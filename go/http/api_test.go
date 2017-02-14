@@ -7,7 +7,7 @@ import (
 )
 
 func TestLbCheck(t *testing.T) {
-	api := new(APIImpl)
+	api := NewAPIImpl()
 	recorder := httptest.NewRecorder()
 	api.LbCheck(recorder, nil, nil)
 

@@ -15,6 +15,10 @@ type API interface {
 type APIImpl struct {
 }
 
+func NewAPIImpl() *APIImpl {
+	return &APIImpl{}
+}
+
 // LbCheck responds to LbCheck by writing "Pong" in to the response.
 func (api *APIImpl) LbCheck(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
 	w.WriteHeader(http.StatusOK)

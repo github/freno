@@ -21,7 +21,7 @@ func main() {
 }
 
 func mainServer(port int) {
-	api := new(http.APIImpl)
+	api := http.NewAPIImpl()
 	router := http.ConfigureRoutes(api)
 	log.Infof(fmt.Sprintf("Starting server in port %d", port))
 	gohttp.ListenAndServe(fmt.Sprintf(":%d", port), router)
