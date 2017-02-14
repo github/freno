@@ -15,12 +15,12 @@ func main() {
 	flag.Parse()
 
 	if *server != "" {
-		mainCli(*port)
+		mainServer(*port)
 	}
 
 }
 
-func mainCli(port int) {
+func mainServer(port int) {
 	api := new(http.APIImpl)
 	router := http.ConfigureRoutes(api)
 	log.Infof(fmt.Sprintf("Starting server in port %d", port))
