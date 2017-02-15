@@ -14,7 +14,7 @@ version=$(git rev-parse HEAD)
 describe=$(git describe --tags --always --dirty)
 
 export GOPATH="$PWD/.gopath"
-cd .gopath/src/github.com/github/throttlery
+cd .gopath/src/github.com/github/freno
 
 # We put the binaries directly into the bindir, because we have no need for shim wrappers
-go build -o "$bindir/throttlery" -ldflags "-X main.AppVersion=${version} -X main.BuildDescribe=${describe}" ./go/cmd/throttlery/main.go
+go build -o "$bindir/freno" -ldflags "-X main.AppVersion=${version} -X main.BuildDescribe=${describe}" ./go/cmd/freno/main.go

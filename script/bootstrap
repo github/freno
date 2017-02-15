@@ -12,5 +12,5 @@ set -e
 set -x
 rm -rf .gopath
 mkdir -p .gopath/src/github.com/github
-ln -s "$PWD" .gopath/src/github.com/github/throttlery
+ln -s "$PWD" .gopath/src/github.com/github/freno
 export GOPATH=$PWD/.gopath:$GOPATH

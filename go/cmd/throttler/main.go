@@ -16,7 +16,7 @@ func main() {
 	if AppVersion == "" {
 		AppVersion = "local-build"
 	}
-	log.Infof("starting throttlery %s", AppVersion)
+	log.Infof("starting freno %s", AppVersion)
 
 	server := flag.String("server", "", "spawn the HTTP API server")
 	port := flag.Int("port", 8080, "the port number, defaults to 8080")
