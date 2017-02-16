@@ -66,6 +66,6 @@ func printHelp() {
 func printUsage() {
 	fmt.Println(`Usage: freno [OPTIONS]
 
-	For more help options use: freno help.
+	For more help options use: freno -help.
 	`)
 }
