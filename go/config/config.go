@@ -26,44 +26,45 @@ type Configuration struct {
 
 func newConfiguration() *Configuration {
 	return &Configuration{
-		parameters: &configurationParameters{
-			ListenPort: 8087,
-			//Debug:                                        false,
-			//ListenSocket:                                 "",
-			//AnExampleListOfStrings:                       []string{"*"},
-			//AnExampleMapOfStringsToStrings:               make(map[string]string),
-		},
+		parameters: newConfigurationParameters(),
 	}
 }
 
-// Read reads configuration from zero, either, some or all given files, in order of input.
-// A file can override configuration provided in previous file.
-func (config *Configuration) Read(fileNames ...string) {
-	parameters := config.parameters
+// Read reads configuration from all given files, in order of input.
+// Each file can override the properties of the previous files
+// Initially, the parameters are the defult ones defined by newConfigurationParameters
+func (config *Configuration) Read(fileNames ...string) error {
+	parameters := newConfigurationParameters()
 
 	for _, fileName := range fileNames {
-		file, err := os.Open(fileName)
-		if err == nil {
-			decoder := json.NewDecoder(file)
-			err := decoder.Decode(parameters)
+		if _, err := os.Stat(fileName); err == nil {
+			file, err := os.Open(fileName)
 			if err == nil {
-				log.Infof("Read config: %s", fileName)
-			} else {
-				log.Fatal("Cannot read config file:", fileName, err)
+				decoder := json.NewDecoder(file)
+				err := decoder.Decode(parameters)
+				if err == nil {
+					log.Infof("Read config: %s", fileName)
+				} else {
+					log.Fatal("Cannot read config file:", fileName, err)
+					return err
+				}
 			}
 		}
 	}
 
 	if err := parameters.postReadAdjustments(); err != nil {
 		log.Fatale(err)
+		return err
 	}
 
 	config.readFileNames = fileNames
+	config.parameters = parameters
+	return nil
 }
 
 // Reload re-reads configuration from last used files
-func (config *Configuration) Reload() {
-	config.Read(config.readFileNames...)
+func (config *Configuration) Reload() error {
+	return config.Read(config.readFileNames...)
 }
 
 // ConfigurationParameters models a set of configurable values, that can be
@@ -77,6 +78,16 @@ type configurationParameters struct {
 	// ListenSocket                                 string // Where freno HTTP should listen for unix socket (default: empty; when given, TCP is disabled)
 	// AnExampleSliceOfStrings                    []string // Add a comment here
 	// AnExampleMapOfStringsToStrings    map[string]string // Add a comment here
+}
+
+func newConfigurationParameters() *configurationParameters {
+	return &configurationParameters{
+		ListenPort: 8087,
+		//Debug:                                        false,
+		//ListenSocket:                                 "",
+		//AnExampleListOfStrings:                       []string{"*"},
+		//AnExampleMapOfStringsToStrings:               make(map[string]string),
+	}
 }
 
 // Hook to implement adjustments after reading each configuration file.
