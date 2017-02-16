@@ -5,7 +5,7 @@ import (
 	"fmt"
 	gohttp "net/http"
 
-	"github.com/github/throttler/go/http"
+	"github.com/github/freno/go/http"
 	"github.com/outbrain/golib/log"
 )
 
