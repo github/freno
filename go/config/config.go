@@ -14,34 +14,34 @@ func Instance() *Configuration {
 	return instance
 }
 
-// Params returns the parameters of the global instance of Configuration
-func Parameters() *configurationParameters {
-	return Instance().parameters
+// Params returns the settings of the global instance of Configuration
+func Settings() *configurationSettings {
+	return Instance().settings
 }
 
 type Configuration struct {
 	readFileNames []string
-	parameters    *configurationParameters
+	settings      *configurationSettings
 }
 
 func newConfiguration() *Configuration {
 	return &Configuration{
-		parameters: newConfigurationParameters(),
+		settings: newConfigurationSettings(),
 	}
 }
 
 // Read reads configuration from all given files, in order of input.
 // Each file can override the properties of the previous files
-// Initially, the parameters are the defult ones defined by newConfigurationParameters
+// Initially, the settings are the defult ones defined by newConfigurationSettings
 func (config *Configuration) Read(fileNames ...string) error {
-	parameters := newConfigurationParameters()
+	settings := newConfigurationSettings()
 
 	for _, fileName := range fileNames {
 		if _, err := os.Stat(fileName); err == nil {
 			file, err := os.Open(fileName)
 			if err == nil {
 				decoder := json.NewDecoder(file)
-				err := decoder.Decode(parameters)
+				err := decoder.Decode(settings)
 				if err == nil {
 					log.Infof("Read config: %s", fileName)
 				} else {
@@ -52,13 +52,13 @@ func (config *Configuration) Read(fileNames ...string) error {
 		}
 	}
 
-	if err := parameters.postReadAdjustments(); err != nil {
+	if err := settings.postReadAdjustments(); err != nil {
 		log.Fatale(err)
 		return err
 	}
 
 	config.readFileNames = fileNames
-	config.parameters = parameters
+	config.settings = settings
 	return nil
 }
 
@@ -67,12 +67,12 @@ func (config *Configuration) Reload() error {
 	return config.Read(config.readFileNames...)
 }
 
-// ConfigurationParameters models a set of configurable values, that can be
+// ConfigurationSettings models a set of configurable values, that can be
 // provided by the user via one or several JSON formatted files.
 //
-// Some of the parameteres have reasonable default values, and some other
+// Some of the settinges have reasonable default values, and some other
 // (like database credentials) are strictly expected from user.
-type configurationParameters struct {
+type configurationSettings struct {
 	ListenPort int
 	// Debug                                        bool   // set debug mode (similar to --debug option)
 	// ListenSocket                                 string // Where freno HTTP should listen for unix socket (default: empty; when given, TCP is disabled)
@@ -80,8 +80,8 @@ type configurationParameters struct {
 	// AnExampleMapOfStringsToStrings    map[string]string // Add a comment here
 }
 
-func newConfigurationParameters() *configurationParameters {
-	return &configurationParameters{
+func newConfigurationSettings() *configurationSettings {
+	return &configurationSettings{
 		ListenPort: 8087,
 		//Debug:                                        false,
 		//ListenSocket:                                 "",
@@ -91,6 +91,6 @@ func newConfigurationParameters() *configurationParameters {
 }
 
 // Hook to implement adjustments after reading each configuration file.
-func (this *configurationParameters) postReadAdjustments() error {
+func (this *configurationSettings) postReadAdjustments() error {
 	return nil
 }
