@@ -5,6 +5,7 @@ import (
 	"fmt"
 	gohttp "net/http"
 
+	"github.com/github/freno/go/config"
 	"github.com/github/freno/go/http"
 	"github.com/outbrain/golib/log"
 )
@@ -19,7 +20,7 @@ func main() {
 	log.Infof("starting freno %s", AppVersion)
 
 	server := flag.String("server", "", "spawn the HTTP API server")
-	port := flag.Int("port", 8080, "the port number, defaults to 8080")
+	port := flag.Int("port", config.Parameters().ListenPort, fmt.Sprintf("the port number, defaults to %d", config.Parameters().ListenPort))
 	flag.Parse()
 
 	if *server != "" {
