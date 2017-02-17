@@ -7,21 +7,25 @@ import (
 	"github.com/outbrain/golib/log"
 )
 
-var instance *Configuration = newConfiguration()
+var instance = newConfiguration()
 
 // Instance returns the global instance of Configuration
 func Instance() *Configuration {
 	return instance
 }
 
-// Params returns the settings of the global instance of Configuration
-func Settings() *configurationSettings {
+// Settings returns the settings of the global instance of Configuration
+func Settings() *ConfigurationSettings {
 	return Instance().settings
 }
 
+// Configuration struct stores the readFileNames and points to the settings
+// which are the configuration parameters used in the application.
+// see ConfigurationSettings for the available settings.
+// Read file names are also stored to allow configuration reloading.
 type Configuration struct {
 	readFileNames []string
-	settings      *configurationSettings
+	settings      *ConfigurationSettings
 }
 
 func newConfiguration() *Configuration {
@@ -72,7 +76,7 @@ func (config *Configuration) Reload() error {
 //
 // Some of the settinges have reasonable default values, and some other
 // (like database credentials) are strictly expected from user.
-type configurationSettings struct {
+type ConfigurationSettings struct {
 	ListenPort int
 	// Debug                                        bool   // set debug mode (similar to --debug option)
 	// ListenSocket                                 string // Where freno HTTP should listen for unix socket (default: empty; when given, TCP is disabled)
@@ -80,8 +84,8 @@ type configurationSettings struct {
 	// AnExampleMapOfStringsToStrings    map[string]string // Add a comment here
 }
 
-func newConfigurationSettings() *configurationSettings {
-	return &configurationSettings{
+func newConfigurationSettings() *ConfigurationSettings {
+	return &ConfigurationSettings{
 		ListenPort: 8087,
 		//Debug:                                        false,
 		//ListenSocket:                                 "",
@@ -91,6 +95,6 @@ func newConfigurationSettings() *configurationSettings {
 }
 
 // Hook to implement adjustments after reading each configuration file.
-func (this *configurationSettings) postReadAdjustments() error {
+func (serttings *ConfigurationSettings) postReadAdjustments() error {
 	return nil
 }

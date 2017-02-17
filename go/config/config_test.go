@@ -67,7 +67,7 @@ func TestReaload(t *testing.T) {
 	}
 }
 
-func dump(path string, contents *configurationSettings) error {
+func dump(path string, contents *ConfigurationSettings) error {
 	json, _ := json.Marshal(contents)
 	err := ioutil.WriteFile(path, json, 0644)
 	return err
