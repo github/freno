@@ -10,7 +10,7 @@ import (
 	"github.com/outbrain/golib/log"
 )
 
-// To be filled by ldflags:
+// AppVersion has to be filled by ldflags:
 var AppVersion string
 
 func main() {
@@ -47,7 +47,7 @@ func loadConfiguration(configFile string) {
 	}
 
 	if err != nil {
-		panic("Error reading configuration, please check the logs. Error was: " + err.Error())
+		log.Fatal("Error reading configuration, please check the logs. Error was: " + err.Error())
 	}
 }
 

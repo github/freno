@@ -43,22 +43,26 @@ func (config *Configuration) Read(fileNames ...string) error {
 	for _, fileName := range fileNames {
 		if _, err := os.Stat(fileName); err == nil {
 			file, err := os.Open(fileName)
+
+			if err != nil {
+				return log.Error("Cannot read config file:", fileName, err)
+			}
+
+			defer file.Close()
+
+			decoder := json.NewDecoder(file)
+			err = decoder.Decode(settings)
+
 			if err == nil {
-				decoder := json.NewDecoder(file)
-				err := decoder.Decode(settings)
-				if err == nil {
-					log.Infof("Read config: %s", fileName)
-				} else {
-					log.Fatal("Cannot read config file:", fileName, err)
-					return err
-				}
+				log.Infof("Config read from %s", fileName)
+			} else {
+				return log.Error("Cannot read config file:", fileName, err)
 			}
 		}
 	}
 
 	if err := settings.postReadAdjustments(); err != nil {
-		log.Fatale(err)
-		return err
+		return log.Errore(err)
 	}
 
 	config.readFileNames = fileNames

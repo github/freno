@@ -4,7 +4,19 @@ import (
 	"encoding/json"
 	"io/ioutil"
 	"testing"
+
+	"github.com/outbrain/golib/log"
 )
+
+func TestReadWrongFile(t *testing.T) {
+	config := Instance()
+	ioutil.WriteFile("/tmp/CorruptedFixture.json", []byte("}---{"), 0644)
+	error := config.Read("/tmp/CorruptedFixture.json")
+	if error == nil {
+		log.Infof("Config failed")
+		t.Errorf("Should have errored")
+	}
+}
 
 func TestReadSingleFile(t *testing.T) {
 	var config = newConfiguration()
