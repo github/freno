@@ -43,7 +43,7 @@ func loadConfiguration(configFile string) {
 	if configFile != "" {
 		err = config.Instance().Read(configFile)
 	} else {
-		err = config.Instance().Read("/etc/freno.conf.json", "conf/freno.conf.json", "freno.conf.json")
+		err = config.Instance().Read("/etc/freno.conf.json")
 	}
 
 	if err != nil {
