@@ -45,7 +45,7 @@ func (config *Configuration) Read(fileNames ...string) error {
 			file, err := os.Open(fileName)
 
 			if err != nil {
-				return log.Error("Cannot read config file:", fileName, err)
+				return log.Errorf("Cannot read config file %s, error was: %s", fileName, err)
 			}
 
 			defer file.Close()
@@ -56,7 +56,7 @@ func (config *Configuration) Read(fileNames ...string) error {
 			if err == nil {
 				log.Infof("Config read from %s", fileName)
 			} else {
-				return log.Error("Cannot read config file:", fileName, err)
+				return log.Errorf("Cannot read config file %s, error was: %s", fileName, err)
 			}
 		}
 	}

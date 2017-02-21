@@ -47,7 +47,7 @@ func loadConfiguration(configFile string) {
 	}
 
 	if err != nil {
-		log.Fatal("Error reading configuration, please check the logs. Error was: " + err.Error())
+		log.Fatalf("Error reading configuration, please check the logs. Error was: %s", err.Error())
 	}
 }
 
