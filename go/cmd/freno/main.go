@@ -17,22 +17,56 @@ func main() {
 	if AppVersion == "" {
 		AppVersion = "local-build"
 	}
-	log.Infof("starting freno %s", AppVersion)
 
 	configFile := flag.String("config", "", "config file name")
 	http := flag.Bool("http", false, "spawn the HTTP API server")
+	quiet := flag.Bool("quiet", false, "quiet")
+	verbose := flag.Bool("verbose", false, "verbose")
+	debug := flag.Bool("debug", false, "debug mode (very verbose)")
+	stack := flag.Bool("stack", false, "add stack trace upon error")
+	log.SetLevel(log.ERROR)
+	if *verbose {
+		log.SetLevel(log.INFO)
+	}
+	if *debug {
+		log.SetLevel(log.DEBUG)
+	}
+	if *stack {
+		log.SetPrintStackTrace(*stack)
+	}
+	if *quiet {
+		// Override!!
+		log.SetLevel(log.ERROR)
+	}
 	help := flag.Bool("help", false, "show the help")
 	flag.Parse()
 
 	loadConfiguration(*configFile)
 
-	flag.Parse()
+	if *help {
+		printHelp()
+		return
+	}
+
+	log.SetLevel(log.ERROR)
+	if *verbose {
+		log.SetLevel(log.INFO)
+	}
+	if *debug {
+		log.SetLevel(log.DEBUG)
+	}
+	if *stack {
+		log.SetPrintStackTrace(*stack)
+	}
+	if *quiet {
+		// Override!!
+		log.SetLevel(log.ERROR)
+	}
+	log.Infof("starting freno %s", AppVersion)
 
 	switch {
 	case *http:
 		httpServe()
-	case *help:
-		printHelp()
 	default:
 		printUsage()
 	}
