@@ -58,7 +58,7 @@ func NewStore(raftDir string, raftBind string) *Store {
 
 // Open opens the store. If enableSingle is set, and there are no existing peers,
 // then this node becomes the first node, and therefore leader, of the cluster.
-func (store *Store) Open(enableSingle bool) error {
+func (store *Store) Open(peerNodes []string) error {
 	// Setup Raft configuration.
 	config := raft.DefaultConfig()
 
@@ -72,18 +72,20 @@ func (store *Store) Open(enableSingle bool) error {
 		return err
 	}
 
+	peers := make([]string, 0, 10)
+	for _, peerNode := range peerNodes {
+		peers = raft.AddUniquePeer(peers, peerNode)
+	}
+
 	// Create peer storage.
 	peerStore := raft.NewJSONPeers(store.raftDir, transport)
-
-	// Check for any existing peers.
-	peers, err := peerStore.Peers()
-	if err != nil {
+	if err := peerStore.SetPeers(peers); err != nil {
 		return err
 	}
 
 	// Allow the node to entry single-mode, potentially electing itself, if
 	// explicitly enabled and there is only 1 node in the cluster already.
-	if enableSingle && len(peers) <= 1 {
+	if len(peerNodes) == 0 && len(peers) <= 1 {
 		log.Infof("enabling single-node mode")
 		config.EnableSingleNode = true
 		config.DisableBootstrapAfterElect = false
