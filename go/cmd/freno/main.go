@@ -22,12 +22,25 @@ func main() {
 
 	configFile := flag.String("config", "", "config file name")
 	http := flag.Bool("http", false, "spawn the HTTP API server")
+	httpPort := flag.Int("http-port", 0, "HTTP listen port; overrides config's ListenPort")
+	raftDataDir := flag.String("raft-datadir", "", "Data directory for raft backend db; overrides config's RaftDataDir")
+	raftListenPort := flag.Int("raft-port", 0, "Raft listen port. Overrides config's RaftListenPort")
 	help := flag.Bool("help", false, "show the help")
 	flag.Parse()
 
 	loadConfiguration(*configFile)
 
 	flag.Parse()
+
+	if *raftDataDir != "" {
+		config.Settings().RaftDataDir = *raftDataDir
+	}
+	if *raftListenPort > 0 {
+		config.Settings().RaftListenPort = *raftListenPort
+	}
+	if *httpPort > 0 {
+		config.Settings().ListenPort = *httpPort
+	}
 
 	switch {
 	case *http:
