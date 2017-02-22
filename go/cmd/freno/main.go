@@ -24,24 +24,8 @@ func main() {
 	verbose := flag.Bool("verbose", false, "verbose")
 	debug := flag.Bool("debug", false, "debug mode (very verbose)")
 	stack := flag.Bool("stack", false, "add stack trace upon error")
-	log.SetLevel(log.ERROR)
-	if *verbose {
-		log.SetLevel(log.INFO)
-	}
-	if *debug {
-		log.SetLevel(log.DEBUG)
-	}
-	if *stack {
-		log.SetPrintStackTrace(*stack)
-	}
-	if *quiet {
-		// Override!!
-		log.SetLevel(log.ERROR)
-	}
 	help := flag.Bool("help", false, "show the help")
 	flag.Parse()
-
-	loadConfiguration(*configFile)
 
 	if *help {
 		printHelp()
@@ -63,6 +47,8 @@ func main() {
 		log.SetLevel(log.ERROR)
 	}
 	log.Infof("starting freno %s", AppVersion)
+
+	loadConfiguration(*configFile)
 
 	switch {
 	case *http:
