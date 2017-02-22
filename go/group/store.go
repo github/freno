@@ -16,6 +16,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -74,6 +75,7 @@ func (store *Store) Open(peerNodes []string) error {
 
 	peers := make([]string, 0, 10)
 	for _, peerNode := range peerNodes {
+		peerNode = strings.TrimSpace(peerNode)
 		peers = raft.AddUniquePeer(peers, peerNode)
 	}
 

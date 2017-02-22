@@ -1,8 +1,6 @@
 package group
 
 import (
-	"fmt"
-	"strings"
 	"time"
 
 	"github.com/github/freno/go/config"
@@ -16,18 +14,9 @@ const RaftDBFile = "freno-raft.db"
 var store *Store
 
 func Setup() error {
-	peerNodes := []string{}
-	for _, raftNode := range config.Settings().RaftNodes {
-		nodeAddress := raftNode
-		if !strings.Contains(nodeAddress, ":") {
-			nodeAddress = fmt.Sprintf("%s:%d", raftNode, config.Settings().RaftListenPort)
-		}
-		peerNodes = append(peerNodes, nodeAddress)
-	}
-	bindAddress := fmt.Sprintf("127.0.0.1:%d", config.Settings().RaftListenPort)
-	store = NewStore(config.Settings().RaftDataDir, bindAddress)
+	store = NewStore(config.Settings().RaftDataDir, config.Settings().RaftBind)
 
-	if err := store.Open(peerNodes); err != nil {
+	if err := store.Open(config.Settings().RaftNodes); err != nil {
 		return log.Errorf("failed to open raft store: %s", err.Error())
 	}
 

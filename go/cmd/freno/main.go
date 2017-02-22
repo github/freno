@@ -4,6 +4,7 @@ import (
 	"flag"
 	"fmt"
 	gohttp "net/http"
+	"strings"
 
 	"github.com/github/freno/go/config"
 	"github.com/github/freno/go/group"
@@ -24,7 +25,8 @@ func main() {
 	http := flag.Bool("http", false, "spawn the HTTP API server")
 	httpPort := flag.Int("http-port", 0, "HTTP listen port; overrides config's ListenPort")
 	raftDataDir := flag.String("raft-datadir", "", "Data directory for raft backend db; overrides config's RaftDataDir")
-	raftListenPort := flag.Int("raft-port", 0, "Raft listen port. Overrides config's RaftListenPort")
+	raftBind := flag.String("raft-bind", "", "Raft bind address (example: '127.0.0.1:10008'). Overrides config's RaftBind")
+	raftNodes := flag.String("raft-nodes", "", "Comma separated (e.g. 'host:port[,host:port]') list of raft nodes. Overrides config's RaftNodes")
 	help := flag.Bool("help", false, "show the help")
 	flag.Parse()
 
@@ -35,8 +37,11 @@ func main() {
 	if *raftDataDir != "" {
 		config.Settings().RaftDataDir = *raftDataDir
 	}
-	if *raftListenPort > 0 {
-		config.Settings().RaftListenPort = *raftListenPort
+	if *raftBind != "" {
+		config.Settings().RaftBind = *raftBind
+	}
+	if *raftNodes != "" {
+		config.Settings().RaftNodes = strings.Split(*raftNodes, ",")
 	}
 	if *httpPort > 0 {
 		config.Settings().ListenPort = *httpPort
