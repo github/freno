@@ -95,7 +95,7 @@ type ConfigurationSettings struct {
 func newConfigurationSettings() *ConfigurationSettings {
 	return &ConfigurationSettings{
 		ListenPort:     8087,
-		RaftListenPort: 8088,
+		RaftListenPort: 10008,
 		RaftDataDir:    "",
 		RaftNodes:      []string{},
 		//Debug:                                        false,

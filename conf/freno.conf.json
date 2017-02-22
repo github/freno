@@ -1,3 +1,6 @@
 {
-  "ListenPort": 8088
+  "ListenPort": 8088,
+  "RaftListenPort": 10008,
+  "RaftDataDir": "/tmp",
+  "RaftNodes": []
 }

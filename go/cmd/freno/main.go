@@ -6,6 +6,7 @@ import (
 	gohttp "net/http"
 
 	"github.com/github/freno/go/config"
+	"github.com/github/freno/go/group"
 	"github.com/github/freno/go/http"
 	"github.com/outbrain/golib/log"
 )
@@ -30,7 +31,8 @@ func main() {
 
 	switch {
 	case *http:
-		httpServe()
+		err := httpServe()
+		log.Errore(err)
 	case *help:
 		printHelp()
 	default:
@@ -43,7 +45,7 @@ func loadConfiguration(configFile string) {
 	if configFile != "" {
 		err = config.Instance().Read(configFile)
 	} else {
-		err = config.Instance().Read("/etc/freno.conf.json")
+		err = config.Instance().Read("/etc/freno.conf.json", "conf/freno.conf.json")
 	}
 
 	if err != nil {
@@ -51,12 +53,18 @@ func loadConfiguration(configFile string) {
 	}
 }
 
-func httpServe() {
+func httpServe() error {
+	log.Infof("Starting raft")
+	if err := group.Setup(); err != nil {
+		return err
+	}
+	go group.Monitor()
+
 	api := http.NewAPIImpl()
 	router := http.ConfigureRoutes(api)
 	port := config.Settings().ListenPort
-	log.Infof(fmt.Sprintf("Starting server in port %d", port))
-	gohttp.ListenAndServe(fmt.Sprintf(":%d", port), router)
+	log.Infof("Starting server in port %d", port)
+	return gohttp.ListenAndServe(fmt.Sprintf(":%d", port), router)
 }
 
 func printHelp() {
