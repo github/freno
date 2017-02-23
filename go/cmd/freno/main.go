@@ -22,6 +22,9 @@ func main() {
 
 	configFile := flag.String("config", "", "config file name")
 	http := flag.Bool("http", false, "spawn the HTTP API server")
+
+	// The next group of variables override configuration file settings. This allows for easy local testing.
+	// In the general deployment case they will not be used.
 	httpPort := flag.Int("http-port", 0, "HTTP listen port; overrides config's ListenPort")
 	raftDataDir := flag.String("raft-datadir", "", "Data directory for raft backend db; overrides config's RaftDataDir")
 	raftBind := flag.String("raft-bind", "", "Raft bind address (example: '127.0.0.1:10008'). Overrides config's RaftBind")
@@ -58,6 +61,7 @@ func main() {
 
 	loadConfiguration(*configFile)
 
+	// Potentialy override config
 	if *raftDataDir != "" {
 		config.Settings().RaftDataDir = *raftDataDir
 	}
@@ -96,7 +100,7 @@ func loadConfiguration(configFile string) {
 }
 
 func httpServe() error {
-	log.Infof("Starting raft")
+	log.Infof("Starting concensus service")
 	if err := group.Setup(); err != nil {
 		return err
 	}

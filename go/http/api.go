@@ -41,6 +41,7 @@ func (api *APIImpl) LeaderCheck(w http.ResponseWriter, r *http.Request, _ httpro
 	}
 }
 
+// register is a wrapper function for accepting both GET and HEAD requests
 func register(router *httprouter.Router, path string, f httprouter.Handle) {
 	router.HEAD(path, f)
 	router.GET(path, f)

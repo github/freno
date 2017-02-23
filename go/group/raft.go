@@ -1,3 +1,10 @@
+//
+// Provide distributed concensus services.
+// Underlying implementation is Raft, via https://godoc.org/github.com/hashicorp/raft
+//
+// This file provides generic access functions to setup & check group communication.
+//
+
 package group
 
 import (
