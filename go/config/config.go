@@ -57,7 +57,7 @@ func (config *Configuration) Read(fileNames ...string) error {
 			if err == nil {
 				log.Infof("Config read from %s", fileName)
 			} else {
-				return log.Errorf("Cannot read config file %s, error was: %s", fileName, err)
+				return fmt.Errorf("Cannot read config file %s, error was: %s", fileName, err)
 			}
 		}
 	}
