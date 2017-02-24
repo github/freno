@@ -8,6 +8,8 @@
 package group
 
 import (
+	"fmt"
+	"strings"
 	"time"
 
 	"github.com/github/freno/go/config"
@@ -21,9 +23,13 @@ const RaftDBFile = "freno-raft.db"
 var store *Store
 
 func Setup() error {
-	store = NewStore(config.Settings().RaftDataDir, config.Settings().RaftBind)
+	store = NewStore(config.Settings().RaftDataDir, normalizeRaftNode(config.Settings().RaftBind))
 
-	if err := store.Open(config.Settings().RaftNodes); err != nil {
+	peerNodes := []string{}
+	for _, raftNode := range config.Settings().RaftNodes {
+		peerNodes = append(peerNodes, normalizeRaftNode(raftNode))
+	}
+	if err := store.Open(peerNodes); err != nil {
 		return log.Errorf("failed to open raft store: %s", err.Error())
 	}
 
@@ -32,6 +38,19 @@ func Setup() error {
 
 func getRaft() *raft.Raft {
 	return store.raft
+}
+
+// normalizeRaftNode attempts to make sure there's a port to the given node.
+// It consults the DefaultRaftPort when there isn't
+func normalizeRaftNode(node string) string {
+	if strings.Contains(node, ":") {
+		return node
+	}
+	if config.Settings().DefaultRaftPort == 0 {
+		return node
+	}
+	node = fmt.Sprintf("%s:%d", node, config.Settings().DefaultRaftPort)
+	return node
 }
 
 func IsLeader() bool {
