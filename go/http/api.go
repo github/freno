@@ -3,6 +3,7 @@ package http
 import (
 	"fmt"
 	"net/http"
+	"os"
 
 	"github.com/github/freno/go/group"
 
@@ -13,6 +14,8 @@ import (
 type API interface {
 	LbCheck(w http.ResponseWriter, _ *http.Request, _ httprouter.Params)
 	LeaderCheck(w http.ResponseWriter, _ *http.Request, _ httprouter.Params)
+	RaftLeader(w http.ResponseWriter, _ *http.Request, _ httprouter.Params)
+	Hostname(w http.ResponseWriter, _ *http.Request, _ httprouter.Params)
 }
 
 // APIImpl implements the API
@@ -41,6 +44,29 @@ func (api *APIImpl) LeaderCheck(w http.ResponseWriter, r *http.Request, _ httpro
 	}
 }
 
+// RaftLeader returns the identity of the leader
+func (api *APIImpl) RaftLeader(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+	leader := group.GetLeader()
+
+	responseCode := http.StatusOK
+	if leader == "" {
+		responseCode = http.StatusInternalServerError
+	}
+	w.WriteHeader(responseCode)
+	fmt.Fprintf(w, leader)
+}
+
+// Hostname returns the hostname this process executes on
+func (api *APIImpl) Hostname(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+	if hostname, err := os.Hostname(); err == nil {
+		w.WriteHeader(http.StatusOK)
+		fmt.Fprint(w, hostname)
+	} else {
+		w.WriteHeader(http.StatusInternalServerError)
+		fmt.Fprint(w, err.Error())
+	}
+}
+
 // register is a wrapper function for accepting both GET and HEAD requests
 func register(router *httprouter.Router, path string, f httprouter.Handle) {
 	router.HEAD(path, f)
@@ -53,5 +79,7 @@ func ConfigureRoutes(api API) *httprouter.Router {
 	router := httprouter.New()
 	register(router, "/lb-check", api.LbCheck)
 	register(router, "/leader-check", api.LeaderCheck)
+	register(router, "/raft/leader", api.RaftLeader)
+	register(router, "/hostname", api.Hostname)
 	return router
 }

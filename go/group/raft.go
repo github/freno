@@ -40,6 +40,10 @@ func IsLeader() bool {
 	return err == nil
 }
 
+func GetLeader() string {
+	return getRaft().Leader()
+}
+
 func Monitor() {
 	t := time.NewTicker(time.Duration(1) * time.Second)
 
