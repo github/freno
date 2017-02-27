@@ -22,6 +22,7 @@ type API interface {
 type APIImpl struct {
 }
 
+// NewAPIImpl creates a new instance of the API implementation
 func NewAPIImpl() *APIImpl {
 	return &APIImpl{}
 }
@@ -34,26 +35,24 @@ func (api *APIImpl) LbCheck(w http.ResponseWriter, r *http.Request, _ httprouter
 // LeaderCheck responds with HTTP 200 when this node is a raft leader, otherwise 404
 // This is a useful check for HAProxy routing
 func (api *APIImpl) LeaderCheck(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
-	responseCode := http.StatusNotFound
 	if group.IsLeader() {
-		responseCode = http.StatusOK
-	}
-	w.WriteHeader(responseCode)
-	if r.Method == http.MethodGet {
-		fmt.Fprintf(w, "HTTP %d", responseCode)
+		w.WriteHeader(http.StatusOK)
+	} else {
+		w.WriteHeader(http.StatusNotFound)
+		if r.Method == http.MethodGet {
+			fmt.Fprintf(w, "HTTP %d", http.StatusNotFound)
+		}
 	}
 }
 
 // RaftLeader returns the identity of the leader
 func (api *APIImpl) RaftLeader(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
-	leader := group.GetLeader()
-
-	responseCode := http.StatusOK
-	if leader == "" {
-		responseCode = http.StatusInternalServerError
+	if leader := group.GetLeader(); leader != "" {
+		w.WriteHeader(http.StatusOK)
+		fmt.Fprintf(w, leader)
+	} else {
+		w.WriteHeader(http.StatusInternalServerError)
 	}
-	w.WriteHeader(responseCode)
-	fmt.Fprintf(w, leader)
 }
 
 // Hostname returns the hostname this process executes on
