@@ -35,11 +35,11 @@ func (api *APIImpl) LbCheck(w http.ResponseWriter, r *http.Request, _ httprouter
 // LeaderCheck responds with HTTP 200 when this node is a raft leader, otherwise 404
 // This is a useful check for HAProxy routing
 func (api *APIImpl) LeaderCheck(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+	statusCode := http.StatusNotFound
 	if group.IsLeader() {
-		w.WriteHeader(http.StatusOK)
-	} else {
-		w.WriteHeader(http.StatusNotFound)
+		statusCode = http.StatusOK
 	}
+	w.WriteHeader(statusCode)
 	if r.Method == http.MethodGet {
 		fmt.Fprintf(w, "HTTP %d", http.StatusNotFound)
 	}
