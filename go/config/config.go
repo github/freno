@@ -2,6 +2,7 @@ package config
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 
 	"github.com/outbrain/golib/log"
@@ -56,7 +57,7 @@ func (config *Configuration) Read(fileNames ...string) error {
 			if err == nil {
 				log.Infof("Config read from %s", fileName)
 			} else {
-				return log.Errorf("Cannot read config file %s, error was: %s", fileName, err)
+				return fmt.Errorf("Cannot read config file %s, error was: %s", fileName, err)
 			}
 		}
 	}
@@ -81,7 +82,11 @@ func (config *Configuration) Reload() error {
 // Some of the settinges have reasonable default values, and some other
 // (like database credentials) are strictly expected from user.
 type ConfigurationSettings struct {
-	ListenPort int
+	ListenPort      int
+	RaftBind        string
+	RaftDataDir     string
+	DefaultRaftPort int      // if a RaftNodes entry does not specify port, use this one
+	RaftNodes       []string // Raft nodes to make initial connection with
 	// Debug                                        bool   // set debug mode (similar to --debug option)
 	// ListenSocket                                 string // Where freno HTTP should listen for unix socket (default: empty; when given, TCP is disabled)
 	// AnExampleSliceOfStrings                    []string // Add a comment here
@@ -90,7 +95,11 @@ type ConfigurationSettings struct {
 
 func newConfigurationSettings() *ConfigurationSettings {
 	return &ConfigurationSettings{
-		ListenPort: 8087,
+		ListenPort:      8087,
+		RaftBind:        "127.0.0.1:10008",
+		RaftDataDir:     "",
+		DefaultRaftPort: 0,
+		RaftNodes:       []string{},
 		//Debug:                                        false,
 		//ListenSocket:                                 "",
 		//AnExampleListOfStrings:                       []string{"*"},
@@ -99,6 +108,9 @@ func newConfigurationSettings() *ConfigurationSettings {
 }
 
 // Hook to implement adjustments after reading each configuration file.
-func (serttings *ConfigurationSettings) postReadAdjustments() error {
+func (settings *ConfigurationSettings) postReadAdjustments() error {
+	if settings.RaftDataDir == "" {
+		return fmt.Errorf("RaftDataDir must be set")
+	}
 	return nil
 }
