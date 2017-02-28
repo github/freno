@@ -25,6 +25,11 @@ func TestNormalizeRaftNode(t *testing.T) {
 		normalizedNode := normalizeRaftNode(node)
 		test.S(t).ExpectEquals(normalizedNode, "localhost:10008")
 	}
+	{
+		node := ""
+		normalizedNode := normalizeRaftNode(node)
+		test.S(t).ExpectEquals(normalizedNode, ":10008")
+	}
 
 	config.Settings().DefaultRaftPort = 0
 	{
