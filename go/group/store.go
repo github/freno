@@ -76,7 +76,7 @@ func (store *Store) Open(peerNodes []string) error {
 	}
 
 	// Create peer storage.
-	peerStore := raft.NewJSONPeers(store.raftDir, transport)
+	peerStore := &raft.StaticPeers{}
 	if err := peerStore.SetPeers(peers); err != nil {
 		return err
 	}
