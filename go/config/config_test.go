@@ -8,24 +8,30 @@ import (
 	"github.com/outbrain/golib/log"
 )
 
+func createConfiguration() *Configuration {
+	config := newConfiguration()
+	config.settings.RaftDataDir = "/tmp"
+	return config
+}
+
 func TestReadWrongFile(t *testing.T) {
 	config := Instance()
 	ioutil.WriteFile("/tmp/CorruptedFixture.json", []byte("}---{"), 0644)
-	error := config.Read("/tmp/CorruptedFixture.json")
-	if error == nil {
+	err := config.Read("/tmp/CorruptedFixture.json")
+	if err == nil {
 		log.Infof("Config failed")
 		t.Errorf("Should have errored")
 	}
 }
 
 func TestReadSingleFile(t *testing.T) {
-	var config = newConfiguration()
+	var config = createConfiguration()
 	newPort := 65534
 
 	config.settings.ListenPort = newPort
 	dump("/tmp/TestReadSingleFileFixture.json", config.settings)
 
-	config = newConfiguration()
+	config = createConfiguration()
 	config.Read("/tmp/TestReadSingleFileFixture.json")
 	if config.settings.ListenPort != newPort {
 		t.Errorf("Expected ListenPort %d to be %d after reading it from configuration", config.settings.ListenPort, newPort)
@@ -33,7 +39,7 @@ func TestReadSingleFile(t *testing.T) {
 }
 
 func TestReadMultipleFiles(t *testing.T) {
-	var config = newConfiguration()
+	var config = createConfiguration()
 	newPort := 65534
 	newerPort := 65535
 
@@ -44,14 +50,14 @@ func TestReadMultipleFiles(t *testing.T) {
 	dump("/tmp/TestReadMultipleFiles2.json", config.settings)
 
 	// Value is overwritten in order
-	config = newConfiguration()
+	config = createConfiguration()
 	config.Read("/tmp/TestReadMultipleFiles1.json", "/tmp/TestReadMultipleFiles2.json")
 	if config.settings.ListenPort != newerPort {
 		t.Errorf("Expected ListenPort %d to be %d after reading it from configuration", config.settings.ListenPort, newerPort)
 	}
 
 	// Value is overwritten in order
-	config = newConfiguration()
+	config = createConfiguration()
 	config.Read("/tmp/TestReadMultipleFiles2.json", "/tmp/TestReadMultipleFiles1.json")
 	if config.settings.ListenPort != newPort {
 		t.Errorf("Expected ListenPort %d to be %d after reading it from configuration", config.settings.ListenPort, newPort)
@@ -59,14 +65,14 @@ func TestReadMultipleFiles(t *testing.T) {
 }
 
 func TestReaload(t *testing.T) {
-	var config = newConfiguration()
+	var config = createConfiguration()
 	newPort := 65534
 	temporaryChangedPort := 8080
 
 	config.settings.ListenPort = newPort
 	dump("/tmp/TestReloadFixture.json", config.settings)
 
-	config = newConfiguration()
+	config = createConfiguration()
 	config.Read("/tmp/TestReadSingleFileFixture.json")
 	if config.settings.ListenPort != newPort {
 		t.Errorf("Expected ListenPort %d to be %d after reading it from configuration", config.settings.ListenPort, newPort)
