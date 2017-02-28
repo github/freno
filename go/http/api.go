@@ -39,9 +39,9 @@ func (api *APIImpl) LeaderCheck(w http.ResponseWriter, r *http.Request, _ httpro
 		w.WriteHeader(http.StatusOK)
 	} else {
 		w.WriteHeader(http.StatusNotFound)
-		if r.Method == http.MethodGet {
-			fmt.Fprintf(w, "HTTP %d", http.StatusNotFound)
-		}
+	}
+	if r.Method == http.MethodGet {
+		fmt.Fprintf(w, "HTTP %d", http.StatusNotFound)
 	}
 }
 
