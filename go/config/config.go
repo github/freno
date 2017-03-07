@@ -91,6 +91,7 @@ type ConfigurationSettings struct {
 	// ListenSocket                                 string // Where freno HTTP should listen for unix socket (default: empty; when given, TCP is disabled)
 	// AnExampleSliceOfStrings                    []string // Add a comment here
 	// AnExampleMapOfStringsToStrings    map[string]string // Add a comment here
+	Stores StoresSettings
 }
 
 func newConfigurationSettings() *ConfigurationSettings {
