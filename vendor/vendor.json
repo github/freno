@@ -1,0 +1,13 @@
+{
+	"comment": "",
+	"ignore": "",
+	"package": [
+		{
+			"checksumSHA1": "Bsj+4a/llh6apYaGfMtUVOM+kA4=",
+			"path": "github.com/paulbellamy/ratecounter",
+			"revision": "348ad3bf08f04afb2b4f645a6587c9372c06a684",
+			"revisionTime": "2017-02-06T10:26:57Z"
+		}
+	],
+	"rootPath": "github.com/github/freno"
+}
