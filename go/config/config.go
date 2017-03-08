@@ -4,8 +4,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"regexp"
 
 	"github.com/outbrain/golib/log"
+)
+
+var (
+	envVariableRegexp = regexp.MustCompile("[$][{](.*)[}]")
 )
 
 var instance = newConfiguration()
@@ -112,6 +117,9 @@ func newConfigurationSettings() *ConfigurationSettings {
 func (settings *ConfigurationSettings) postReadAdjustments() error {
 	if settings.RaftDataDir == "" {
 		return fmt.Errorf("RaftDataDir must be set")
+	}
+	if err := settings.Stores.postReadAdjustments(); err != nil {
+		return err
 	}
 	return nil
 }
