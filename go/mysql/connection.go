@@ -10,51 +10,65 @@ import (
 	"net"
 )
 
-// ConnectionConfig is the minimal configuration required to connect to a MySQL server
-type ConnectionConfig struct {
-	Key        InstanceKey
-	User       string
-	Password   string
-	ImpliedKey *InstanceKey
+const maxPoolConnections = 3
+const maxIdleConnections = 3
+const timeoutMillis = 1000
+
+// ConnectionProbe is the minimal configuration required to connect to a MySQL server
+type ConnectionProbe struct {
+	Key         InstanceKey
+	User        string
+	Password    string
+	MetricQuery string
+	InProgress  int64
 }
 
-func NewConnectionConfig() *ConnectionConfig {
-	config := &ConnectionConfig{
+type ConnectionProbes map[InstanceKey](*ConnectionProbe)
+
+type ClusterConnectionProbes struct {
+	ClusterName string
+	Probes      *ConnectionProbes
+}
+
+func NewConnectionProbes() *ConnectionProbes {
+	return &ConnectionProbes{}
+}
+
+func NewConnectionProbe() *ConnectionProbe {
+	config := &ConnectionProbe{
 		Key: InstanceKey{},
 	}
-	config.ImpliedKey = &config.Key
 	return config
 }
 
 // DuplicateCredentials creates a new connection config with given key and with same credentials as this config
-func (this *ConnectionConfig) DuplicateCredentials(key InstanceKey) *ConnectionConfig {
-	config := &ConnectionConfig{
+func (this *ConnectionProbe) DuplicateCredentials(key InstanceKey) *ConnectionProbe {
+	config := &ConnectionProbe{
 		Key:      key,
 		User:     this.User,
 		Password: this.Password,
 	}
-	config.ImpliedKey = &config.Key
 	return config
 }
 
-func (this *ConnectionConfig) Duplicate() *ConnectionConfig {
+func (this *ConnectionProbe) Duplicate() *ConnectionProbe {
 	return this.DuplicateCredentials(this.Key)
 }
 
-func (this *ConnectionConfig) String() string {
+func (this *ConnectionProbe) String() string {
 	return fmt.Sprintf("%s, user=%s", this.Key.DisplayString(), this.User)
 }
 
-func (this *ConnectionConfig) Equals(other *ConnectionConfig) bool {
-	return this.Key.Equals(&other.Key) || this.ImpliedKey.Equals(other.ImpliedKey)
+func (this *ConnectionProbe) Equals(other *ConnectionProbe) bool {
+	return this.Key.Equals(&other.Key)
 }
 
-func (this *ConnectionConfig) GetDBUri(databaseName string) string {
+func (this *ConnectionProbe) GetDBUri(databaseName string) string {
 	hostname := this.Key.Hostname
 	var ip = net.ParseIP(hostname)
 	if (ip != nil) && (ip.To4() == nil) {
 		// Wrap IPv6 literals in square brackets
 		hostname = fmt.Sprintf("[%s]", hostname)
 	}
-	return fmt.Sprintf("%s:%s@tcp(%s:%d)/%s?charset=utf8mb4,utf8,latin1", this.User, this.Password, hostname, this.Key.Port, databaseName)
+	return fmt.Sprintf("%s:%s@tcp(%s:%d)/%s?charset=utf8mb4,utf8,latin1&timeout=%dms", this.User, this.Password, hostname, this.Key.Port, databaseName, timeoutMillis)
 }
