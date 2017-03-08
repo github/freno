@@ -9,6 +9,7 @@ import (
 	"github.com/github/freno/go/config"
 	"github.com/github/freno/go/group"
 	"github.com/github/freno/go/http"
+	"github.com/github/freno/go/throttle"
 	"github.com/outbrain/golib/log"
 )
 
@@ -105,6 +106,7 @@ func httpServe() error {
 		return err
 	}
 	go group.Monitor()
+	go throttle.NewThrottler().Operate()
 
 	api := http.NewAPIImpl()
 	router := http.ConfigureRoutes(api)
