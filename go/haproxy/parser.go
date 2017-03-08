@@ -53,7 +53,9 @@ func ParseCsvHosts(csv string, poolName string) (hosts []string, err error) {
 func Read(host string, port int) (csv string, err error) {
 	haproxyUrl := fmt.Sprintf("http://%s:%d/;csv;norefresh", host, port)
 	resp, err := http.Get(haproxyUrl)
-	defer resp.Body.Close()
+	if resp != nil {
+		defer resp.Body.Close()
+	}
 	if err != nil {
 		return "", err
 	}
