@@ -130,6 +130,17 @@ func (throttler *Throttler) refreshMySQLInventory() error {
 	}
 	log.Debugf("refreshing MySQL inventory")
 
+	addInstanceKey := func(key *mysql.InstanceKey, clusterSettings *config.MySQLClusterConfigurationSettings, probes *mysql.ConnectionProbes) {
+		log.Debugf("read instance key: %+v", key)
+
+		connectionProbe := mysql.NewConnectionProbe()
+		connectionProbe.Key = *key
+		connectionProbe.User = clusterSettings.User
+		connectionProbe.Password = clusterSettings.Password
+		connectionProbe.MetricQuery = clusterSettings.MetricQuery
+		(*probes)[*key] = connectionProbe
+	}
+
 	for clusterName, clusterSettings := range config.Settings().Stores.MySQL.Clusters {
 		clusterName := clusterName
 		clusterSettings := clusterSettings
@@ -152,18 +163,27 @@ func (throttler *Throttler) refreshMySQLInventory() error {
 				}
 				for _, host := range hosts {
 					key := mysql.InstanceKey{Hostname: host, Port: clusterSettings.Port}
-					log.Debugf("read instance key: %+v", key)
-
-					connectionProbe := mysql.NewConnectionProbe()
-					connectionProbe.Key = key
-					connectionProbe.User = clusterSettings.User
-					connectionProbe.Password = clusterSettings.Password
-					connectionProbe.MetricQuery = clusterSettings.MetricQuery
-					(*clusterConnectionProbes.Probes)[key] = connectionProbe
+					addInstanceKey(&key, clusterSettings, clusterConnectionProbes.Probes)
 				}
 				throttler.mysqlClusterProbesChan <- clusterConnectionProbes
+				return nil
 			}
-			return nil
+			if !clusterSettings.StaticHostsSettings.IsEmpty() {
+				clusterConnectionProbes := &mysql.ClusterConnectionProbes{
+					ClusterName: clusterName,
+					Probes:      mysql.NewConnectionProbes(),
+				}
+				for _, host := range clusterSettings.StaticHostsSettings.Hosts {
+					key, err := mysql.ParseInstanceKey(host, clusterSettings.Port)
+					if err != nil {
+						return log.Errore(err)
+					}
+					addInstanceKey(key, clusterSettings, clusterConnectionProbes.Probes)
+				}
+				throttler.mysqlClusterProbesChan <- clusterConnectionProbes
+				return nil
+			}
+			return log.Errorf("Could not find any hosts definition for cluster %s", clusterName)
 		}()
 	}
 	return nil
@@ -203,13 +223,14 @@ func (throttler *Throttler) aggregateMySQLMetrics() error {
 					return instanceMetricResult
 				}
 				if value >= worstMetricValue {
+					worstMetricValue = value
 					worstMetric = instanceMetricResult
 				}
 			}
 			return worstMetric
 		}()
 		val, err := aggregatedMetric.Get()
-		log.Debugf("###>>> aggregated metric %+v, %+v", val, err)
+		log.Debugf("###>>> aggregated metric %s: %+v, %+v", metricName, val, err)
 		throttler.aggregatedMetrics.Set(metricName, aggregatedMetric, cache.DefaultExpiration)
 	}
 	return nil

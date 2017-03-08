@@ -12,7 +12,7 @@ import (
 )
 
 const (
-	DefaultInstancePort = 3306
+	DefaultMySQLPort = 3306
 )
 
 // InstanceKey is an instance indicator, identifued by hostname and port
@@ -36,11 +36,11 @@ func NewRawInstanceKey(hostPort string) (*InstanceKey, error) {
 	return instanceKey, nil
 }
 
-// ParseRawInstanceKeyLoose will parse an InstanceKey from a string representation such as 127.0.0.1:3306.
-// The port part is optional; there will be no name resolve
-func ParseRawInstanceKeyLoose(hostPort string) (*InstanceKey, error) {
+// ParseInstanceKey will parse an InstanceKey from a string representation such as 127.0.0.1:3306 or some.hostname
+// `defaultPort` is used if `hostPort` does not include a port.
+func ParseInstanceKey(hostPort string, defaultPort int) (*InstanceKey, error) {
 	if !strings.Contains(hostPort, ":") {
-		return &InstanceKey{Hostname: hostPort, Port: DefaultInstancePort}, nil
+		return &InstanceKey{Hostname: hostPort, Port: defaultPort}, nil
 	}
 	return NewRawInstanceKey(hostPort)
 }
