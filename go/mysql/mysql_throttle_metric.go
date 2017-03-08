@@ -6,7 +6,6 @@
 package mysql
 
 import (
-	gosql "database/sql"
 	"fmt"
 	"strings"
 
@@ -16,46 +15,53 @@ import (
 type MySQLThrottleMetric struct {
 	Key   InstanceKey
 	Value float64
+	Err   error
 }
 
 func NewMySQLThrottleMetric() *MySQLThrottleMetric {
 	return &MySQLThrottleMetric{Value: 0}
 }
 
-func (mySQLThrottleMetric *MySQLThrottleMetric) MetricValue() float64 {
-	return mySQLThrottleMetric.Value
+func (metric *MySQLThrottleMetric) Get() (float64, error) {
+	return metric.Value, metric.Err
 }
 
 // GetReplicationLag returns replication lag for a given connection config; either by explicit query
 // or via SHOW SLAVE STATUS
-func ReadThrottleMetric(connectionConfig *ConnectionConfig, metricQuery string) (mySQLThrottleMetric *MySQLThrottleMetric, err error) {
+func ReadThrottleMetric(connectionProbe *ConnectionProbe) (mySQLThrottleMetric *MySQLThrottleMetric) {
 	mySQLThrottleMetric = NewMySQLThrottleMetric()
-	mySQLThrottleMetric.Key = connectionConfig.Key
+	mySQLThrottleMetric.Key = connectionProbe.Key
 
-	dbUri := connectionConfig.GetDBUri("information_schema")
-	var db *gosql.DB
-	if db, _, err = sqlutils.GetDB(dbUri); err != nil {
-		return mySQLThrottleMetric, err
+	dbUri := connectionProbe.GetDBUri("information_schema")
+
+	db, fromCache, err := sqlutils.GetDB(dbUri)
+	if err != nil {
+		mySQLThrottleMetric.Err = err
+		return mySQLThrottleMetric
+	}
+	if !fromCache {
+		db.SetMaxOpenConns(maxPoolConnections)
+		db.SetMaxIdleConns(maxIdleConnections)
+	}
+	if strings.HasPrefix(strings.ToLower(connectionProbe.MetricQuery), "select") {
+		mySQLThrottleMetric.Err = db.QueryRow(connectionProbe.MetricQuery).Scan(&mySQLThrottleMetric.Value)
+		return mySQLThrottleMetric
 	}
 
-	if strings.HasPrefix(strings.ToLower(metricQuery), "select") {
-		err = db.QueryRow(metricQuery).Scan(&mySQLThrottleMetric.Value)
-		return mySQLThrottleMetric, err
+	if strings.HasPrefix(strings.ToLower(connectionProbe.MetricQuery), "show global") {
+		var variableName string // just a placeholder
+		mySQLThrottleMetric.Err = db.QueryRow(connectionProbe.MetricQuery).Scan(&variableName, &mySQLThrottleMetric.Value)
+		return mySQLThrottleMetric
 	}
 
-	if strings.HasPrefix(strings.ToLower(metricQuery), "show global") {
-		var variableName string
-		err = db.QueryRow(metricQuery).Scan(&variableName, &mySQLThrottleMetric.Value)
-		return mySQLThrottleMetric, err
-	}
-
-	if metricQuery != "" {
-		return mySQLThrottleMetric, fmt.Errorf("Unsupported metrics query type: %s", metricQuery)
+	if connectionProbe.MetricQuery != "" {
+		mySQLThrottleMetric.Err = fmt.Errorf("Unsupported metrics query type: %s", connectionProbe.MetricQuery)
+		return mySQLThrottleMetric
 	}
 
 	// No metric query? By default we look at replication lag as output of SHOW SLAVE STATUS
 
-	err = sqlutils.QueryRowsMap(db, `show slave status`, func(m sqlutils.RowMap) error {
+	mySQLThrottleMetric.Err = sqlutils.QueryRowsMap(db, `show slave status`, func(m sqlutils.RowMap) error {
 		slaveIORunning := m.GetString("Slave_IO_Running")
 		slaveSQLRunning := m.GetString("Slave_SQL_Running")
 		secondsBehindMaster := m.GetNullInt64("Seconds_Behind_Master")
@@ -65,5 +71,5 @@ func ReadThrottleMetric(connectionConfig *ConnectionConfig, metricQuery string) 
 		mySQLThrottleMetric.Value = float64(secondsBehindMaster.Int64)
 		return nil
 	})
-	return mySQLThrottleMetric, err
+	return mySQLThrottleMetric
 }

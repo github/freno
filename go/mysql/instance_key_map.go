@@ -33,6 +33,16 @@ func (this *InstanceKeyMap) AddKeys(keys []InstanceKey) {
 	}
 }
 
+// AddKeyMaps adds all keys from another map
+func (this *InstanceKeyMap) AddKeyMap(other *InstanceKeyMap) {
+	if other == nil {
+		return
+	}
+	for key := range *other {
+		this.AddKey(key)
+	}
+}
+
 // HasKey checks if given key is within the map
 func (this *InstanceKeyMap) HasKey(key InstanceKey) bool {
 	_, ok := (*this)[key]
