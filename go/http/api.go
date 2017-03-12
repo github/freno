@@ -110,11 +110,12 @@ func (api *APIImpl) CheckMySQLCluster(w http.ResponseWriter, r *http.Request, ps
 func (api *APIImpl) AggregatedMetrics(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 	w.Header().Set("Content-Type", "application/json")
 	aggregatedMetrics := api.throttler.AggregatedMetrics()
-	json.NewEncoder(w).Encode(aggregatedMetrics)
-	// for metricName, metric := range aggregatedMetrics {
-	// 	value, err := metric.Get()
-	// 	fmt.Fprintf(w, "%s: %+v, %+v\n", metricName, value, err)
-	// }
+	responseMap := map[string]string{}
+	for metricName, metric := range aggregatedMetrics {
+		value, err := metric.Get()
+		responseMap[metricName] = fmt.Sprintf("%+v, %+v", value, err)
+	}
+	json.NewEncoder(w).Encode(responseMap)
 }
 
 // register is a wrapper function for accepting both GET and HEAD requests
