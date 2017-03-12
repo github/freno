@@ -160,7 +160,7 @@ func (throttler *Throttler) refreshMySQLInventory() error {
 				if err != nil {
 					return log.Errorf("Unable to get HAproxy hosts from %s:%d: %+v", clusterSettings.HAProxySettings.Host, clusterSettings.HAProxySettings.Port, err)
 				}
-				log.Debugf("Read %+v hosts from haproxy %s:%d", len(hosts), clusterSettings.HAProxySettings.Host, clusterSettings.HAProxySettings.Port)
+				log.Debugf("Read %+v hosts from haproxy %s:%d/%s", len(hosts), clusterSettings.HAProxySettings.Host, clusterSettings.HAProxySettings.Port, clusterSettings.HAProxySettings.PoolName)
 				clusterProbes := &mysql.ClusterProbes{
 					ClusterName: clusterName,
 					Probes:      mysql.NewProbes(),
