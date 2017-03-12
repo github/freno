@@ -16,8 +16,8 @@ func init() {
 	log.SetLevel(log.ERROR)
 }
 
-func TestNewConnectionProbe(t *testing.T) {
-	c := NewConnectionProbe()
+func TestNewProbe(t *testing.T) {
+	c := NewProbe()
 	test.S(t).ExpectEquals(c.Key.Hostname, "")
 	test.S(t).ExpectEquals(c.Key.Port, 0)
 	test.S(t).ExpectEquals(c.User, "")
@@ -25,7 +25,7 @@ func TestNewConnectionProbe(t *testing.T) {
 }
 
 func TestDuplicateCredentials(t *testing.T) {
-	c := NewConnectionProbe()
+	c := NewProbe()
 	c.Key = InstanceKey{Hostname: "myhost", Port: 3306}
 	c.User = "gromit"
 	c.Password = "penguin"
@@ -38,7 +38,7 @@ func TestDuplicateCredentials(t *testing.T) {
 }
 
 func TestDuplicate(t *testing.T) {
-	c := NewConnectionProbe()
+	c := NewProbe()
 	c.Key = InstanceKey{Hostname: "myhost", Port: 3306}
 	c.User = "gromit"
 	c.Password = "penguin"

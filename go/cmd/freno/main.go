@@ -106,9 +106,11 @@ func httpServe() error {
 		return err
 	}
 	go group.Monitor()
-	go throttle.NewThrottler().Operate()
 
-	api := http.NewAPIImpl()
+	throttler := throttle.NewThrottler()
+	go throttler.Operate()
+
+	api := http.NewAPIImpl(throttler)
 	router := http.ConfigureRoutes(api)
 	port := config.Settings().ListenPort
 	log.Infof("Starting server in port %d", port)

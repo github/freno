@@ -28,11 +28,11 @@ func (metric *MySQLThrottleMetric) Get() (float64, error) {
 
 // GetReplicationLag returns replication lag for a given connection config; either by explicit query
 // or via SHOW SLAVE STATUS
-func ReadThrottleMetric(connectionProbe *ConnectionProbe) (mySQLThrottleMetric *MySQLThrottleMetric) {
+func ReadThrottleMetric(probe *Probe) (mySQLThrottleMetric *MySQLThrottleMetric) {
 	mySQLThrottleMetric = NewMySQLThrottleMetric()
-	mySQLThrottleMetric.Key = connectionProbe.Key
+	mySQLThrottleMetric.Key = probe.Key
 
-	dbUri := connectionProbe.GetDBUri("information_schema")
+	dbUri := probe.GetDBUri("information_schema")
 
 	db, fromCache, err := sqlutils.GetDB(dbUri)
 	if err != nil {
@@ -43,19 +43,19 @@ func ReadThrottleMetric(connectionProbe *ConnectionProbe) (mySQLThrottleMetric *
 		db.SetMaxOpenConns(maxPoolConnections)
 		db.SetMaxIdleConns(maxIdleConnections)
 	}
-	if strings.HasPrefix(strings.ToLower(connectionProbe.MetricQuery), "select") {
-		mySQLThrottleMetric.Err = db.QueryRow(connectionProbe.MetricQuery).Scan(&mySQLThrottleMetric.Value)
+	if strings.HasPrefix(strings.ToLower(probe.MetricQuery), "select") {
+		mySQLThrottleMetric.Err = db.QueryRow(probe.MetricQuery).Scan(&mySQLThrottleMetric.Value)
 		return mySQLThrottleMetric
 	}
 
-	if strings.HasPrefix(strings.ToLower(connectionProbe.MetricQuery), "show global") {
+	if strings.HasPrefix(strings.ToLower(probe.MetricQuery), "show global") {
 		var variableName string // just a placeholder
-		mySQLThrottleMetric.Err = db.QueryRow(connectionProbe.MetricQuery).Scan(&variableName, &mySQLThrottleMetric.Value)
+		mySQLThrottleMetric.Err = db.QueryRow(probe.MetricQuery).Scan(&variableName, &mySQLThrottleMetric.Value)
 		return mySQLThrottleMetric
 	}
 
-	if connectionProbe.MetricQuery != "" {
-		mySQLThrottleMetric.Err = fmt.Errorf("Unsupported metrics query type: %s", connectionProbe.MetricQuery)
+	if probe.MetricQuery != "" {
+		mySQLThrottleMetric.Err = fmt.Errorf("Unsupported metrics query type: %s", probe.MetricQuery)
 		return mySQLThrottleMetric
 	}
 

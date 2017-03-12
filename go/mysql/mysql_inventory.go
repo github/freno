@@ -10,13 +10,13 @@ import (
 )
 
 type MySQLInventory struct {
-	ClustersProbes     map[string](*ConnectionProbes)
+	ClustersProbes     map[string](*Probes)
 	InstanceKeyMetrics map[InstanceKey]base.MetricResult
 }
 
 func NewMySQLInventory() *MySQLInventory {
 	inventory := &MySQLInventory{
-		ClustersProbes:     make(map[string](*ConnectionProbes)),
+		ClustersProbes:     make(map[string](*Probes)),
 		InstanceKeyMetrics: make(map[InstanceKey]base.MetricResult),
 	}
 	return inventory

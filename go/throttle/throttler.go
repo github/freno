@@ -28,11 +28,12 @@ type Throttler struct {
 
 	mysqlThrottleMetricChan chan *mysql.MySQLThrottleMetric
 	mysqlInventoryChan      chan *mysql.MySQLInventory
-	mysqlClusterProbesChan  chan *mysql.ClusterConnectionProbes
+	mysqlClusterProbesChan  chan *mysql.ClusterProbes
 
 	mysqlInventory *mysql.MySQLInventory
 
-	aggregatedMetrics *cache.Cache
+	mysqlClusterThresholds *cache.Cache
+	aggregatedMetrics      *cache.Cache
 }
 
 func NewThrottler() *Throttler {
@@ -42,10 +43,11 @@ func NewThrottler() *Throttler {
 		mysqlThrottleMetricChan: make(chan *mysql.MySQLThrottleMetric),
 
 		mysqlInventoryChan:     make(chan *mysql.MySQLInventory, 1),
-		mysqlClusterProbesChan: make(chan *mysql.ClusterConnectionProbes),
+		mysqlClusterProbesChan: make(chan *mysql.ClusterProbes),
 		mysqlInventory:         mysql.NewMySQLInventory(),
 
-		aggregatedMetrics: cache.New(aggregatedMetricsExpiration, aggregatedMetricsCleanup),
+		mysqlClusterThresholds: cache.New(cache.NoExpiration, 0),
+		aggregatedMetrics:      cache.New(aggregatedMetricsExpiration, aggregatedMetricsCleanup),
 	}
 	return throttler
 }
@@ -78,10 +80,10 @@ func (throttler *Throttler) Operate() {
 				// sparse
 				go throttler.refreshMySQLInventory()
 			}
-		case connectionProbes := <-throttler.mysqlClusterProbesChan:
+		case probes := <-throttler.mysqlClusterProbesChan:
 			{
 				// incoming structural update, sparse, as result of refreshMySQLInventory()
-				throttler.onUpdatedMySQLClusterProbes(connectionProbes)
+				throttler.onUpdatedMySQLClusterProbes(probes)
 			}
 		case <-mysqlAggregateTick:
 			{
@@ -99,21 +101,21 @@ func (throttler *Throttler) collectMySQLMetrics() error {
 		return nil
 	}
 	// synchronously, get lists of probes
-	for _, connectionProbes := range throttler.mysqlInventory.ClustersProbes {
-		connectionProbes := connectionProbes
+	for _, probes := range throttler.mysqlInventory.ClustersProbes {
+		probes := probes
 		go func() {
-			// connectionProbes is known not to change. It can be *replaced*, but not changed.
+			// probes is known not to change. It can be *replaced*, but not changed.
 			// so it's safe to iterate it
-			for _, connectionProbe := range *connectionProbes {
-				connectionProbe := connectionProbe
+			for _, probe := range *probes {
+				probe := probe
 				go func() {
 					// Avoid querying the same server twice at the same time. If previous read is still there,
 					// we avoid re-reading it.
-					if !atomic.CompareAndSwapInt64(&connectionProbe.InProgress, 0, 1) {
+					if !atomic.CompareAndSwapInt64(&probe.InProgress, 0, 1) {
 						return
 					}
-					defer atomic.StoreInt64(&connectionProbe.InProgress, 0)
-					throttleMetrics := mysql.ReadThrottleMetric(connectionProbe)
+					defer atomic.StoreInt64(&probe.InProgress, 0)
+					throttleMetrics := mysql.ReadThrottleMetric(probe)
 					throttler.mysqlThrottleMetricChan <- throttleMetrics
 				}()
 			}
@@ -130,15 +132,16 @@ func (throttler *Throttler) refreshMySQLInventory() error {
 	}
 	log.Debugf("refreshing MySQL inventory")
 
-	addInstanceKey := func(key *mysql.InstanceKey, clusterSettings *config.MySQLClusterConfigurationSettings, probes *mysql.ConnectionProbes) {
+	addInstanceKey := func(key *mysql.InstanceKey, clusterSettings *config.MySQLClusterConfigurationSettings, probes *mysql.Probes) {
 		log.Debugf("read instance key: %+v", key)
 
-		connectionProbe := mysql.NewConnectionProbe()
-		connectionProbe.Key = *key
-		connectionProbe.User = clusterSettings.User
-		connectionProbe.Password = clusterSettings.Password
-		connectionProbe.MetricQuery = clusterSettings.MetricQuery
-		(*probes)[*key] = connectionProbe
+		probe := &mysql.Probe{
+			Key:         *key,
+			User:        clusterSettings.User,
+			Password:    clusterSettings.Password,
+			MetricQuery: clusterSettings.MetricQuery,
+		}
+		(*probes)[*key] = probe
 	}
 
 	for clusterName, clusterSettings := range config.Settings().Stores.MySQL.Clusters {
@@ -147,6 +150,7 @@ func (throttler *Throttler) refreshMySQLInventory() error {
 		// config may dynamically change, but internal structure (config.Settings().Stores.MySQL.Clusters in our case)
 		// is immutable and can only be _replaced_. Hence, it's safe to read in a goroutine:
 		go func() error {
+			throttler.mysqlClusterThresholds.Set(clusterName, clusterSettings.ThrottleThreshold, cache.DefaultExpiration)
 			if !clusterSettings.HAProxySettings.IsEmpty() {
 				log.Debugf("getting haproxy data from %s:%d", clusterSettings.HAProxySettings.Host, clusterSettings.HAProxySettings.Port)
 				csv, err := haproxy.Read(clusterSettings.HAProxySettings.Host, clusterSettings.HAProxySettings.Port)
@@ -157,30 +161,30 @@ func (throttler *Throttler) refreshMySQLInventory() error {
 				if err != nil {
 					return log.Errorf("Unable to get HAproxy hosts from %s:%d: %+v", clusterSettings.HAProxySettings.Host, clusterSettings.HAProxySettings.Port, err)
 				}
-				clusterConnectionProbes := &mysql.ClusterConnectionProbes{
+				clusterProbes := &mysql.ClusterProbes{
 					ClusterName: clusterName,
-					Probes:      mysql.NewConnectionProbes(),
+					Probes:      mysql.NewProbes(),
 				}
 				for _, host := range hosts {
 					key := mysql.InstanceKey{Hostname: host, Port: clusterSettings.Port}
-					addInstanceKey(&key, clusterSettings, clusterConnectionProbes.Probes)
+					addInstanceKey(&key, clusterSettings, clusterProbes.Probes)
 				}
-				throttler.mysqlClusterProbesChan <- clusterConnectionProbes
+				throttler.mysqlClusterProbesChan <- clusterProbes
 				return nil
 			}
 			if !clusterSettings.StaticHostsSettings.IsEmpty() {
-				clusterConnectionProbes := &mysql.ClusterConnectionProbes{
+				clusterProbes := &mysql.ClusterProbes{
 					ClusterName: clusterName,
-					Probes:      mysql.NewConnectionProbes(),
+					Probes:      mysql.NewProbes(),
 				}
 				for _, host := range clusterSettings.StaticHostsSettings.Hosts {
 					key, err := mysql.ParseInstanceKey(host, clusterSettings.Port)
 					if err != nil {
 						return log.Errore(err)
 					}
-					addInstanceKey(key, clusterSettings, clusterConnectionProbes.Probes)
+					addInstanceKey(key, clusterSettings, clusterProbes.Probes)
 				}
-				throttler.mysqlClusterProbesChan <- clusterConnectionProbes
+				throttler.mysqlClusterProbesChan <- clusterProbes
 				return nil
 			}
 			return log.Errorf("Could not find any hosts definition for cluster %s", clusterName)
@@ -190,8 +194,8 @@ func (throttler *Throttler) refreshMySQLInventory() error {
 }
 
 // synchronous update of inventory
-func (throttler *Throttler) onUpdatedMySQLClusterProbes(clusterProbes *mysql.ClusterConnectionProbes) error {
-	log.Debugf("onMySQLClusterConnectionProbes: %s", clusterProbes.ClusterName)
+func (throttler *Throttler) onUpdatedMySQLClusterProbes(clusterProbes *mysql.ClusterProbes) error {
+	log.Debugf("onMySQLClusterProbes: %s", clusterProbes.ClusterName)
 	throttler.mysqlInventory.ClustersProbes[clusterProbes.ClusterName] = clusterProbes.Probes
 	return nil
 }
@@ -201,18 +205,18 @@ func (throttler *Throttler) aggregateMySQLMetrics() error {
 	if !throttler.isLeader {
 		return nil
 	}
-	for clusterName, connectionProbes := range throttler.mysqlInventory.ClustersProbes {
+	for clusterName, probes := range throttler.mysqlInventory.ClustersProbes {
 		metricName := fmt.Sprintf("mysql/%s", clusterName)
 		aggregatedMetric := func() (worstMetric base.MetricResult) {
 			var worstMetricValue float64
 
-			// connectionProbes is known not to change. It can be *replaced*, but not changed.
+			// probes is known not to change. It can be *replaced*, but not changed.
 			// so it's safe to iterate it
-			if len(*connectionProbes) == 0 {
+			if len(*probes) == 0 {
 				return base.NoHostsMetricResult
 			}
-			for _, connectionProbe := range *connectionProbes {
-				instanceMetricResult, ok := throttler.mysqlInventory.InstanceKeyMetrics[connectionProbe.Key]
+			for _, probe := range *probes {
+				instanceMetricResult, ok := throttler.mysqlInventory.InstanceKeyMetrics[probe.Key]
 				if !ok {
 					return base.NoMetricResultYet
 				}
@@ -234,4 +238,16 @@ func (throttler *Throttler) aggregateMySQLMetrics() error {
 		throttler.aggregatedMetrics.Set(metricName, aggregatedMetric, cache.DefaultExpiration)
 	}
 	return nil
+}
+
+func (throttler *Throttler) GetMySQLClusterMetrics(clusterName string) (metricResult base.MetricResult, threshold float64) {
+	if thresholdVal, found := throttler.mysqlClusterThresholds.Get(clusterName); found {
+		threshold, _ = thresholdVal.(float64)
+	}
+
+	metricName := fmt.Sprintf("mysql/%s", clusterName)
+	if metricResultVal, found := throttler.aggregatedMetrics.Get(metricName); found {
+		metricResult = metricResultVal.(base.MetricResult)
+	}
+	return metricResult, threshold
 }

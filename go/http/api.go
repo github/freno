@@ -6,6 +6,7 @@ import (
 	"os"
 
 	"github.com/github/freno/go/group"
+	"github.com/github/freno/go/throttle"
 
 	"github.com/julienschmidt/httprouter"
 )
@@ -16,15 +17,19 @@ type API interface {
 	LeaderCheck(w http.ResponseWriter, _ *http.Request, _ httprouter.Params)
 	RaftLeader(w http.ResponseWriter, _ *http.Request, _ httprouter.Params)
 	Hostname(w http.ResponseWriter, _ *http.Request, _ httprouter.Params)
+	CheckMySQLCluster(w http.ResponseWriter, r *http.Request, _ httprouter.Params)
 }
 
 // APIImpl implements the API
 type APIImpl struct {
+	throttler *throttle.Throttler
 }
 
 // NewAPIImpl creates a new instance of the API implementation
-func NewAPIImpl() *APIImpl {
-	return &APIImpl{}
+func NewAPIImpl(throttler *throttle.Throttler) *APIImpl {
+	return &APIImpl{
+		throttler: throttler,
+	}
 }
 
 // LbCheck responds to LbCheck with HTTP 200
@@ -66,6 +71,26 @@ func (api *APIImpl) Hostname(w http.ResponseWriter, r *http.Request, _ httproute
 	}
 }
 
+// CheckMySQLCluster checks whether a cluster's collected metric is within its threshold
+func (api *APIImpl) CheckMySQLCluster(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
+	clusterName := ps.ByName("clusterName")
+	metricResult, threshold := api.throttler.GetMySQLClusterMetrics(clusterName)
+	value, err := metricResult.Get()
+
+	statusCode := http.StatusInternalServerError
+	if err != nil {
+		statusCode = http.StatusInternalServerError
+	} else if value > threshold {
+		statusCode = http.StatusTooManyRequests
+	} else {
+		statusCode = http.StatusOK
+	}
+	w.WriteHeader(statusCode)
+	if r.Method == http.MethodGet {
+		fmt.Fprintf(w, "HTTP %d\n%+v\n%+v", statusCode, err, value)
+	}
+}
+
 // register is a wrapper function for accepting both GET and HEAD requests
 func register(router *httprouter.Router, path string, f httprouter.Handle) {
 	router.HEAD(path, f)
@@ -80,5 +105,6 @@ func ConfigureRoutes(api API) *httprouter.Router {
 	register(router, "/leader-check", api.LeaderCheck)
 	register(router, "/raft/leader", api.RaftLeader)
 	register(router, "/hostname", api.Hostname)
+	register(router, "/check/:app/mysql/:clusterName", api.CheckMySQLCluster)
 	return router
 }

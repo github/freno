@@ -14,8 +14,8 @@ const maxPoolConnections = 3
 const maxIdleConnections = 3
 const timeoutMillis = 1000
 
-// ConnectionProbe is the minimal configuration required to connect to a MySQL server
-type ConnectionProbe struct {
+// Probe is the minimal configuration required to connect to a MySQL server
+type Probe struct {
 	Key         InstanceKey
 	User        string
 	Password    string
@@ -23,27 +23,27 @@ type ConnectionProbe struct {
 	InProgress  int64
 }
 
-type ConnectionProbes map[InstanceKey](*ConnectionProbe)
+type Probes map[InstanceKey](*Probe)
 
-type ClusterConnectionProbes struct {
+type ClusterProbes struct {
 	ClusterName string
-	Probes      *ConnectionProbes
+	Probes      *Probes
 }
 
-func NewConnectionProbes() *ConnectionProbes {
-	return &ConnectionProbes{}
+func NewProbes() *Probes {
+	return &Probes{}
 }
 
-func NewConnectionProbe() *ConnectionProbe {
-	config := &ConnectionProbe{
+func NewProbe() *Probe {
+	config := &Probe{
 		Key: InstanceKey{},
 	}
 	return config
 }
 
 // DuplicateCredentials creates a new connection config with given key and with same credentials as this config
-func (this *ConnectionProbe) DuplicateCredentials(key InstanceKey) *ConnectionProbe {
-	config := &ConnectionProbe{
+func (this *Probe) DuplicateCredentials(key InstanceKey) *Probe {
+	config := &Probe{
 		Key:      key,
 		User:     this.User,
 		Password: this.Password,
@@ -51,19 +51,19 @@ func (this *ConnectionProbe) DuplicateCredentials(key InstanceKey) *ConnectionPr
 	return config
 }
 
-func (this *ConnectionProbe) Duplicate() *ConnectionProbe {
+func (this *Probe) Duplicate() *Probe {
 	return this.DuplicateCredentials(this.Key)
 }
 
-func (this *ConnectionProbe) String() string {
+func (this *Probe) String() string {
 	return fmt.Sprintf("%s, user=%s", this.Key.DisplayString(), this.User)
 }
 
-func (this *ConnectionProbe) Equals(other *ConnectionProbe) bool {
+func (this *Probe) Equals(other *Probe) bool {
 	return this.Key.Equals(&other.Key)
 }
 
-func (this *ConnectionProbe) GetDBUri(databaseName string) string {
+func (this *Probe) GetDBUri(databaseName string) string {
 	hostname := this.Key.Hostname
 	var ip = net.ParseIP(hostname)
 	if (ip != nil) && (ip.To4() == nil) {
