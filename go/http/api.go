@@ -1,6 +1,7 @@
 package http
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"os"
@@ -19,6 +20,13 @@ type API interface {
 	Hostname(w http.ResponseWriter, _ *http.Request, _ httprouter.Params)
 	CheckMySQLCluster(w http.ResponseWriter, r *http.Request, _ httprouter.Params)
 	AggregatedMetrics(w http.ResponseWriter, r *http.Request, _ httprouter.Params)
+}
+
+type CheckResponse struct {
+	StatusCode int
+	Error      error
+	Value      float64
+	Threshold  float64
 }
 
 // APIImpl implements the API
@@ -88,7 +96,13 @@ func (api *APIImpl) CheckMySQLCluster(w http.ResponseWriter, r *http.Request, ps
 	}
 	w.WriteHeader(statusCode)
 	if r.Method == http.MethodGet {
-		fmt.Fprintf(w, "HTTP %d\n%+v\n%+v/%+v", statusCode, err, value, threshold)
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(CheckResponse{
+			StatusCode: statusCode,
+			Error:      err,
+			Value:      value,
+			Threshold:  threshold,
+		})
 	}
 }
 
