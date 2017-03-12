@@ -18,6 +18,7 @@ type API interface {
 	RaftLeader(w http.ResponseWriter, _ *http.Request, _ httprouter.Params)
 	Hostname(w http.ResponseWriter, _ *http.Request, _ httprouter.Params)
 	CheckMySQLCluster(w http.ResponseWriter, r *http.Request, _ httprouter.Params)
+	AggregatedMetrics(w http.ResponseWriter, r *http.Request, _ httprouter.Params)
 }
 
 // APIImpl implements the API
@@ -91,6 +92,15 @@ func (api *APIImpl) CheckMySQLCluster(w http.ResponseWriter, r *http.Request, ps
 	}
 }
 
+// AggregatedMetrics returns a snapshot of all current aggregated metrics
+func (api *APIImpl) AggregatedMetrics(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
+	aggregatedMetrics := api.throttler.AggregatedMetrics()
+	for metricName, metric := range aggregatedMetrics {
+		value, err := metric.Get()
+		fmt.Fprintf(w, "%s: %+v, %+v", metricName, value, err)
+	}
+}
+
 // register is a wrapper function for accepting both GET and HEAD requests
 func register(router *httprouter.Router, path string, f httprouter.Handle) {
 	router.HEAD(path, f)
@@ -106,5 +116,6 @@ func ConfigureRoutes(api API) *httprouter.Router {
 	register(router, "/raft/leader", api.RaftLeader)
 	register(router, "/hostname", api.Hostname)
 	register(router, "/check/:app/mysql/:clusterName", api.CheckMySQLCluster)
+	register(router, "/aggregated-metrics", api.AggregatedMetrics)
 	return router
 }
