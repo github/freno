@@ -97,7 +97,7 @@ func (api *APIImpl) AggregatedMetrics(w http.ResponseWriter, r *http.Request, ps
 	aggregatedMetrics := api.throttler.AggregatedMetrics()
 	for metricName, metric := range aggregatedMetrics {
 		value, err := metric.Get()
-		fmt.Fprintf(w, "%s: %+v, %+v", metricName, value, err)
+		fmt.Fprintf(w, "%s: %+v, %+v\n", metricName, value, err)
 	}
 }
 
