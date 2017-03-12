@@ -94,9 +94,11 @@ func (api *APIImpl) CheckMySQLCluster(w http.ResponseWriter, r *http.Request, ps
 	} else {
 		statusCode = http.StatusOK
 	}
-	w.WriteHeader(statusCode)
 	if r.Method == http.MethodGet {
 		w.Header().Set("Content-Type", "application/json")
+	}
+	w.WriteHeader(statusCode)
+	if r.Method == http.MethodGet {
 		json.NewEncoder(w).Encode(CheckResponse{
 			StatusCode: statusCode,
 			Error:      err,
