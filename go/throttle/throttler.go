@@ -72,7 +72,6 @@ func (throttler *Throttler) Operate() {
 		case metric := <-throttler.mysqlThrottleMetricChan:
 			{
 				// incoming MySQL metric, frequent, as result of collectMySQLMetrics()
-				log.Debugf("got metrics for %+v", metric)
 				throttler.mysqlInventory.InstanceKeyMetrics[metric.Key] = metric
 			}
 		case <-mysqlRefreshTick:
@@ -233,8 +232,6 @@ func (throttler *Throttler) aggregateMySQLMetrics() error {
 			}
 			return worstMetric
 		}()
-		val, err := aggregatedMetric.Get()
-		log.Debugf("###>>> aggregated metric %s: %+v, %+v", metricName, val, err)
 		throttler.aggregatedMetrics.Set(metricName, aggregatedMetric, cache.DefaultExpiration)
 	}
 	return nil
