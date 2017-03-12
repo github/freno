@@ -87,7 +87,7 @@ func (api *APIImpl) CheckMySQLCluster(w http.ResponseWriter, r *http.Request, ps
 	}
 	w.WriteHeader(statusCode)
 	if r.Method == http.MethodGet {
-		fmt.Fprintf(w, "HTTP %d\n%+v\n%+v", statusCode, err, value)
+		fmt.Fprintf(w, "HTTP %d\n%+v\n%+v/%+v", statusCode, err, value, threshold)
 	}
 }
 

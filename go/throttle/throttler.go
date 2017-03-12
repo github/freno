@@ -220,7 +220,6 @@ func (throttler *Throttler) aggregateMySQLMetrics() error {
 					return base.NoMetricResultYet
 				}
 
-				log.Debugf(">>> metric is %+v", instanceMetricResult)
 				value, err := instanceMetricResult.Get()
 				if err != nil {
 					return instanceMetricResult
