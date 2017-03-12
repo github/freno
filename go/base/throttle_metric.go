@@ -15,6 +15,7 @@ type MetricResult interface {
 
 var noHostsError = errors.New("No hosts found")
 var noResultYetError = errors.New("Metric not collected yet")
+var noSuchMetricError = errors.New("No such metric")
 
 type noHostsMetricResult struct{}
 
@@ -31,3 +32,11 @@ func (metricResult *noMetricResultYet) Get() (float64, error) {
 }
 
 var NoMetricResultYet = &noMetricResultYet{}
+
+type noSuchMetric struct{}
+
+func (metricResult *noSuchMetric) Get() (float64, error) {
+	return 0, noSuchMetricError
+}
+
+var NoSuchMetric = &noSuchMetric{}

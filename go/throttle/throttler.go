@@ -239,11 +239,15 @@ func (throttler *Throttler) aggregateMySQLMetrics() error {
 func (throttler *Throttler) GetMySQLClusterMetrics(clusterName string) (metricResult base.MetricResult, threshold float64) {
 	if thresholdVal, found := throttler.mysqlClusterThresholds.Get(clusterName); found {
 		threshold, _ = thresholdVal.(float64)
+	} else {
+		return base.NoSuchMetric, 0
 	}
 
 	metricName := fmt.Sprintf("mysql/%s", clusterName)
 	if metricResultVal, found := throttler.aggregatedMetrics.Get(metricName); found {
 		metricResult = metricResultVal.(base.MetricResult)
+	} else {
+		return base.NoSuchMetric, 0
 	}
 	return metricResult, threshold
 }
