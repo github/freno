@@ -232,7 +232,9 @@ func (throttler *Throttler) aggregateMySQLMetrics() error {
 			}
 			return worstMetric
 		}()
-		throttler.aggregatedMetrics.Set(metricName, aggregatedMetric, cache.DefaultExpiration)
+		go func() {
+			throttler.aggregatedMetrics.Set(metricName, aggregatedMetric, cache.DefaultExpiration)
+		}()
 	}
 	return nil
 }
