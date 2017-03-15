@@ -25,9 +25,21 @@ type API interface {
 
 type CheckResponse struct {
 	StatusCode int
-	Error      error
+	Message    string
 	Value      float64
 	Threshold  float64
+}
+
+func NewCheckResponse(statusCode int, err error, value float64, threshold float64) *CheckResponse {
+	response := &CheckResponse{
+		StatusCode: statusCode,
+		Value:      value,
+		Threshold:  threshold,
+	}
+	if err != nil {
+		response.Message = err.Error()
+	}
+	return response
 }
 
 // APIImpl implements the API
@@ -94,8 +106,9 @@ func (api *APIImpl) checkAppMetricResult(w http.ResponseWriter, r *http.Request,
 		// any error
 		statusCode = http.StatusInternalServerError
 	} else if value > threshold {
-		// casual throttline
+		// casual throttling
 		statusCode = http.StatusTooManyRequests
+		err = base.ThresholdExceededError
 	} else {
 		// all good!
 		statusCode = http.StatusOK
@@ -105,12 +118,7 @@ func (api *APIImpl) checkAppMetricResult(w http.ResponseWriter, r *http.Request,
 	}
 	w.WriteHeader(statusCode)
 	if r.Method == http.MethodGet {
-		json.NewEncoder(w).Encode(CheckResponse{
-			StatusCode: statusCode,
-			Error:      err,
-			Value:      value,
-			Threshold:  threshold,
-		})
+		json.NewEncoder(w).Encode(NewCheckResponse(statusCode, err, value, threshold))
 	}
 }
 
