@@ -7,6 +7,8 @@ import (
 	"strings"
 )
 
+// parseHeader parses the HAPRoxy CSV header, which lists column names.
+// Returned is a header-to-index map
 func parseHeader(header string) (tokensMap map[string]int) {
 	tokensMap = map[string]int{}
 	header = strings.TrimLeft(header, "#")
@@ -19,10 +21,14 @@ func parseHeader(header string) (tokensMap map[string]int) {
 	return tokensMap
 }
 
+// Simple utility function to split CSV lines
 func parseLines(csv string) []string {
 	return strings.Split(csv, "\n")
 }
 
+// ParseHosts reads HAProxy CSV lines and returns lists of hosts participating in the given pool (backend)
+// Returned are all non-disabled hosts in given backend. Thus, a NOLB is skipped; any UP or DOWN hosts are returned.
+// Such list indicates the hosts which can be expected to be active, which is then the list freno will probe.
 func ParseHosts(csvLines []string, poolName string) (hosts []string, err error) {
 	if len(csvLines) < 1 {
 		return hosts, fmt.Errorf("No lines found haproxy CSV; expecting at least a header")
@@ -45,11 +51,14 @@ func ParseHosts(csvLines []string, poolName string) (hosts []string, err error) 
 	return hosts, nil
 }
 
+// ParseCsvHosts reads HAProxy CSV text and returns lists of hosts participating in the given pool (backend).
+// See comment for ParseHosts
 func ParseCsvHosts(csv string, poolName string) (hosts []string, err error) {
 	csvLines := parseLines(csv)
 	return ParseHosts(csvLines, poolName)
 }
 
+// Read will read HAProxy URI and return with the CSV text
 func Read(host string, port int) (csv string, err error) {
 	haproxyUrl := fmt.Sprintf("http://%s:%d/;csv;norefresh", host, port)
 	resp, err := http.Get(haproxyUrl)
