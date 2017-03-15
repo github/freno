@@ -23,8 +23,9 @@ type MySQLClusterConfigurationSettings struct {
 
 // Hook to implement adjustments after reading each configuration file.
 func (settings *MySQLClusterConfigurationSettings) postReadAdjustments() error {
-	// We accept user & password in the form "${SOME_ENV_VARIABLE}" in which case we pull
-	// the given variable from os env
+	// Username & password may be given as plaintext in the config file, or can be delivered
+	// via environment variables. We accept user & password in the form "${SOME_ENV_VARIABLE}"
+	// in which case we get the value from this process' invoking environment.
 	if submatch := envVariableRegexp.FindStringSubmatch(settings.User); len(submatch) > 1 {
 		settings.User = os.Getenv(submatch[1])
 	}
@@ -49,8 +50,9 @@ func (settings *MySQLConfigurationSettings) postReadAdjustments() error {
 	if settings.Port == 0 {
 		settings.Port = DefaultMySQLPort
 	}
-	// We accept user & password in the form "${SOME_ENV_VARIABLE}" in which case we pull
-	// the given variable from os env
+	// Username & password may be given as plaintext in the config file, or can be delivered
+	// via environment variables. We accept user & password in the form "${SOME_ENV_VARIABLE}"
+	// in which case we get the value from this process' invoking environment.
 	if submatch := envVariableRegexp.FindStringSubmatch(settings.User); len(submatch) > 1 {
 		settings.User = os.Getenv(submatch[1])
 	}
