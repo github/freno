@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 
+	"github.com/github/freno/go/base"
 	"github.com/github/freno/go/group"
 	"github.com/github/freno/go/throttle"
 
@@ -80,18 +81,23 @@ func (api *APIImpl) Hostname(w http.ResponseWriter, r *http.Request, _ httproute
 	}
 }
 
-// CheckMySQLCluster checks whether a cluster's collected metric is within its threshold
-func (api *APIImpl) CheckMySQLCluster(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
-	clusterName := ps.ByName("clusterName")
-	metricResult, threshold := api.throttler.GetMySQLClusterMetrics(clusterName)
+func (api *APIImpl) checkAppMetricResult(w http.ResponseWriter, r *http.Request, ps httprouter.Params, metricResultFunc base.MetricResultFunc) {
+	appName := ps.ByName("app")
+	metricResult, threshold := api.throttler.AppRequestMetricResult(appName, metricResultFunc)
 	value, err := metricResult.Get()
 
 	statusCode := http.StatusInternalServerError
-	if err != nil {
+	if err == base.AppDeniedError {
+		// app specifically not allowed to get metrics
+		statusCode = http.StatusExpectationFailed
+	} else if err != nil {
+		// any error
 		statusCode = http.StatusInternalServerError
 	} else if value > threshold {
+		// casual throttline
 		statusCode = http.StatusTooManyRequests
 	} else {
+		// all good!
 		statusCode = http.StatusOK
 	}
 	if r.Method == http.MethodGet {
@@ -106,6 +112,15 @@ func (api *APIImpl) CheckMySQLCluster(w http.ResponseWriter, r *http.Request, ps
 			Threshold:  threshold,
 		})
 	}
+}
+
+// CheckMySQLCluster checks whether a cluster's collected metric is within its threshold
+func (api *APIImpl) CheckMySQLCluster(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
+	clusterName := ps.ByName("clusterName")
+	var metricResultFunc base.MetricResultFunc = func() (metricResult base.MetricResult, threshold float64) {
+		return api.throttler.GetMySQLClusterMetrics(clusterName)
+	}
+	api.checkAppMetricResult(w, r, ps, metricResultFunc)
 }
 
 // AggregatedMetrics returns a snapshot of all current aggregated metrics
