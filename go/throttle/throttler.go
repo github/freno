@@ -61,7 +61,7 @@ func (throttler *Throttler) Operate() {
 		select {
 		case <-leaderCheckTick:
 			{
-				// sparsse
+				// sparse
 				throttler.isLeader = group.IsLeader()
 			}
 		case <-mysqlCollectTick:
