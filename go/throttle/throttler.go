@@ -51,6 +51,7 @@ func NewThrottler() *Throttler {
 		mysqlClusterThresholds: cache.New(cache.NoExpiration, 0),
 		aggregatedMetrics:      cache.New(aggregatedMetricsExpiration, aggregatedMetricsCleanup),
 	}
+	throttler.ThrottleApp("abuse")
 	return throttler
 }
 
