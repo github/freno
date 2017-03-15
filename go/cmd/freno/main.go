@@ -9,6 +9,7 @@ import (
 	"github.com/github/freno/go/config"
 	"github.com/github/freno/go/group"
 	"github.com/github/freno/go/http"
+	"github.com/github/freno/go/throttle"
 	"github.com/outbrain/golib/log"
 )
 
@@ -106,7 +107,10 @@ func httpServe() error {
 	}
 	go group.Monitor()
 
-	api := http.NewAPIImpl()
+	throttler := throttle.NewThrottler()
+	go throttler.Operate()
+
+	api := http.NewAPIImpl(throttler)
 	router := http.ConfigureRoutes(api)
 	port := config.Settings().ListenPort
 	log.Infof("Starting server in port %d", port)

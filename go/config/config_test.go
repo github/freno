@@ -64,7 +64,7 @@ func TestReadMultipleFiles(t *testing.T) {
 	}
 }
 
-func TestReaload(t *testing.T) {
+func TestReload(t *testing.T) {
 	var config = createConfiguration()
 	newPort := 65534
 	temporaryChangedPort := 8080

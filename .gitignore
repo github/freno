@@ -1,4 +1,5 @@
 .gopath/
 bin/
 main
+conf/freno.local.conf.json
 

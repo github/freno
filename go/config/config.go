@@ -4,8 +4,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"regexp"
 
 	"github.com/outbrain/golib/log"
+)
+
+var (
+	envVariableRegexp = regexp.MustCompile("[$][{](.*)[}]")
 )
 
 var instance = newConfiguration()
@@ -91,6 +96,7 @@ type ConfigurationSettings struct {
 	// ListenSocket                                 string // Where freno HTTP should listen for unix socket (default: empty; when given, TCP is disabled)
 	// AnExampleSliceOfStrings                    []string // Add a comment here
 	// AnExampleMapOfStringsToStrings    map[string]string // Add a comment here
+	Stores StoresSettings
 }
 
 func newConfigurationSettings() *ConfigurationSettings {
@@ -111,6 +117,9 @@ func newConfigurationSettings() *ConfigurationSettings {
 func (settings *ConfigurationSettings) postReadAdjustments() error {
 	if settings.RaftDataDir == "" {
 		return fmt.Errorf("RaftDataDir must be set")
+	}
+	if err := settings.Stores.postReadAdjustments(); err != nil {
+		return err
 	}
 	return nil
 }
