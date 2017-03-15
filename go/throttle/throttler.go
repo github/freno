@@ -82,7 +82,7 @@ func (throttler *Throttler) Operate() {
 		case probes := <-throttler.mysqlClusterProbesChan:
 			{
 				// incoming structural update, sparse, as result of refreshMySQLInventory()
-				throttler.UpdateMySQLClusterProbes(probes)
+				throttler.updateMySQLClusterProbes(probes)
 			}
 		case <-mysqlAggregateTick:
 			{
@@ -194,7 +194,7 @@ func (throttler *Throttler) refreshMySQLInventory() error {
 }
 
 // synchronous update of inventory
-func (throttler *Throttler) UpdateMySQLClusterProbes(clusterProbes *mysql.ClusterProbes) error {
+func (throttler *Throttler) updateMySQLClusterProbes(clusterProbes *mysql.ClusterProbes) error {
 	log.Debugf("onMySQLClusterProbes: %s", clusterProbes.ClusterName)
 	throttler.mysqlInventory.ClustersProbes[clusterProbes.ClusterName] = clusterProbes.Probes
 	return nil
