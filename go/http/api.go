@@ -21,6 +21,8 @@ type API interface {
 	Hostname(w http.ResponseWriter, _ *http.Request, _ httprouter.Params)
 	CheckMySQLCluster(w http.ResponseWriter, r *http.Request, _ httprouter.Params)
 	AggregatedMetrics(w http.ResponseWriter, r *http.Request, _ httprouter.Params)
+	ThrottleApp(w http.ResponseWriter, r *http.Request, _ httprouter.Params)
+	UnthrottleApp(w http.ResponseWriter, r *http.Request, _ httprouter.Params)
 }
 
 type CheckResponse struct {
@@ -42,6 +44,15 @@ func NewCheckResponse(statusCode int, err error, value float64, threshold float6
 	return response
 }
 
+type GeneralResponse struct {
+	StatusCode int
+	Message    string
+}
+
+func NewGeneralResponse(statusCode int, message string) *GeneralResponse {
+	return &GeneralResponse{StatusCode: statusCode, Message: message}
+}
+
 // APIImpl implements the API
 type APIImpl struct {
 	throttler *throttle.Throttler
@@ -51,6 +62,17 @@ type APIImpl struct {
 func NewAPIImpl(throttler *throttle.Throttler) *APIImpl {
 	return &APIImpl{
 		throttler: throttler,
+	}
+}
+
+func (api *APIImpl) respondOK(w http.ResponseWriter, r *http.Request) {
+	if r.Method == http.MethodGet {
+		w.Header().Set("Content-Type", "application/json")
+	}
+	statusCode := http.StatusOK
+	w.WriteHeader(statusCode)
+	if r.Method == http.MethodGet {
+		json.NewEncoder(w).Encode(NewGeneralResponse(statusCode, "OK"))
 	}
 }
 
@@ -143,6 +165,22 @@ func (api *APIImpl) AggregatedMetrics(w http.ResponseWriter, r *http.Request, ps
 	json.NewEncoder(w).Encode(responseMap)
 }
 
+// ThrottleApp forcibly marks given app as throttled. Future requests by this app will be denied.
+func (api *APIImpl) ThrottleApp(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
+	appName := ps.ByName("app")
+	api.throttler.ThrottleApp(appName)
+
+	api.respondOK(w, r)
+}
+
+// ThrottleApp unthrottles given app.
+func (api *APIImpl) UnthrottleApp(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
+	appName := ps.ByName("app")
+	api.throttler.UnthrottleApp(appName)
+
+	api.respondOK(w, r)
+}
+
 // register is a wrapper function for accepting both GET and HEAD requests
 func register(router *httprouter.Router, path string, f httprouter.Handle) {
 	router.HEAD(path, f)
@@ -159,5 +197,7 @@ func ConfigureRoutes(api API) *httprouter.Router {
 	register(router, "/hostname", api.Hostname)
 	register(router, "/check/:app/mysql/:clusterName", api.CheckMySQLCluster)
 	register(router, "/aggregated-metrics", api.AggregatedMetrics)
+	register(router, "/throttle-app/:app", api.ThrottleApp)
+	register(router, "/unthrottle-app/:app", api.UnthrottleApp)
 	return router
 }
