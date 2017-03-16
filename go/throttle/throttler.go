@@ -55,6 +55,10 @@ func NewThrottler() *Throttler {
 	return throttler
 }
 
+func (throttler *Throttler) ThrottledAppsCache() *cache.Cache {
+	return throttler.throttledApps
+}
+
 func (throttler *Throttler) Operate() {
 	leaderCheckTick := time.Tick(leaderCheckInterval)
 	mysqlCollectTick := time.Tick(mysqlCollectInterval)
