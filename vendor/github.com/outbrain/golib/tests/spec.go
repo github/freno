@@ -74,3 +74,8 @@ func (spec *Spec) ExpectFalse(actual interface{}) {
 func (spec *Spec) ExpectTrue(actual interface{}) {
 	spec.ExpectEquals(actual, true)
 }
+
+// Errorf is equivalent to Test.Errorf
+func (spec *Spec) Errorf(format string, args ...interface{}) {
+	spec.t.Errorf(format, args)
+}
