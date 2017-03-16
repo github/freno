@@ -29,6 +29,7 @@ func newExpvarRateCounter(name string, interval time.Duration) *ExpvarRateCounte
 // it to expvar
 func (c *ExpvarRateCounter) Incr(amount int64) {
 	c.rateCounter.Incr(amount)
+	// TODO: replace this in favor of asynchronous refresh of expavar counter
 	c.expvarInt.Set(c.rateCounter.Rate())
 }
 
