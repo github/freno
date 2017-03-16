@@ -2,11 +2,14 @@ package http
 
 import (
 	"encoding/json"
+	"expvar"
 	"fmt"
 	"net/http"
 	"os"
+	"time"
 
 	"github.com/github/freno/go/group"
+	"github.com/github/freno/go/ratecounter"
 	"github.com/github/freno/go/throttle"
 
 	"github.com/julienschmidt/httprouter"
@@ -41,10 +44,15 @@ func NewAPIImpl(throttler *throttle.Throttler) *APIImpl {
 	}
 }
 
+var lbCheckCounter = ratecounter.FromPool("api.lb-check.per_minute", 1*time.Minute)
+
 // LbCheck responds to LbCheck with HTTP 200
 func (api *APIImpl) LbCheck(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
 	w.WriteHeader(http.StatusOK)
+	lbCheckCounter.Tick()
 }
+
+var leaderCheckCounter = ratecounter.FromPool("api.leader-check.per_minute", 1*time.Minute)
 
 // LeaderCheck responds with HTTP 200 when this node is a raft leader, otherwise 404
 // This is a useful check for HAProxy routing
@@ -57,7 +65,10 @@ func (api *APIImpl) LeaderCheck(w http.ResponseWriter, r *http.Request, _ httpro
 	if r.Method == http.MethodGet {
 		fmt.Fprintf(w, "HTTP %d", statusCode)
 	}
+	leaderCheckCounter.Tick()
 }
+
+var raftLeaderCounter = ratecounter.FromPool("api.raft-leader.per_minute", 1*time.Minute)
 
 // RaftLeader returns the identity of the leader
 func (api *APIImpl) RaftLeader(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
@@ -67,6 +78,7 @@ func (api *APIImpl) RaftLeader(w http.ResponseWriter, r *http.Request, _ httprou
 	} else {
 		w.WriteHeader(http.StatusInternalServerError)
 	}
+	raftLeaderCounter.Tick()
 }
 
 // Hostname returns the hostname this process executes on
@@ -79,6 +91,8 @@ func (api *APIImpl) Hostname(w http.ResponseWriter, r *http.Request, _ httproute
 		fmt.Fprint(w, err.Error())
 	}
 }
+
+var totalCheckMySQLCluster = ratecounter.FromPool("api.check-mysql-cluster.total.per_second", 1*time.Second)
 
 // CheckMySQLCluster checks whether a cluster's collected metric is within its threshold
 func (api *APIImpl) CheckMySQLCluster(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
@@ -106,6 +120,7 @@ func (api *APIImpl) CheckMySQLCluster(w http.ResponseWriter, r *http.Request, ps
 			Threshold:  threshold,
 		})
 	}
+	totalCheckMySQLCluster.Tick()
 }
 
 // AggregatedMetrics returns a snapshot of all current aggregated metrics
@@ -130,6 +145,22 @@ func register(router *httprouter.Router, path string, f httprouter.Handle) {
 // given api's methods.
 func ConfigureRoutes(api API) *httprouter.Router {
 	router := httprouter.New()
+
+	// Register expvars Handler (which is not publicly callable, so pasted inline)
+	register(router, "/debug/vars", httprouter.Handle(func(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		fmt.Fprintf(w, "{\n")
+		first := true
+		expvar.Do(func(kv expvar.KeyValue) {
+			if !first {
+				fmt.Fprintf(w, ",\n")
+			}
+			first = false
+			fmt.Fprintf(w, "%q: %s", kv.Key, kv.Value)
+		})
+		fmt.Fprintf(w, "\n}\n")
+	}))
+
 	register(router, "/lb-check", api.LbCheck)
 	register(router, "/leader-check", api.LeaderCheck)
 	register(router, "/raft/leader", api.RaftLeader)
