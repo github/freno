@@ -16,7 +16,6 @@ type Pool struct {
 
 var pool = &Pool{
 	counters: make(map[string]*rc.RateCounter),
-	lock:     sync.RWMutex{},
 }
 
 // FromPool returns a new counter from the pool identified by the prefix and interval
