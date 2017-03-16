@@ -2,6 +2,7 @@ package http
 
 import (
 	"encoding/json"
+	"expvar"
 	"fmt"
 	"net/http"
 	"os"
@@ -130,6 +131,22 @@ func register(router *httprouter.Router, path string, f httprouter.Handle) {
 // given api's methods.
 func ConfigureRoutes(api API) *httprouter.Router {
 	router := httprouter.New()
+
+	// Register expvars Handler (which is not publicly callable, so pasted inline)
+	register(router, "/debug/vars", httprouter.Handle(func(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		fmt.Fprintf(w, "{\n")
+		first := true
+		expvar.Do(func(kv expvar.KeyValue) {
+			if !first {
+				fmt.Fprintf(w, ",\n")
+			}
+			first = false
+			fmt.Fprintf(w, "%q: %s", kv.Key, kv.Value)
+		})
+		fmt.Fprintf(w, "\n}\n")
+	}))
+
 	register(router, "/lb-check", api.LbCheck)
 	register(router, "/leader-check", api.LeaderCheck)
 	register(router, "/raft/leader", api.RaftLeader)
