@@ -8,13 +8,15 @@ import (
 	rc "github.com/paulbellamy/ratecounter"
 )
 
+// Pool holds a map of rate counters
 type Pool struct {
 	counters map[string]*rc.RateCounter
-	lock     sync.Mutex
+	lock     sync.RWMutex
 }
 
 var pool = &Pool{
 	counters: make(map[string]*rc.RateCounter),
+	lock:     sync.RWMutex{},
 }
 
 // FromPool returns a new counter from the pool identified by the prefix and interval
@@ -24,12 +26,18 @@ var pool = &Pool{
 func FromPool(prefix string, interval time.Duration) *rc.RateCounter {
 	key := fmt.Sprintf("%s::%s", prefix, interval.String())
 
-	pool.lock.Lock()
-	defer pool.lock.Unlock()
+	pool.lock.RLock()
 	counter, ok := pool.counters[key]
+	pool.lock.RUnlock()
+
 	if !ok {
+		pool.lock.Lock()
 		pool.counters[key] = rc.NewRateCounter(interval)
+		pool.lock.Unlock()
+
+		pool.lock.RLock()
 		counter = pool.counters[key]
+		pool.lock.RUnlock()
 	}
 	return counter
 }
