@@ -33,6 +33,11 @@ func (c *ExpvarRateCounter) Incr(amount int64) {
 	c.expvarInt.Set(c.rateCounter.Rate())
 }
 
+// Incr increments the counter by one
+func (c *ExpvarRateCounter) Tick() {
+	c.Incr(1)
+}
+
 // Pool holds a map of rate counters
 type Pool struct {
 	counters map[string]*ExpvarRateCounter

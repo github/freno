@@ -32,3 +32,10 @@ func TestIncr(t *testing.T) {
 	test.S(t).ExpectEquals(counter.rateCounter.Rate(), int64(3))
 	test.S(t).ExpectEquals(counter.expvarInt.String(), "3")
 }
+
+func TestTick(t *testing.T) {
+	counter := FromPool("anotherCounter", 1*time.Second)
+	counter.Tick()
+	test.S(t).ExpectEquals(counter.rateCounter.Rate(), int64(1))
+	test.S(t).ExpectEquals(counter.expvarInt.String(), "1")
+}
