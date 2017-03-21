@@ -26,6 +26,8 @@ const (
 	raftTimeout         = 10 * time.Second
 )
 
+// command struct is the data type we move around as raft events. We can easily model all
+// our events using op/key/value setup.
 type command struct {
 	Operation string `json:"op,omitempty"`
 	Key       string `json:"key,omitempty"`
@@ -45,7 +47,7 @@ type Store struct {
 	raft *raft.Raft // The consensus mechanism
 }
 
-// New returns a new raft Store.
+// NewStore inits and returns a new store
 func NewStore(raftDir string, raftBind string, throttler *throttle.Throttler) *Store {
 	return &Store{
 		raftDir:   raftDir,
@@ -112,6 +114,7 @@ func (store *Store) Open(peerNodes []string) error {
 	return nil
 }
 
+// genericCommand requests concensus for applying a single command.
 func (store *Store) genericCommand(c *command) error {
 	if store.raft.State() != raft.Leader {
 		return fmt.Errorf("not leader")
@@ -126,6 +129,8 @@ func (store *Store) genericCommand(c *command) error {
 	return f.Error()
 }
 
+// ThrottleApp, as implied by ConcensusService, is a raft oepration request which
+// will ask for concensus.
 func (store *Store) ThrottleApp(appName string) error {
 	c := &command{
 		Operation: "throttle",
@@ -134,6 +139,8 @@ func (store *Store) ThrottleApp(appName string) error {
 	return store.genericCommand(c)
 }
 
+// UnthrottleApp, as implied by ConcensusService, is a raft oepration request which
+// will ask for concensus.
 func (store *Store) UnthrottleApp(appName string) error {
 	c := &command{
 		Operation: "unthrottle",

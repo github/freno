@@ -6,6 +6,8 @@ import (
 	"github.com/hashicorp/raft"
 )
 
+// snapshotData holds whatever data we wish to persist as part of raft snapshotting
+// it will mostly duplicate data stored in `throttler`.
 type snapshotData struct {
 	throttledApps map[string]bool
 }
@@ -16,6 +18,7 @@ func newSnapshotData() *snapshotData {
 	}
 }
 
+// fsmSnapshot handles raft persisting of snapshots
 type fsmSnapshot struct {
 	data snapshotData
 }
@@ -26,6 +29,7 @@ func newFsmSnapshot() *fsmSnapshot {
 	}
 }
 
+// Persist
 func (f *fsmSnapshot) Persist(sink raft.SnapshotSink) error {
 	err := func() error {
 		// Encode data.
@@ -33,17 +37,14 @@ func (f *fsmSnapshot) Persist(sink raft.SnapshotSink) error {
 		if err != nil {
 			return err
 		}
-
 		// Write data to sink.
 		if _, err := sink.Write(b); err != nil {
 			return err
 		}
-
 		// Close the sink.
 		if err := sink.Close(); err != nil {
 			return err
 		}
-
 		return nil
 	}()
 
@@ -51,10 +52,9 @@ func (f *fsmSnapshot) Persist(sink raft.SnapshotSink) error {
 		sink.Cancel()
 		return err
 	}
-
 	return nil
 }
 
+// Release
 func (f *fsmSnapshot) Release() {
-
 }

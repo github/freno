@@ -9,6 +9,8 @@ import (
 	"github.com/outbrain/golib/log"
 )
 
+// fsm is a raft finite state machine, that is freno aware. It applies events/commands
+// onto the freno throttler.
 type fsm Store
 
 // Apply applies a Raft log entry to the key-value store.
@@ -29,7 +31,7 @@ func (f *fsm) Apply(l *raft.Log) interface{} {
 	}
 }
 
-// Snapshot returns a snapshot of the key-value store.
+// Snapshot returns a snapshot object of freno's state
 func (f *fsm) Snapshot() (raft.FSMSnapshot, error) {
 	log.Debugf("freno/raft: creating snapshot")
 	snapshot := newFsmSnapshot()
@@ -40,7 +42,7 @@ func (f *fsm) Snapshot() (raft.FSMSnapshot, error) {
 	return snapshot, nil
 }
 
-// Restore stores the key-value store to a previous state.
+// Restore restores freno state
 func (f *fsm) Restore(rc io.ReadCloser) error {
 	data := newSnapshotData()
 	if err := json.NewDecoder(rc).Decode(&data); err != nil {
@@ -53,11 +55,13 @@ func (f *fsm) Restore(rc io.ReadCloser) error {
 	return nil
 }
 
+// applyThrottleApp will apply a "throttle" command locally (this applies as result of the raft concensus algorithm)
 func (f *fsm) applyThrottleApp(appName string) interface{} {
 	f.throttler.ThrottleApp(appName)
 	return nil
 }
 
+// applyThrottleApp will apply a "unthrottle" command locally (this applies as result of the raft concensus algorithm)
 func (f *fsm) applyUnthrottleApp(appName string) interface{} {
 	f.throttler.UnthrottleApp(appName)
 	return nil
