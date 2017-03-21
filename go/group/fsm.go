@@ -57,13 +57,13 @@ func (f *fsm) Restore(rc io.ReadCloser) error {
 	return nil
 }
 
-// applyThrottleApp will apply a "throttle" command locally (this applies as result of the raft concensus algorithm)
+// applyThrottleApp will apply a "throttle" command locally (this applies as result of the raft consensus algorithm)
 func (f *fsm) applyThrottleApp(appName string) interface{} {
 	f.throttler.ThrottleApp(appName)
 	return nil
 }
 
-// applyThrottleApp will apply a "unthrottle" command locally (this applies as result of the raft concensus algorithm)
+// applyThrottleApp will apply a "unthrottle" command locally (this applies as result of the raft consensus algorithm)
 func (f *fsm) applyUnthrottleApp(appName string) interface{} {
 	f.throttler.UnthrottleApp(appName)
 	return nil

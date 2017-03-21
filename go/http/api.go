@@ -56,15 +56,15 @@ func NewGeneralResponse(statusCode int, message string) *GeneralResponse {
 // APIImpl implements the API
 type APIImpl struct {
 	throttler        *throttle.Throttler
-	concensusService group.ConcensusService
+	consensusService group.ConsensusService
 	hostname         string
 }
 
 // NewAPIImpl creates a new instance of the API implementation
-func NewAPIImpl(throttler *throttle.Throttler, concensusService group.ConcensusService) *APIImpl {
+func NewAPIImpl(throttler *throttle.Throttler, consensusService group.ConsensusService) *APIImpl {
 	api := &APIImpl{
 		throttler:        throttler,
-		concensusService: concensusService,
+		consensusService: consensusService,
 	}
 	if hostname, err := os.Hostname(); err == nil {
 		api.hostname = hostname
@@ -181,7 +181,7 @@ func (api *APIImpl) AggregatedMetrics(w http.ResponseWriter, r *http.Request, ps
 // ThrottleApp forcibly marks given app as throttled. Future requests by this app will be denied.
 func (api *APIImpl) ThrottleApp(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 	appName := ps.ByName("app")
-	err := api.concensusService.ThrottleApp(appName)
+	err := api.consensusService.ThrottleApp(appName)
 
 	api.respondGeneric(w, r, err)
 }
@@ -189,7 +189,7 @@ func (api *APIImpl) ThrottleApp(w http.ResponseWriter, r *http.Request, ps httpr
 // ThrottleApp unthrottles given app.
 func (api *APIImpl) UnthrottleApp(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 	appName := ps.ByName("app")
-	err := api.concensusService.UnthrottleApp(appName)
+	err := api.consensusService.UnthrottleApp(appName)
 
 	api.respondGeneric(w, r, err)
 }

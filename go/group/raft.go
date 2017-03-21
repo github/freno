@@ -1,5 +1,5 @@
 //
-// Provide distributed concensus services.
+// Provide distributed consensus services.
 // Underlying implementation is Raft, via https://godoc.org/github.com/hashicorp/raft
 //
 // This file provides generic access functions to setup & check group communication.
@@ -23,15 +23,15 @@ const RaftDBFile = "freno-raft.db"
 
 var store *Store
 
-// ConcensusService is a freno-oriented interface for making requests that require concensus.
-type ConcensusService interface {
+// ConsensusService is a freno-oriented interface for making requests that require consensus.
+type ConsensusService interface {
 	ThrottleApp(appName string) error
 	UnthrottleApp(appName string) error
 }
 
 // Setup creates the entire raft shananga. Creates the store, associates with the throttler,
 // contacts peer nodes. The thing.
-func Setup(throttler *throttle.Throttler) (ConcensusService, error) {
+func Setup(throttler *throttle.Throttler) (ConsensusService, error) {
 	store = NewStore(config.Settings().RaftDataDir, normalizeRaftNode(config.Settings().RaftBind), throttler)
 
 	peerNodes := []string{}

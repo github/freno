@@ -36,8 +36,8 @@ type command struct {
 
 // The store is a raft store that is freno-aware.
 // It operates on a `throttler` instance on given events/commands.
-// Store implements ConcensusService, which is a freno-oriented interface for
-// running operations via concensus.
+// Store implements consensusService, which is a freno-oriented interface for
+// running operations via consensus.
 type Store struct {
 	raftDir  string
 	raftBind string
@@ -114,7 +114,7 @@ func (store *Store) Open(peerNodes []string) error {
 	return nil
 }
 
-// genericCommand requests concensus for applying a single command.
+// genericCommand requests consensus for applying a single command.
 func (store *Store) genericCommand(c *command) error {
 	if store.raft.State() != raft.Leader {
 		return fmt.Errorf("not leader")
@@ -129,8 +129,8 @@ func (store *Store) genericCommand(c *command) error {
 	return f.Error()
 }
 
-// ThrottleApp, as implied by ConcensusService, is a raft oepration request which
-// will ask for concensus.
+// ThrottleApp, as implied by consensusService, is a raft oepration request which
+// will ask for consensus.
 func (store *Store) ThrottleApp(appName string) error {
 	c := &command{
 		Operation: "throttle",
@@ -139,8 +139,8 @@ func (store *Store) ThrottleApp(appName string) error {
 	return store.genericCommand(c)
 }
 
-// UnthrottleApp, as implied by ConcensusService, is a raft oepration request which
-// will ask for concensus.
+// UnthrottleApp, as implied by consensusService, is a raft oepration request which
+// will ask for consensus.
 func (store *Store) UnthrottleApp(appName string) error {
 	c := &command{
 		Operation: "unthrottle",
