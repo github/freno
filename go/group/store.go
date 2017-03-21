@@ -28,9 +28,9 @@ const (
 )
 
 type command struct {
-	Op    string
-	Key   string
-	Value string
+	Operation string `json:"op,omitempty"`
+	Key       string `json:"key,omitempty"`
+	Value     string `json:"value,omitempty"`
 }
 
 // Store is a simple key-value store, where all changes are made via Raft consensus.
@@ -126,16 +126,16 @@ func (store *Store) genericCommand(c *command) error {
 
 func (store *Store) ThrottleApp(appName string) error {
 	c := &command{
-		Op:  "throttle",
-		Key: appName,
+		Operation: "throttle",
+		Key:       appName,
 	}
 	return store.genericCommand(c)
 }
 
 func (store *Store) UnthrottleApp(appName string) error {
 	c := &command{
-		Op:  "unthrottle",
-		Key: appName,
+		Operation: "unthrottle",
+		Key:       appName,
 	}
 	return store.genericCommand(c)
 }
@@ -163,13 +163,13 @@ func (f *fsm) Apply(l *raft.Log) interface{} {
 	}
 
 	log.Debugf("Applying via raft %+v", c)
-	switch c.Op {
+	switch c.Operation {
 	case "throttle":
 		return f.applyThrottleApp(c.Key)
 	case "unthrottle":
 		return f.applyUnthrottleApp(c.Key)
 	default:
-		panic(fmt.Sprintf("unrecognized command op: %s", c.Op))
+		panic(fmt.Sprintf("unrecognized command operation: %s", c.Operation))
 	}
 }
 
