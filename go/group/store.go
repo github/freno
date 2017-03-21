@@ -162,7 +162,7 @@ func (f *fsm) Apply(l *raft.Log) interface{} {
 		panic(fmt.Sprintf("failed to unmarshal command: %s", err.Error()))
 	}
 
-	log.Debugf("Applying %s via raft", c.Op)
+	log.Debugf("Applying via raft %+v", c)
 	switch c.Op {
 	case "throttle":
 		return f.applyThrottleApp(c.Key)
