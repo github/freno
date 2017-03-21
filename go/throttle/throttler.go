@@ -14,11 +14,6 @@ import (
 	"github.com/patrickmn/go-cache"
 )
 
-type ThrottlerService interface {
-	ThrottleApp(appName string) error
-	UnthrottleApp(appName string) error
-}
-
 const leaderCheckInterval = 1 * time.Second
 const mysqlCollectInterval = 100 * time.Millisecond
 const mysqlRefreshInterval = 10 * time.Second
@@ -275,14 +270,12 @@ func (throttler *Throttler) AggregatedMetrics() map[string]base.MetricResult {
 	return snapshot
 }
 
-func (throttler *Throttler) ThrottleApp(appName string) error {
+func (throttler *Throttler) ThrottleApp(appName string) {
 	throttler.throttledApps.Set(appName, true, cache.DefaultExpiration)
-	return nil
 }
 
-func (throttler *Throttler) UnthrottleApp(appName string) error {
+func (throttler *Throttler) UnthrottleApp(appName string) {
 	throttler.throttledApps.Delete(appName)
-	return nil
 }
 
 func (throttler *Throttler) IsAppThrottled(appName string) bool {

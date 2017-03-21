@@ -55,16 +55,16 @@ func NewGeneralResponse(statusCode int, message string) *GeneralResponse {
 
 // APIImpl implements the API
 type APIImpl struct {
-	throttler                 *throttle.Throttler
-	concensusThrottlerService throttle.ThrottlerService
-	hostname                  string
+	throttler        *throttle.Throttler
+	concensusService group.ConcensusService
+	hostname         string
 }
 
 // NewAPIImpl creates a new instance of the API implementation
-func NewAPIImpl(throttler *throttle.Throttler, concensusThrottlerService throttle.ThrottlerService) *APIImpl {
+func NewAPIImpl(throttler *throttle.Throttler, concensusService group.ConcensusService) *APIImpl {
 	api := &APIImpl{
-		throttler:                 throttler,
-		concensusThrottlerService: concensusThrottlerService,
+		throttler:        throttler,
+		concensusService: concensusService,
 	}
 	if hostname, err := os.Hostname(); err == nil {
 		api.hostname = hostname
@@ -174,7 +174,7 @@ func (api *APIImpl) AggregatedMetrics(w http.ResponseWriter, r *http.Request, ps
 // ThrottleApp forcibly marks given app as throttled. Future requests by this app will be denied.
 func (api *APIImpl) ThrottleApp(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 	appName := ps.ByName("app")
-	api.concensusThrottlerService.ThrottleApp(appName)
+	api.concensusService.ThrottleApp(appName)
 
 	api.respondOK(w, r)
 }
@@ -182,7 +182,7 @@ func (api *APIImpl) ThrottleApp(w http.ResponseWriter, r *http.Request, ps httpr
 // ThrottleApp unthrottles given app.
 func (api *APIImpl) UnthrottleApp(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 	appName := ps.ByName("app")
-	api.concensusThrottlerService.UnthrottleApp(appName)
+	api.concensusService.UnthrottleApp(appName)
 
 	api.respondOK(w, r)
 }
