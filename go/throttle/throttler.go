@@ -56,8 +56,8 @@ func NewThrottler(isLeaderFunc func() bool) *Throttler {
 	return throttler
 }
 
-func (throttler *Throttler) ThrottledAppsCache() *cache.Cache {
-	return throttler.throttledApps
+func (throttler *Throttler) ThrottledAppsSnapshot() map[string]cache.Item {
+	return throttler.throttledApps.Items()
 }
 
 func (throttler *Throttler) Operate() {

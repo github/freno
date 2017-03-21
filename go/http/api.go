@@ -72,14 +72,21 @@ func NewAPIImpl(throttler *throttle.Throttler, concensusService group.ConcensusS
 	return api
 }
 
-func (api *APIImpl) respondOK(w http.ResponseWriter, r *http.Request) {
+// respondGeneric will generate a generic response in the form of {status, message}
+// It will set response based on whether request is HEAD/GET and based on given error
+func (api *APIImpl) respondGeneric(w http.ResponseWriter, r *http.Request, e error) {
 	if r.Method == http.MethodGet {
 		w.Header().Set("Content-Type", "application/json")
 	}
-	statusCode := http.StatusOK
-	w.WriteHeader(statusCode)
+	var generalRespnse *GeneralResponse
+	if e == nil {
+		generalRespnse = NewGeneralResponse(http.StatusOK, "OK")
+	} else {
+		generalRespnse = NewGeneralResponse(http.StatusInternalServerError, e.Error())
+	}
+	w.WriteHeader(generalRespnse.StatusCode)
 	if r.Method == http.MethodGet {
-		json.NewEncoder(w).Encode(NewGeneralResponse(statusCode, "OK"))
+		json.NewEncoder(w).Encode(generalRespnse)
 	}
 }
 
@@ -174,17 +181,17 @@ func (api *APIImpl) AggregatedMetrics(w http.ResponseWriter, r *http.Request, ps
 // ThrottleApp forcibly marks given app as throttled. Future requests by this app will be denied.
 func (api *APIImpl) ThrottleApp(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 	appName := ps.ByName("app")
-	api.concensusService.ThrottleApp(appName)
+	err := api.concensusService.ThrottleApp(appName)
 
-	api.respondOK(w, r)
+	api.respondGeneric(w, r, err)
 }
 
 // ThrottleApp unthrottles given app.
 func (api *APIImpl) UnthrottleApp(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 	appName := ps.ByName("app")
-	api.concensusService.UnthrottleApp(appName)
+	err := api.concensusService.UnthrottleApp(appName)
 
-	api.respondOK(w, r)
+	api.respondGeneric(w, r, err)
 }
 
 // register is a wrapper function for accepting both GET and HEAD requests

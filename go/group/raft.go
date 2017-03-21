@@ -23,11 +23,14 @@ const RaftDBFile = "freno-raft.db"
 
 var store *Store
 
+// ConcensusService is a freno-oriented interface for making requests that require concensus.
 type ConcensusService interface {
 	ThrottleApp(appName string) error
 	UnthrottleApp(appName string) error
 }
 
+// Setup creates the entire raft shananga. Creates the store, associates with the throttler,
+// contacts peer nodes. The thing.
 func Setup(throttler *throttle.Throttler) (ConcensusService, error) {
 	store = NewStore(config.Settings().RaftDataDir, normalizeRaftNode(config.Settings().RaftBind), throttler)
 
@@ -42,6 +45,7 @@ func Setup(throttler *throttle.Throttler) (ConcensusService, error) {
 	return store, nil
 }
 
+// getRaft is a convenience method
 func getRaft() *raft.Raft {
 	return store.raft
 }
@@ -59,16 +63,20 @@ func normalizeRaftNode(node string) string {
 	return node
 }
 
+// IsLeader tells if this node is the current raft leader
 func IsLeader() bool {
 	future := getRaft().VerifyLeader()
 	err := future.Error()
 	return err == nil
 }
 
+// GetLeader returns identity of raft leader
 func GetLeader() string {
 	return getRaft().Leader()
 }
 
+// Monitor is a utility function to routinely observe leadership state.
+// It doesn't actually do much; merely takes notes.
 func Monitor() {
 	t := time.NewTicker(time.Duration(5) * time.Second)
 
