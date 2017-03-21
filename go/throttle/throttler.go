@@ -7,13 +7,17 @@ import (
 
 	"github.com/github/freno/go/base"
 	"github.com/github/freno/go/config"
-	"github.com/github/freno/go/group"
 	"github.com/github/freno/go/haproxy"
 	"github.com/github/freno/go/mysql"
 
 	"github.com/outbrain/golib/log"
 	"github.com/patrickmn/go-cache"
 )
+
+type ThrottlerService interface {
+	ThrottleApp(appName string) error
+	UnthrottleApp(appName string) error
+}
 
 const leaderCheckInterval = 1 * time.Second
 const mysqlCollectInterval = 100 * time.Millisecond
@@ -24,7 +28,8 @@ const aggregatedMetricsExpiration = 5 * time.Second
 const aggregatedMetricsCleanup = 1 * time.Second
 
 type Throttler struct {
-	isLeader bool
+	isLeader     bool
+	isLeaderFunc func() bool
 
 	mysqlThrottleMetricChan chan *mysql.MySQLThrottleMetric
 	mysqlInventoryChan      chan *mysql.MySQLInventory
@@ -37,9 +42,10 @@ type Throttler struct {
 	throttledApps          *cache.Cache
 }
 
-func NewThrottler() *Throttler {
+func NewThrottler(isLeaderFunc func() bool) *Throttler {
 	throttler := &Throttler{
-		isLeader: false,
+		isLeader:     false,
+		isLeaderFunc: isLeaderFunc,
 
 		mysqlThrottleMetricChan: make(chan *mysql.MySQLThrottleMetric),
 
@@ -69,7 +75,7 @@ func (throttler *Throttler) Operate() {
 		case <-leaderCheckTick:
 			{
 				// sparse
-				throttler.isLeader = group.IsLeader()
+				throttler.isLeader = throttler.isLeaderFunc()
 			}
 		case <-mysqlCollectTick:
 			{
@@ -269,12 +275,14 @@ func (throttler *Throttler) AggregatedMetrics() map[string]base.MetricResult {
 	return snapshot
 }
 
-func (throttler *Throttler) ThrottleApp(appName string) {
+func (throttler *Throttler) ThrottleApp(appName string) error {
 	throttler.throttledApps.Set(appName, true, cache.DefaultExpiration)
+	return nil
 }
 
-func (throttler *Throttler) UnthrottleApp(appName string) {
+func (throttler *Throttler) UnthrottleApp(appName string) error {
 	throttler.throttledApps.Delete(appName)
+	return nil
 }
 
 func (throttler *Throttler) IsAppThrottled(appName string) bool {

@@ -55,14 +55,21 @@ func NewGeneralResponse(statusCode int, message string) *GeneralResponse {
 
 // APIImpl implements the API
 type APIImpl struct {
-	throttler *throttle.Throttler
+	throttler                 *throttle.Throttler
+	concensusThrottlerService throttle.ThrottlerService
+	hostname                  string
 }
 
 // NewAPIImpl creates a new instance of the API implementation
-func NewAPIImpl(throttler *throttle.Throttler) *APIImpl {
-	return &APIImpl{
-		throttler: throttler,
+func NewAPIImpl(throttler *throttle.Throttler, concensusThrottlerService throttle.ThrottlerService) *APIImpl {
+	api := &APIImpl{
+		throttler:                 throttler,
+		concensusThrottlerService: concensusThrottlerService,
 	}
+	if hostname, err := os.Hostname(); err == nil {
+		api.hostname = hostname
+	}
+	return api
 }
 
 func (api *APIImpl) respondOK(w http.ResponseWriter, r *http.Request) {
@@ -106,12 +113,11 @@ func (api *APIImpl) RaftLeader(w http.ResponseWriter, r *http.Request, _ httprou
 
 // Hostname returns the hostname this process executes on
 func (api *APIImpl) Hostname(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
-	if hostname, err := os.Hostname(); err == nil {
+	if api.hostname != "" {
 		w.WriteHeader(http.StatusOK)
-		fmt.Fprint(w, hostname)
+		fmt.Fprint(w, api.hostname)
 	} else {
 		w.WriteHeader(http.StatusInternalServerError)
-		fmt.Fprint(w, err.Error())
 	}
 }
 
@@ -168,7 +174,7 @@ func (api *APIImpl) AggregatedMetrics(w http.ResponseWriter, r *http.Request, ps
 // ThrottleApp forcibly marks given app as throttled. Future requests by this app will be denied.
 func (api *APIImpl) ThrottleApp(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 	appName := ps.ByName("app")
-	api.throttler.ThrottleApp(appName)
+	api.concensusThrottlerService.ThrottleApp(appName)
 
 	api.respondOK(w, r)
 }
@@ -176,7 +182,7 @@ func (api *APIImpl) ThrottleApp(w http.ResponseWriter, r *http.Request, ps httpr
 // ThrottleApp unthrottles given app.
 func (api *APIImpl) UnthrottleApp(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 	appName := ps.ByName("app")
-	api.throttler.UnthrottleApp(appName)
+	api.concensusThrottlerService.UnthrottleApp(appName)
 
 	api.respondOK(w, r)
 }

@@ -101,16 +101,15 @@ func loadConfiguration(configFile string) {
 }
 
 func httpServe() error {
+	throttler := throttle.NewThrottler(group.IsLeader)
 	log.Infof("Starting concensus service")
-	if err := group.Setup(); err != nil {
+	if err := group.Setup(throttler); err != nil {
 		return err
 	}
 	go group.Monitor()
-
-	throttler := throttle.NewThrottler()
 	go throttler.Operate()
 
-	api := http.NewAPIImpl(throttler)
+	api := http.NewAPIImpl(throttler, group.ConcensusThrotllerService)
 	router := http.ConfigureRoutes(api)
 	port := config.Settings().ListenPort
 	log.Infof("Starting server in port %d", port)

@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/github/freno/go/config"
+	"github.com/github/freno/go/throttle"
 	"github.com/outbrain/golib/log"
 
 	"github.com/hashicorp/raft"
@@ -21,9 +22,11 @@ import (
 const RaftDBFile = "freno-raft.db"
 
 var store *Store
+var ConcensusThrotllerService throttle.ThrottlerService
 
-func Setup() error {
-	store = NewStore(config.Settings().RaftDataDir, normalizeRaftNode(config.Settings().RaftBind))
+func Setup(throttler *throttle.Throttler) error {
+	store = NewStore(config.Settings().RaftDataDir, normalizeRaftNode(config.Settings().RaftBind), throttler)
+	ConcensusThrotllerService = store
 
 	peerNodes := []string{}
 	for _, raftNode := range config.Settings().RaftNodes {

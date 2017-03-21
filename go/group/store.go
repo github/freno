@@ -13,13 +13,13 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"sync"
 	"time"
 
-	"github.com/outbrain/golib/log"
+	"github.com/github/freno/go/throttle"
 
 	"github.com/hashicorp/raft"
 	"github.com/hashicorp/raft-boltdb"
+	"github.com/outbrain/golib/log"
 )
 
 const (
@@ -28,9 +28,9 @@ const (
 )
 
 type command struct {
-	Op    string `json:"op,omitempty"`
-	Key   string `json:"key,omitempty"`
-	Value string `json:"value,omitempty"`
+	Op    string
+	Key   string
+	Value string
 }
 
 // Store is a simple key-value store, where all changes are made via Raft consensus.
@@ -38,18 +38,17 @@ type Store struct {
 	raftDir  string
 	raftBind string
 
-	mu sync.Mutex
-	m  map[string]string // The key-value store for the system.
+	throttler *throttle.Throttler
 
 	raft *raft.Raft // The consensus mechanism
 }
 
 // New returns a new Store.
-func NewStore(raftDir string, raftBind string) *Store {
+func NewStore(raftDir string, raftBind string, throttler *throttle.Throttler) *Store {
 	return &Store{
-		raftDir:  raftDir,
-		raftBind: raftBind,
-		m:        make(map[string]string),
+		raftDir:   raftDir,
+		raftBind:  raftBind,
+		throttler: throttler,
 	}
 }
 
@@ -111,24 +110,11 @@ func (store *Store) Open(peerNodes []string) error {
 	return nil
 }
 
-// Get returns the value for the given key.
-func (store *Store) Get(key string) (string, error) {
-	store.mu.Lock()
-	defer store.mu.Unlock()
-	return store.m[key], nil
-}
-
-// Set sets the value for the given key.
-func (store *Store) Set(key, value string) error {
+func (store *Store) genericCommand(c *command) error {
 	if store.raft.State() != raft.Leader {
 		return fmt.Errorf("not leader")
 	}
 
-	c := &command{
-		Op:    "set",
-		Key:   key,
-		Value: value,
-	}
 	b, err := json.Marshal(c)
 	if err != nil {
 		return err
@@ -138,23 +124,20 @@ func (store *Store) Set(key, value string) error {
 	return f.Error()
 }
 
-// Delete deletes the given key.
-func (store *Store) Delete(key string) error {
-	if store.raft.State() != raft.Leader {
-		return fmt.Errorf("not leader")
-	}
-
+func (store *Store) ThrottleApp(appName string) error {
 	c := &command{
-		Op:  "delete",
-		Key: key,
+		Op:  "throttle",
+		Key: appName,
 	}
-	b, err := json.Marshal(c)
-	if err != nil {
-		return err
-	}
+	return store.genericCommand(c)
+}
 
-	f := store.raft.Apply(b, raftTimeout)
-	return f.Error()
+func (store *Store) UnthrottleApp(appName string) error {
+	c := &command{
+		Op:  "unthrottle",
+		Key: appName,
+	}
+	return store.genericCommand(c)
 }
 
 // Join joins a node, located at addr, to this store. The node must be ready to
@@ -179,11 +162,12 @@ func (f *fsm) Apply(l *raft.Log) interface{} {
 		panic(fmt.Sprintf("failed to unmarshal command: %s", err.Error()))
 	}
 
+	log.Debugf("Applying %s via raft", c.Op)
 	switch c.Op {
-	case "set":
-		return f.applySet(c.Key, c.Value)
-	case "delete":
-		return f.applyDelete(c.Key)
+	case "throttle":
+		return f.applyThrottleApp(c.Key)
+	case "unthrottle":
+		return f.applyUnthrottleApp(c.Key)
 	default:
 		panic(fmt.Sprintf("unrecognized command op: %s", c.Op))
 	}
@@ -191,41 +175,35 @@ func (f *fsm) Apply(l *raft.Log) interface{} {
 
 // Snapshot returns a snapshot of the key-value store.
 func (f *fsm) Snapshot() (raft.FSMSnapshot, error) {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-
-	// Clone the map.
-	o := make(map[string]string)
-	for k, v := range f.m {
-		o[k] = v
-	}
-	return &fsmSnapshot{store: o}, nil
+	return nil, nil
+	// // Clone the map.
+	// o := make(map[string]string)
+	// for k, v := range f.m {
+	// 	o[k] = v
+	// }
+	// return &fsmSnapshot{store: o}, nil
 }
 
 // Restore stores the key-value store to a previous state.
 func (f *fsm) Restore(rc io.ReadCloser) error {
-	o := make(map[string]string)
-	if err := json.NewDecoder(rc).Decode(&o); err != nil {
-		return err
-	}
-
-	// Set the state from the snapshot, no lock required according to
-	// Hashicorp docs.
-	f.m = o
+	// o := make(map[string]string)
+	// if err := json.NewDecoder(rc).Decode(&o); err != nil {
+	// 	return err
+	// }
+	//
+	// // Set the state from the snapshot, no lock required according to
+	// // Hashicorp docs.
+	// f.m = o
 	return nil
 }
 
-func (f *fsm) applySet(key, value string) interface{} {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	f.m[key] = value
+func (f *fsm) applyThrottleApp(appName string) interface{} {
+	f.throttler.ThrottleApp(appName)
 	return nil
 }
 
-func (f *fsm) applyDelete(key string) interface{} {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	delete(f.m, key)
+func (f *fsm) applyUnthrottleApp(appName string) interface{} {
+	f.throttler.UnthrottleApp(appName)
 	return nil
 }
 
