@@ -36,7 +36,7 @@ func (f *fsm) Snapshot() (raft.FSMSnapshot, error) {
 	log.Debugf("freno/raft: creating snapshot")
 	snapshot := newFsmSnapshot()
 
-	for appName, _ := range f.throttler.ThrottledAppsSnapshot() {
+	for appName := range f.throttler.ThrottledAppsSnapshot() {
 		snapshot.data.throttledApps[appName] = true
 	}
 	return snapshot, nil
