@@ -23,6 +23,12 @@ Clients (application, scripts, jobs) are expected to consult with `freno`. `fren
 
 `freno` is originally designed to provide a unified, self adapting solution to MySQL throttling: controlling writes while maintaining low replication lag.
 
+`freno` is configured with a pre-defined list of MySQL clusters. This may includes credentials, lag (or other) inspection query, and expected thresholds. For each cluster, `freno` needs to know what servers to probe and collect data from. For each cluster, you may provide this list:
+
+- static, hard coded list of `hostname[:port]`
+- dynamic. Hosts may come and go, and throttling may adapt to these changes. Supported dynamic options:
+  - via `haproxy`: provide `freno` with a `haproxy` URL and backend/pool name, and `freno` will periodically parse the list of enabled servers in that pool and dynamically adapt to probe it.
+
 Read more about [freno and MySQL throttling](doc/mysql.md)
 
 ### Use cases
@@ -46,11 +52,9 @@ Read more on [HTTP requests & responses](doc/http.md)
 
 Read more on `raft` and [High Availability](doc/high-availability.md)
 
-### HAProxy
-
-Read more on [High Availability](doc/high-availability.md)
-
 ### Configuration
+
+See [sample config file](resources/freno.conf.sample.json)
 
 ### What's in a name?
 
