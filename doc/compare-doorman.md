@@ -1,10 +1,10 @@
 # Compared to Doorman
 
-`freno` is both similar to and different from [Doormar](https://github.com/youtube/doorman).
+`freno` is both similar to and different from [Doorman](https://github.com/youtube/doorman).
 
 ### Capacity vs. State
 
-`freno` does not discuss _capacity_. It does not now what the capacity is for the backend store (e.g. database/replication write capacity).
+`freno` does not discuss _capacity_. It does not know what the capacity is for the backend store (e.g. database/replication write capacity).
 
 `freno` clients do not request for a specific capacity.
 
@@ -26,7 +26,7 @@ Both `freno` and `Doorman` are cooperative. The clients are _expected_ to talk t
 
 ### Availability
 
-`freno` is a highly available service that uses the `Raft` consensus protocol to coordinate between multiple running nodes. There is a single leader node which probes data from backend stores. When the leader steps down, another takes its place. For the first few seconds it would refuse connections (stepping up as `raft` leader will take a couple seconds) and it will likely have no metrics to share. Within a few seconds it will have all the info it needs to serve.
+`freno` is a highly available service that uses the `raft` consensus protocol to coordinate between multiple running nodes. There is a single leader node which probes data from backend stores. When the leader steps down, another takes its place. For the first few seconds it would refuse connections (stepping up as `raft` leader will take a couple seconds) and it will likely have no metrics to share. Within a few seconds it will have all the info it needs to serve.
 
 Events/commands passed to one node are shared via `raft` consensus to other nodes; a newly promoted leader would have all the necessary events to pick up from the place the previous leader stepped down.
 

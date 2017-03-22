@@ -8,14 +8,12 @@ Current implementation can throttle writes to (multiple) MySQL clusters, based o
 
 `freno` is highly available and uses `raft` consensus protocol to decide leadership and to pass user events between member nodes.
 
-It is written in `Go` and ships as a single self contained binary; it only requires a configuration file.
-
 
 ### Cooperative
 
 `freno` collects data from backend stores (at this time MySQL only) and has the logic to answer the question "may I write to the backend store?"
 
-Clients (application, scripts, jobs) are expected to consult with `freno`. `freno` is not a proxy between the client and the backend store. It merely observes the store and says "you're good to go" or "you should stop writing". Clients are expected to consult with `freno` and respect its recommendation.
+Clients (application, scripts, jobs) are expected to consult with `freno`. `freno` is not a proxy between the client and the backend store. It merely observes the store and states "you're good to write" or "you should stop writing". Clients are expected to consult with `freno` and respect its recommendation.
 
 ### Per store
 
