@@ -4,7 +4,7 @@
 
 Client/automated requests should use `HEAD` requests, and manual/human requests may use `GET` requests. Both variations return the same HTTP status codes.
 
-# Check requests
+# 'check' requests
 
 The `check` request is the one important question `freno` must answer: "may this app write to this datastore?"
 
@@ -26,7 +26,23 @@ Notes:
 - `429` (Too Many Requests) is just a normal "do not write" response, and is a frequent response if the store is busy.
 - `500` (Internal Server Error) can happen if the node just started, or otherwise `freno` met an unexpected error. Try a `GET` (more informative) request or search the logs.
 
-# GET requests
+# Other requests
+
+`freno` supports the following:
+
+### Client requests
+
+- `/throttle-app/<app-name>`: instructs `freno` to deny writes to the `archive` app. `/check/archive/...` requests will be responded by `417` (Expectation Failed).
+  Example: `/throttle-app/archive`
+- `/unthrottle-app/<app-name>`: Undoes a `/throttle-app` request. App will be able to proceed as normal, based on store status.
+
+### General requests
+
+- `/lb-check`: returns `HTTP 200`. Indicates the node is alive
+- `/leader-check`: returns `HTTP 200` when the node is the `raft` leader, or `404` otherwise.
+- `/hostname`: node host name
+
+# GET method
 
 `GET` and `HEAD` respond with same status codes. But `GET` requests compute and return additional data. Automated requests should not be interested in this data; the status code is what should guide the clients. However humans or manual requests may benefit from extra information supplied by the `GET` request.
 

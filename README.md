@@ -41,7 +41,11 @@ Read more on [HTTP requests & responses](doc/http.md)
 
 ### Raft
 
+Read more on `raft` and [High Availability](doc/high-abailability.md)
+
 ### HAProxy
+
+Read more on [High Availability](doc/high-abailability.md)
 
 ### Configuration
 
