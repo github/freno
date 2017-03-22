@@ -9,6 +9,8 @@ import (
 	"github.com/github/freno/go/base"
 	"github.com/github/freno/go/group"
 	"github.com/github/freno/go/throttle"
+	metrics "github.com/rcrowley/go-metrics"
+	"github.com/rcrowley/go-metrics/exp"
 
 	"github.com/julienschmidt/httprouter"
 )
@@ -200,6 +202,11 @@ func register(router *httprouter.Router, path string, f httprouter.Handle) {
 	router.GET(path, f)
 }
 
+func metricsHandle(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
+	handler := exp.ExpHandler(metrics.DefaultRegistry)
+	handler.ServeHTTP(w, r)
+}
+
 // ConfigureRoutes configures a set of HTTP routes to be actions dispatched by the
 // given api's methods.
 func ConfigureRoutes(api API) *httprouter.Router {
@@ -212,5 +219,9 @@ func ConfigureRoutes(api API) *httprouter.Router {
 	register(router, "/aggregated-metrics", api.AggregatedMetrics)
 	register(router, "/throttle-app/:app", api.ThrottleApp)
 	register(router, "/unthrottle-app/:app", api.UnthrottleApp)
+
+	router.GET("/debug/vars", metricsHandle)
+	router.GET("/debug/metrics", metricsHandle)
+
 	return router
 }
