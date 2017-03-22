@@ -157,6 +157,13 @@ func (api *APIImpl) checkAppMetricResult(w http.ResponseWriter, r *http.Request,
 	if r.Method == http.MethodGet {
 		json.NewEncoder(w).Encode(NewCheckResponse(statusCode, err, value, threshold))
 	}
+
+	metrics.GetOrRegisterCounter("check.any.total", nil).Inc(1)
+	metrics.GetOrRegisterCounter(fmt.Sprintf("check.%s.total", appName), nil).Inc(1)
+	if statusCode != http.StatusOK {
+		metrics.GetOrRegisterCounter("check.any.error", nil).Inc(1)
+		metrics.GetOrRegisterCounter(fmt.Sprintf("check.%s.error", appName), nil).Inc(1)
+	}
 }
 
 // CheckMySQLCluster checks whether a cluster's collected metric is within its threshold
