@@ -8,18 +8,17 @@ package group
 import (
 	"encoding/json"
 	"fmt"
-	"io"
 	"net"
 	"os"
 	"path/filepath"
 	"strings"
-	"sync"
 	"time"
 
-	"github.com/outbrain/golib/log"
+	"github.com/github/freno/go/throttle"
 
 	"github.com/hashicorp/raft"
 	"github.com/hashicorp/raft-boltdb"
+	"github.com/outbrain/golib/log"
 )
 
 const (
@@ -27,29 +26,33 @@ const (
 	raftTimeout         = 10 * time.Second
 )
 
+// command struct is the data type we move around as raft events. We can easily model all
+// our events using op/key/value setup.
 type command struct {
-	Op    string `json:"op,omitempty"`
-	Key   string `json:"key,omitempty"`
-	Value string `json:"value,omitempty"`
+	Operation string `json:"op,omitempty"`
+	Key       string `json:"key,omitempty"`
+	Value     string `json:"value,omitempty"`
 }
 
-// Store is a simple key-value store, where all changes are made via Raft consensus.
+// The store is a raft store that is freno-aware.
+// It operates on a `throttler` instance on given events/commands.
+// Store implements consensusService, which is a freno-oriented interface for
+// running operations via consensus.
 type Store struct {
 	raftDir  string
 	raftBind string
 
-	mu sync.Mutex
-	m  map[string]string // The key-value store for the system.
+	throttler *throttle.Throttler
 
 	raft *raft.Raft // The consensus mechanism
 }
 
-// New returns a new Store.
-func NewStore(raftDir string, raftBind string) *Store {
+// NewStore inits and returns a new store
+func NewStore(raftDir string, raftBind string, throttler *throttle.Throttler) *Store {
 	return &Store{
-		raftDir:  raftDir,
-		raftBind: raftBind,
-		m:        make(map[string]string),
+		raftDir:   raftDir,
+		raftBind:  raftBind,
+		throttler: throttler,
 	}
 }
 
@@ -81,7 +84,7 @@ func (store *Store) Open(peerNodes []string) error {
 		return err
 	}
 
-	// Allow the node to entry single-mode, potentially electing itself, if
+	// Allow the node to enter single-mode, potentially electing itself, if
 	// explicitly enabled and there is only 1 node in the cluster already.
 	if len(peerNodes) == 0 && len(peers) <= 1 {
 		log.Infof("enabling single-node mode")
@@ -111,24 +114,12 @@ func (store *Store) Open(peerNodes []string) error {
 	return nil
 }
 
-// Get returns the value for the given key.
-func (store *Store) Get(key string) (string, error) {
-	store.mu.Lock()
-	defer store.mu.Unlock()
-	return store.m[key], nil
-}
-
-// Set sets the value for the given key.
-func (store *Store) Set(key, value string) error {
+// genericCommand requests consensus for applying a single command.
+func (store *Store) genericCommand(c *command) error {
 	if store.raft.State() != raft.Leader {
 		return fmt.Errorf("not leader")
 	}
 
-	c := &command{
-		Op:    "set",
-		Key:   key,
-		Value: value,
-	}
 	b, err := json.Marshal(c)
 	if err != nil {
 		return err
@@ -138,23 +129,24 @@ func (store *Store) Set(key, value string) error {
 	return f.Error()
 }
 
-// Delete deletes the given key.
-func (store *Store) Delete(key string) error {
-	if store.raft.State() != raft.Leader {
-		return fmt.Errorf("not leader")
-	}
-
+// ThrottleApp, as implied by consensusService, is a raft oepration request which
+// will ask for consensus.
+func (store *Store) ThrottleApp(appName string) error {
 	c := &command{
-		Op:  "delete",
-		Key: key,
+		Operation: "throttle",
+		Key:       appName,
 	}
-	b, err := json.Marshal(c)
-	if err != nil {
-		return err
-	}
+	return store.genericCommand(c)
+}
 
-	f := store.raft.Apply(b, raftTimeout)
-	return f.Error()
+// UnthrottleApp, as implied by consensusService, is a raft oepration request which
+// will ask for consensus.
+func (store *Store) UnthrottleApp(appName string) error {
+	c := &command{
+		Operation: "unthrottle",
+		Key:       appName,
+	}
+	return store.genericCommand(c)
 }
 
 // Join joins a node, located at addr, to this store. The node must be ready to
@@ -169,97 +161,3 @@ func (store *Store) Join(addr string) error {
 	log.Infof("node at %s joined successfully", addr)
 	return nil
 }
-
-type fsm Store
-
-// Apply applies a Raft log entry to the key-value store.
-func (f *fsm) Apply(l *raft.Log) interface{} {
-	var c command
-	if err := json.Unmarshal(l.Data, &c); err != nil {
-		panic(fmt.Sprintf("failed to unmarshal command: %s", err.Error()))
-	}
-
-	switch c.Op {
-	case "set":
-		return f.applySet(c.Key, c.Value)
-	case "delete":
-		return f.applyDelete(c.Key)
-	default:
-		panic(fmt.Sprintf("unrecognized command op: %s", c.Op))
-	}
-}
-
-// Snapshot returns a snapshot of the key-value store.
-func (f *fsm) Snapshot() (raft.FSMSnapshot, error) {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-
-	// Clone the map.
-	o := make(map[string]string)
-	for k, v := range f.m {
-		o[k] = v
-	}
-	return &fsmSnapshot{store: o}, nil
-}
-
-// Restore stores the key-value store to a previous state.
-func (f *fsm) Restore(rc io.ReadCloser) error {
-	o := make(map[string]string)
-	if err := json.NewDecoder(rc).Decode(&o); err != nil {
-		return err
-	}
-
-	// Set the state from the snapshot, no lock required according to
-	// Hashicorp docs.
-	f.m = o
-	return nil
-}
-
-func (f *fsm) applySet(key, value string) interface{} {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	f.m[key] = value
-	return nil
-}
-
-func (f *fsm) applyDelete(key string) interface{} {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	delete(f.m, key)
-	return nil
-}
-
-type fsmSnapshot struct {
-	store map[string]string
-}
-
-func (f *fsmSnapshot) Persist(sink raft.SnapshotSink) error {
-	err := func() error {
-		// Encode data.
-		b, err := json.Marshal(f.store)
-		if err != nil {
-			return err
-		}
-
-		// Write data to sink.
-		if _, err := sink.Write(b); err != nil {
-			return err
-		}
-
-		// Close the sink.
-		if err := sink.Close(); err != nil {
-			return err
-		}
-
-		return nil
-	}()
-
-	if err != nil {
-		sink.Cancel()
-		return err
-	}
-
-	return nil
-}
-
-func (f *fsmSnapshot) Release() {}
