@@ -56,6 +56,8 @@ Read more on `raft` and [High Availability](doc/high-availability.md)
 
 See [sample config file](resources/freno.conf.sample.json)
 
+See a [MySQL-specific dissection](doc/mysql.md#configuration) of the configuration
+
 ### What's in a name?
 
 "Freno" is Spanish for "brake", as in _car brake_. Basically we just wanted to call it "throttler" or "throttled" but both these names are in use by multiple other repositories and we went looking for something else. When we looked up the word "freno" in a dictionary, we found the following sentence:
