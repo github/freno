@@ -37,7 +37,6 @@ You will find the top-level configuration:
   "MetricQuery": "select unix_timestamp(now(6)) - unix_timestamp(ts) as lag_check from meta.heartbeat order by ts desc limit 1",
   "ThrottleThreshold": 1.0,
   "Clusters": {
-    "..."
   }
 }
 ```
@@ -51,4 +50,30 @@ These params apply in general to all MySQL clusters, unless specified differentl
   - Strictly speaking, you don't have to provide a replication-lag metric. This could be any query that reports any metric. However you're likely interested in replication lag to start with.
 - `ThrottleThreshold`: an upper limit for valid collected values. If value collected (via `MetricQuery`) is below or equal to `ThrottleThreshold`, cluster is considered to be good to write to. If higher, then cluster writes will need to be throttled.
 
-Looking at per-cluster
+Looking at clusters configuration:
+
+```json
+"MySQL": {
+  "Clusters": {
+    "prod4": {
+      "ThrottleThreshold": 0.8,
+      "HAProxySettings": {
+        "Host": "my.haproxy.mydomain.com",
+        "Port": 1001,
+        "PoolName": "my_prod4_pool"
+      }
+    },
+    "local": {
+      "User": "msandbox",
+      "Password": "msandbox",
+      "StaticHostsSettings" : {
+          "Hosts": [
+            "127.0.0.1:22293",
+            "127.0.0.1:22294",
+            "127.0.0.1:22295"
+          ]
+      }
+    }
+  }
+}
+```
