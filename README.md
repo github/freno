@@ -30,6 +30,15 @@ Clients (application, scripts, jobs) are expected to consult with `freno`. `fren
 
 ### HTTP
 
+`freno` serves requests via `HTTP`. The most important request is the `check` request: "May this app write to this store?". `freno` appreciates `HEAD` requests (`GET` are also accepted, with more overhead) and responds with status codes:
+
+- `200` (OK): Application may write to data store
+- `417` (Expectation Failed): Requesting application is explicitly forbidden to write.
+- `429` (Too Many Requests): Do not write. A normal state indicating the store's state does not meet expected threshold.
+- `500` (Internal Server Error): Internal error. Do not write.
+
+Read more on [HTTP requests & responses](docs/http.md)
+
 ### Raft
 
 ### HAProxy

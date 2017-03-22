@@ -40,7 +40,6 @@ A `GET` request for `http://my.freno.service:9777/check/archive/mysql/main-clust
     "Message": "",
     "Value": 0.430933,
     "Threshold": 1
-
 }
 ```
 
