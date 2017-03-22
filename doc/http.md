@@ -1,6 +1,6 @@
 # HTTP
 
-`freno` serves requests via `HTTP`. Requests/responses are short enough that `HTTP` does not incur a substantial overhead.
+`freno` serves requests via `HTTP`. Requests/responses are short enough that `HTTP` does not incur a substantial overhead. `freno` listens on configuration's `"ListenPort"`.
 
 Client/automated requests should use `HEAD` requests, and manual/human requests may use `GET` requests. Both variations return the same HTTP status codes.
 

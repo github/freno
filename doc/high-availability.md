@@ -25,6 +25,30 @@ The following depicts a possible setup to provide with `freno` high availability
 
 `freno` stores the `Bolt` data in `freno-raft.db`, under the `RaftDataDir` path as defined in config file.
 
+
+### Configuration
+
+Let's dissect the general section of the [sample config file](../resources/freno.conf.sample.json):
+
+
+```
+{
+  "ListenPort": 9777,
+  "DefaultRaftPort": "9888",
+  "RaftBind": "10.0.0.1",
+  "RaftDataDir": "/var/lib/freno",
+  "RaftNodes": ["10.0.0.1", "10.0.0.2", "10.0.0.3"]
+}
+```
+
+- `ListenPort` is the `HTTP` port where `freno` will serve. Will be exposed to the user, or better yet, to HAProxy as suggested above.
+- `DefaultRaftPort` is the internal `raft` port, used for consensus communication. Need not be exposed to the user.
+- `RaftDataDir`: local directory where `freno` stores `raft` data, under `freno-raft.db`
+- `RaftBind`: where `raft` should listen on.
+- `RaftNodes`: complete list of `raft` members. At this time this list is not dynamic.
+
+Using IP addresses seems to work better than hostnames.
+
 ### Single node mode
 
 It is possible to run `freno` as a single node service (meaning no high availability). To do that, provide the following in the config file:
