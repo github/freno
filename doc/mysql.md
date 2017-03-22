@@ -55,26 +55,24 @@ These params apply in general to all MySQL clusters, unless specified differentl
 Looking at clusters configuration:
 
 ```json
-"MySQL": {
-  "Clusters": {
-    "prod4": {
-      "ThrottleThreshold": 0.8,
-      "HAProxySettings": {
-        "Host": "my.haproxy.mydomain.com",
-        "Port": 1001,
-        "PoolName": "my_prod4_pool"
-      }
-    },
-    "local": {
-      "User": "msandbox",
-      "Password": "msandbox",
-      "StaticHostsSettings" : {
-          "Hosts": [
-            "127.0.0.1:22293",
-            "127.0.0.1:22294",
-            "127.0.0.1:22295"
-          ]
-      }
+"Clusters": {
+  "prod4": {
+    "ThrottleThreshold": 0.8,
+    "HAProxySettings": {
+      "Host": "my.haproxy.mydomain.com",
+      "Port": 1001,
+      "PoolName": "my_prod4_pool"
+    }
+  },
+  "local": {
+    "User": "msandbox",
+    "Password": "msandbox",
+    "StaticHostsSettings" : {
+        "Hosts": [
+          "127.0.0.1:22293",
+          "127.0.0.1:22294",
+          "127.0.0.1:22295"
+        ]
     }
   }
 }
