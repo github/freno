@@ -32,8 +32,17 @@ Notes:
 
 ### Client requests
 
+- `/check/<app>/<store-type>/<store-name>`: the most important request: may `app` write to a backend store?
+
+  - `<app>` can be any name, does not need to be pre-defined
+  - `mysql` is the only supported `<store-type>` at this time
+  - `<store-name>` must be defined in the configuration file
+  - Example: `/check/archive/mysql/main1`
+
 - `/throttle-app/<app-name>`: instructs `freno` to deny writes to the `archive` app. `/check/archive/...` requests will be responded by `417` (Expectation Failed).
-  Example: `/throttle-app/archive`
+
+   Example: `/throttle-app/archive`
+
 - `/unthrottle-app/<app-name>`: Undoes a `/throttle-app` request. App will be able to proceed as normal, based on store status.
 
 ### General requests
