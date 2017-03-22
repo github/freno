@@ -1,10 +1,46 @@
 # freno
 
-A throttler service. At this time it serves the question "may I write to the MySQL cluster?" by investigating replication lag on the cluster.
+Cooperative, highly available throttler service: clients can use `freno` to throttle writes to a resource.
+
+Current implementation can throttle writes to (multiple) MySQL clusters, based on replication status for those clusters. `freno` will throttle cooperative clients when replication lag exceeds a pre-defined threshold.
+
+`freno` dynamically adapts to changes in server inventory; it can further be controlled by the user to force throttling of certain apps.
+
+`freno` is highly available and uses `raft` consensus protocol to decide leadership and to pass user events between member nodes.
+
+It is written in `Go` and ships as a single self contained binary; it only requires a configuration file.
+
+
+### Cooperative
+
+`freno` collects data from backend stores (at this time MySQL only) and has the logic to answer the question "may I write to the backend store?"
+
+Clients (application, scripts, jobs) are expected to consult with `freno`. `freno` is not a proxy between the client and the backend store. It merely observes the store and says "you're good to go" or "you should stop writing". Clients are expected to consult with `freno` and respect its recommendation.
+
+### Per store
+
+### Per app
+
+### MySQL
+
+
+### Use cases
+
+`freno` is useful for bulk operations: massive loading/archiving tasks, schema migrations, mass updates. Such operations typically walk through thousands to millions of rows and may cause undesired effects such as MySQL replication lags. By breaking these tasks to small subtasks (e.g. `100` rows at a time), and by consulting `freno` before applying each such subtask, we are able to achieve the same result without ill effect to the database and to the application that uses it.
+
+`freno` is not suitable for OLTP queries.
+
+### HTTP
+
+### Raft
+
+### HAProxy
+
+### Configuration
 
 ### What's in a name?
 
-"Freno" is Spanish for "brake", as in _car brake_. Basically "throttler" was the ideal name for this service, but it is being used in some many other repositories that we went looking for something else. When we looked up the word "Freno", we found the following sentence use sample:
+"Freno" is Spanish for "brake", as in _car brake_. Basically we just wanted to call it "throttler" or "throttled" but both these names are in use by multiple other repositories and we went looking for something else. When we looked up the word "freno" in a dictionary, we found the following sentence:
 
 > Echa el freno, magdaleno!
 
