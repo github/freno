@@ -57,7 +57,7 @@ Notes:
 
 For example:
 
-A `GET` request for `http://my.freno.service:9777/check/archive/mysql/main-cluster` may yield with:
+A `GET` request for `http://my.freno.service:9777/check/archive/mysql/main1` may yield with:
 
 ```json
 {
