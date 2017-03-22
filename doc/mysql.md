@@ -48,7 +48,9 @@ These params apply in general to all MySQL clusters, unless specified differentl
   - if not provided, `freno` will assume you're interested in replication lag, and will issue a `SHOW SLAVE STATUS` to extract `Seconds_behind_master`
   - We strongly recommend using a custom heartbeat mechanism such as `pt-heartbeat`, with subsecond resolution. The sample query above works well with `pt-heartbeat` subsecond timestamps.
   - Strictly speaking, you don't have to provide a replication-lag metric. This could be any query that reports any metric. However you're likely interested in replication lag to start with.
+  - Note: the sefault time unit for replication lag is _seconds_
 - `ThrottleThreshold`: an upper limit for valid collected values. If value collected (via `MetricQuery`) is below or equal to `ThrottleThreshold`, cluster is considered to be good to write to. If higher, then cluster writes will need to be throttled.
+  - Note: use _seconds_ as replication lag time unit. In the above we throttle above `1.0` seconds.
 
 Looking at clusters configuration:
 
@@ -77,3 +79,12 @@ Looking at clusters configuration:
   }
 }
 ```
+
+This introduces two clusters: `prod4` and `local`. `freno` will only serve requests for these two clusters. Any other request (e.g. `/check/archive/mysql/prod7`) will be answered with `HTTP 500` -- an unknown metric
+
+Noteworthy:
+
+- `prod4` chooses to (but doesn't have to) override the `ThrottleThreshold` to `0.8` seconds
+- `prod4` list of servers is dictated by `HAProxy`. `freno` will routinely and dynamically poll given HAProxy server for list of hosts. These will include any hosts not in `NOLB`.
+- `local` cluster chooses to override `User` & `Password`.
+- `local` cluster defines a static list of hosts.
