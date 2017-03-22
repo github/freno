@@ -37,7 +37,7 @@ Clients (application, scripts, jobs) are expected to consult with `freno`. `fren
 - `429` (Too Many Requests): Do not write. A normal state indicating the store's state does not meet expected threshold.
 - `500` (Internal Server Error): Internal error. Do not write.
 
-Read more on [HTTP requests & responses](docs/http.md)
+Read more on [HTTP requests & responses](doc/http.md)
 
 ### Raft
 
