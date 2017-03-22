@@ -21,6 +21,9 @@ Clients (application, scripts, jobs) are expected to consult with `freno`. `fren
 
 ### MySQL
 
+`freno` is originally designed to provide a unified, self adapting solution to MySQL throttling: controlling writes while maintaining low replication lag.
+
+Read more about [freno and MySQL throttling](doc/mysql.md)
 
 ### Use cases
 
