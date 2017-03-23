@@ -133,20 +133,23 @@ func (api *APIImpl) checkAppMetricResult(w http.ResponseWriter, r *http.Request,
 	metricResult, threshold := api.throttler.AppRequestMetricResult(appName, metricResultFunc)
 	value, err := metricResult.Get()
 
-	statusCode := http.StatusInternalServerError
+	statusCode := http.StatusInternalServerError // 500
 	if err == base.AppDeniedError {
 		// app specifically not allowed to get metrics
-		statusCode = http.StatusExpectationFailed
+		statusCode = http.StatusExpectationFailed // 417
+	} else if err == base.NoSuchMetricError {
+		// not collected yet, or metric does not exist
+		statusCode = http.StatusNotFound // 404
 	} else if err != nil {
 		// any error
-		statusCode = http.StatusInternalServerError
+		statusCode = http.StatusInternalServerError // 500
 	} else if value > threshold {
 		// casual throttling
-		statusCode = http.StatusTooManyRequests
+		statusCode = http.StatusTooManyRequests // 429
 		err = base.ThresholdExceededError
 	} else {
 		// all good!
-		statusCode = http.StatusOK
+		statusCode = http.StatusOK // 200
 	}
 	if r.Method == http.MethodGet {
 		w.Header().Set("Content-Type", "application/json")

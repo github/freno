@@ -15,6 +15,7 @@ For example in `/check/archive/mysql/main1` the `archive` app wishes to write to
 # Status codes
 
 - `200` (OK): Application may write to data store
+- `404` (Not Found): Unknown metric name.
 - `417` (Expectation Failed): Requesting application is explicitly forbidden to write.
 - `429` (Too Many Requests): Do not write. A normal state indicating the store's state does not meet expected threshold.
 - `500` (Internal Server Error): Internal error. Do not write.
@@ -22,6 +23,7 @@ For example in `/check/archive/mysql/main1` the `archive` app wishes to write to
 Notes:
 
 - Clients should only proceed to write on status code `200`.
+- `404` (Not Found) can be seen when metric name is incorrect, undefined, or if the server is not the leader or was _just_ promoted and didn't get the chance to collect data yet.
 - `417` (Expectation Failed) results from a user/admin telling `freno` to reject requests from certain apps
 - `429` (Too Many Requests) is just a normal "do not write" response, and is a frequent response if the store is busy.
 - `500` (Internal Server Error) can happen if the node just started, or otherwise `freno` met an unexpected error. Try a `GET` (more informative) request or search the logs.
