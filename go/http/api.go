@@ -136,14 +136,14 @@ func (api *APIImpl) checkAppMetricResult(w http.ResponseWriter, r *http.Request,
 	value, err := metricResult.Get()
 	statusCode := http.StatusInternalServerError
 
-	defer func(appName string, statusCode int) {
+	defer func(appName string, statusCode *int) {
 		metrics.GetOrRegisterCounter("check.any.total", nil).Inc(1)
 		metrics.GetOrRegisterCounter(fmt.Sprintf("check.%s.total", appName), nil).Inc(1)
-		if statusCode != http.StatusOK {
+		if *statusCode != http.StatusOK {
 			metrics.GetOrRegisterCounter("check.any.error", nil).Inc(1)
 			metrics.GetOrRegisterCounter(fmt.Sprintf("check.%s.error", appName), nil).Inc(1)
 		}
-	}(appName, statusCode)
+	}(appName, &statusCode)
 
 	if err == base.AppDeniedError {
 		// app specifically not allowed to get metrics
