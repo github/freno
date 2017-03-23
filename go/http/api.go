@@ -134,8 +134,17 @@ func (api *APIImpl) checkAppMetricResult(w http.ResponseWriter, r *http.Request,
 	appName := ps.ByName("app")
 	metricResult, threshold := api.throttler.AppRequestMetricResult(appName, metricResultFunc)
 	value, err := metricResult.Get()
-
 	statusCode := http.StatusInternalServerError
+
+	defer func(appName string, statusCode int) {
+		metrics.GetOrRegisterCounter("check.any.total", nil).Inc(1)
+		metrics.GetOrRegisterCounter(fmt.Sprintf("check.%s.total", appName), nil).Inc(1)
+		if statusCode != http.StatusOK {
+			metrics.GetOrRegisterCounter("check.any.error", nil).Inc(1)
+			metrics.GetOrRegisterCounter(fmt.Sprintf("check.%s.error", appName), nil).Inc(1)
+		}
+	}(appName, statusCode)
+
 	if err == base.AppDeniedError {
 		// app specifically not allowed to get metrics
 		statusCode = http.StatusExpectationFailed
@@ -156,13 +165,6 @@ func (api *APIImpl) checkAppMetricResult(w http.ResponseWriter, r *http.Request,
 	w.WriteHeader(statusCode)
 	if r.Method == http.MethodGet {
 		json.NewEncoder(w).Encode(NewCheckResponse(statusCode, err, value, threshold))
-	}
-
-	metrics.GetOrRegisterCounter("check.any.total", nil).Inc(1)
-	metrics.GetOrRegisterCounter(fmt.Sprintf("check.%s.total", appName), nil).Inc(1)
-	if statusCode != http.StatusOK {
-		metrics.GetOrRegisterCounter("check.any.error", nil).Inc(1)
-		metrics.GetOrRegisterCounter(fmt.Sprintf("check.%s.error", appName), nil).Inc(1)
 	}
 }
 
