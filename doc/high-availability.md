@@ -11,7 +11,7 @@ Events/commands passed to one node are shared via `raft` consensus to other node
 The following depicts a possible setup to provide with `freno` high availability:
 
 - `3` or `5` (say `n`) `freno` nodes.
-- All nodes to have similar config. Config's `"RaftNodes"` to list all `n` nodes (including the local node). Use IP addresses.
+- On each node, configure `"RaftNodes"` to list all `n` nodes (this includes the local node). Use IP addresses.
   - What we get: `n` nodes talking to each other, one of them becoming _leader_. Only the leader collects data hence is the only one that can actually serve client checks.
 - HAProxy in front of `freno` nodes.
   - HAProxy only directs traffic to the _leader_. `freno` has specialized `/leader-check`.
