@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/outbrain/golib/sqlutils"
+	metrics "github.com/rcrowley/go-metrics"
 )
 
 type MySQLThrottleMetric struct {
@@ -32,9 +33,17 @@ func ReadThrottleMetric(probe *Probe) (mySQLThrottleMetric *MySQLThrottleMetric)
 	mySQLThrottleMetric = NewMySQLThrottleMetric()
 	mySQLThrottleMetric.Key = probe.Key
 
+	defer func(metric *MySQLThrottleMetric) {
+		metrics.GetOrRegisterCounter("probes.total", nil).Inc(1)
+		if metric.Err != nil {
+			metrics.GetOrRegisterCounter("probes.error", nil).Inc(1)
+		}
+	}(mySQLThrottleMetric)
+
 	dbUri := probe.GetDBUri("information_schema")
 
 	db, fromCache, err := sqlutils.GetDB(dbUri)
+
 	if err != nil {
 		mySQLThrottleMetric.Err = err
 		return mySQLThrottleMetric
