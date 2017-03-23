@@ -50,6 +50,8 @@ Read more on [HTTP requests & responses](doc/http.md)
 
 ### Raft
 
+`freno` uses `raft` to provide high availability. `freno` nodes will compete for _leadership_ and only the leader will collect metrics and should serve clients.
+
 Read more on `raft` and [High Availability](doc/high-availability.md)
 
 ### Configuration
