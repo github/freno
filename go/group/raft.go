@@ -8,6 +8,7 @@
 package group
 
 import (
+	"expvar"
 	"fmt"
 	"strings"
 	"time"
@@ -30,7 +31,7 @@ type ConsensusService interface {
 }
 
 // Setup creates the entire raft shananga. Creates the store, associates with the throttler,
-// contacts peer nodes. The thing.
+// contacts peer nodes, and subscribes to leader changes to export them.
 func Setup(throttler *throttle.Throttler) (ConsensusService, error) {
 	store = NewStore(config.Settings().RaftDataDir, normalizeRaftNode(config.Settings().RaftBind), throttler)
 
@@ -42,7 +43,34 @@ func Setup(throttler *throttle.Throttler) (ConsensusService, error) {
 		return nil, log.Errorf("failed to open raft store: %s", err.Error())
 	}
 
+	subscribeToLeaderChanges()
+
 	return store, nil
+}
+
+// subscribeToLeaderChanges adds a new observer to the raft setup, the observer will filter
+// only those events related to leader changes, which are enqueued in a channel.
+// asyncronously another goroutine sits waiting for leader changes upon which, it exports
+// them into the raft.leader expvar
+func subscribeToLeaderChanges() {
+	expvar.NewString("raft.leader").Set(getRaft().Leader())
+	observationsChannel := make(chan raft.Observation)
+
+	observer := raft.NewObserver(observationsChannel, false, func(o *raft.Observation) bool {
+		_, isLeaderObservation := o.Data.(raft.LeaderObservation)
+		return isLeaderObservation
+	})
+	getRaft().RegisterObserver(observer)
+
+	go func() {
+		for {
+			observation := <-observationsChannel
+			leader_observation, ok := observation.Data.(raft.LeaderObservation)
+			if ok {
+				expvar.Get("raft.leader").(*expvar.String).Set(leader_observation.Leader)
+			}
+		}
+	}()
 }
 
 // getRaft is a convenience method
