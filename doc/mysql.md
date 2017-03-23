@@ -4,7 +4,7 @@
 
 ### Background
 
-`MySQL` installments typically include a master an multiple replicas. Aggressive write to the master may cause increased replication lags. Replication lags have multiple undesired effects, such as stale replica data.
+`MySQL` installments typically include a master and multiple replicas. Aggressive write to the master may cause increased replication lags. Replication lags have multiple undesired effects, such as stale replica data.
 
 Common operations apply massive changes to MySQL data, such as:
 
