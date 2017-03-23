@@ -7,7 +7,6 @@ import (
 
 	"github.com/github/freno/go/base"
 	"github.com/github/freno/go/config"
-	"github.com/github/freno/go/group"
 	"github.com/github/freno/go/haproxy"
 	"github.com/github/freno/go/mysql"
 
@@ -24,7 +23,8 @@ const aggregatedMetricsExpiration = 5 * time.Second
 const aggregatedMetricsCleanup = 1 * time.Second
 
 type Throttler struct {
-	isLeader bool
+	isLeader     bool
+	isLeaderFunc func() bool
 
 	mysqlThrottleMetricChan chan *mysql.MySQLThrottleMetric
 	mysqlInventoryChan      chan *mysql.MySQLInventory
@@ -34,11 +34,13 @@ type Throttler struct {
 
 	mysqlClusterThresholds *cache.Cache
 	aggregatedMetrics      *cache.Cache
+	throttledApps          *cache.Cache
 }
 
-func NewThrottler() *Throttler {
+func NewThrottler(isLeaderFunc func() bool) *Throttler {
 	throttler := &Throttler{
-		isLeader: false,
+		isLeader:     false,
+		isLeaderFunc: isLeaderFunc,
 
 		mysqlThrottleMetricChan: make(chan *mysql.MySQLThrottleMetric),
 
@@ -46,10 +48,16 @@ func NewThrottler() *Throttler {
 		mysqlClusterProbesChan: make(chan *mysql.ClusterProbes),
 		mysqlInventory:         mysql.NewMySQLInventory(),
 
+		throttledApps:          cache.New(cache.NoExpiration, 0),
 		mysqlClusterThresholds: cache.New(cache.NoExpiration, 0),
 		aggregatedMetrics:      cache.New(aggregatedMetricsExpiration, aggregatedMetricsCleanup),
 	}
+	throttler.ThrottleApp("abusing-app")
 	return throttler
+}
+
+func (throttler *Throttler) ThrottledAppsSnapshot() map[string]cache.Item {
+	return throttler.throttledApps.Items()
 }
 
 func (throttler *Throttler) Operate() {
@@ -62,7 +70,7 @@ func (throttler *Throttler) Operate() {
 		case <-leaderCheckTick:
 			{
 				// sparse
-				throttler.isLeader = group.IsLeader()
+				throttler.isLeader = throttler.isLeaderFunc()
 			}
 		case <-mysqlCollectTick:
 			{
@@ -260,4 +268,24 @@ func (throttler *Throttler) AggregatedMetrics() map[string]base.MetricResult {
 		snapshot[key] = metricResult
 	}
 	return snapshot
+}
+
+func (throttler *Throttler) ThrottleApp(appName string) {
+	throttler.throttledApps.Set(appName, true, cache.DefaultExpiration)
+}
+
+func (throttler *Throttler) UnthrottleApp(appName string) {
+	throttler.throttledApps.Delete(appName)
+}
+
+func (throttler *Throttler) IsAppThrottled(appName string) bool {
+	_, found := throttler.throttledApps.Get(appName)
+	return found
+}
+
+func (throttler *Throttler) AppRequestMetricResult(appName string, metricResultFunc base.MetricResultFunc) (metricResult base.MetricResult, threshold float64) {
+	if throttler.IsAppThrottled(appName) {
+		return base.AppDeniedMetric, 0
+	}
+	return metricResultFunc()
 }
