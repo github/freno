@@ -1,6 +1,6 @@
 # freno
 
-Cooperative, highly available throttler service: clients can use `freno` to throttle writes to a resource.
+Cooperative, highly available throttler service: clients use `freno` to throttle writes to a resource.
 
 Current implementation can throttle writes to (multiple) MySQL clusters, based on replication status for those clusters. `freno` will throttle cooperative clients when replication lag exceeds a pre-defined threshold.
 
@@ -56,9 +56,14 @@ Read more on `raft` and [High Availability](doc/high-availability.md)
 
 ### Configuration
 
-See [sample config file](resources/freno.conf.sample.json)
+See [sample config file](resources/freno.conf.sample.json). Also find:
 
-See a [MySQL-specific dissection](doc/mysql.md#configuration) of the configuration
+- [General/raft configuration](doc/high-availability.md#configuration) dissection
+- [MySQL-specific configuration](doc/mysql.md#configuration) dissection
+
+### Resources
+
+You may find various [resources](resources/) for setting up `freno` in your environment.
 
 ### What's in a name?
 
@@ -67,3 +72,7 @@ See a [MySQL-specific dissection](doc/mysql.md#configuration) of the configurati
 > Echa el freno, magdaleno!
 
 This reminded us of the 80's and that was it.
+
+### Authors
+
+Authored by GitHub engineering
