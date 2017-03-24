@@ -15,9 +15,11 @@ Current implementation can throttle writes to (multiple) MySQL clusters, based o
 
 Clients (application, scripts, jobs) are expected to consult with `freno`. `freno` is not a proxy between the client and the backend store. It merely observes the store and states "you're good to write" or "you should stop writing". Clients are expected to consult with `freno` and respect its recommendation.
 
-### Per store
+### Stores and apps
 
-### Per app
+`freno` collects data per data store. E.g. when probing MySQL clusters it will collect replication lag per cluster, independently. Backend store metrics are collected automatically and represent absolute truths.
+
+`freno` serves clients, identified as _apps_. Since `freno` is cooperative, it trusts apps to identify themselves. Apps can be managed: `freno` can be instructed to forcibly throttle a certain app. This is so as to enable other, high priority apps to run to completion. `freno` merely accepts instructions on who to throttle, and does not have scheduling/prioritization logic of its own.
 
 ### MySQL
 
@@ -63,7 +65,7 @@ See [sample config file](resources/freno.conf.sample.json). Also find:
 
 ### Deployment
 
-See [deployment docs](doc/deploy.md) for suggestions on how to deploy `freno`.
+See [deployment docs](doc/deploy.md) for suggestions on a recommended `freno` deployment setup.
 
 ### Resources
 
