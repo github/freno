@@ -61,6 +61,10 @@ See [sample config file](resources/freno.conf.sample.json). Also find:
 - [General/raft configuration](doc/high-availability.md#configuration) dissection
 - [MySQL-specific configuration](doc/mysql.md#configuration) dissection
 
+### Deployment
+
+See [deployment docs](doc/deploy.md) for suggestions on how to deploy `freno`.
+
 ### Resources
 
 You may find various [resources](resources/) for setting up `freno` in your environment.
