@@ -28,7 +28,7 @@ func (metric *MySQLThrottleMetric) Get() (float64, error) {
 	return metric.Value, metric.Err
 }
 
-// GetReplicationLag returns replication lag for a given connection config; either by explicit query
+// ReadThrottleMetric returns replication lag for a given connection config; either by explicit query
 // or via SHOW SLAVE STATUS
 func ReadThrottleMetric(probe *Probe) (mySQLThrottleMetric *MySQLThrottleMetric) {
 	started := time.Now()
