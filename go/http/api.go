@@ -137,12 +137,14 @@ func (api *APIImpl) checkAppMetricResult(w http.ResponseWriter, r *http.Request,
 	statusCode := http.StatusInternalServerError
 
 	defer func(appName string, statusCode *int) {
-		metrics.GetOrRegisterCounter("check.any.total", nil).Inc(1)
-		metrics.GetOrRegisterCounter(fmt.Sprintf("check.%s.total", appName), nil).Inc(1)
-		if *statusCode != http.StatusOK {
-			metrics.GetOrRegisterCounter("check.any.error", nil).Inc(1)
-			metrics.GetOrRegisterCounter(fmt.Sprintf("check.%s.error", appName), nil).Inc(1)
-		}
+		go func() {
+			metrics.GetOrRegisterCounter("check.any.total", nil).Inc(1)
+			metrics.GetOrRegisterCounter(fmt.Sprintf("check.%s.total", appName), nil).Inc(1)
+			if *statusCode != http.StatusOK {
+				metrics.GetOrRegisterCounter("check.any.error", nil).Inc(1)
+				metrics.GetOrRegisterCounter(fmt.Sprintf("check.%s.error", appName), nil).Inc(1)
+			}
+		}()
 	}(appName, &statusCode)
 
 	if err == base.AppDeniedError {
