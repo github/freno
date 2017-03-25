@@ -63,8 +63,7 @@ func subscribeToLeaderChanges() {
 	getRaft().RegisterObserver(observer)
 
 	go func() {
-		for {
-			observation := <-observationsChannel
+		for observation := range observationsChannel {
 			leader_observation, ok := observation.Data.(raft.LeaderObservation)
 			if ok {
 				expvar.Get("raft.leader").(*expvar.String).Set(leader_observation.Leader)
