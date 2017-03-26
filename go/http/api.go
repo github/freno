@@ -135,7 +135,7 @@ func (api *APIImpl) checkAppMetricResult(w http.ResponseWriter, r *http.Request,
 	metricResult, threshold := api.throttler.AppRequestMetricResult(appName, metricResultFunc)
 	value, err := metricResult.Get()
 
-  statusCode := http.StatusInternalServerError // 500
+	statusCode := http.StatusInternalServerError // 500
 
 	defer func(appName string, statusCode *int) {
 		go func() {
@@ -148,7 +148,7 @@ func (api *APIImpl) checkAppMetricResult(w http.ResponseWriter, r *http.Request,
 		}()
 	}(appName, &statusCode)
 
-  if err == base.AppDeniedError {
+	if err == base.AppDeniedError {
 		// app specifically not allowed to get metrics
 		statusCode = http.StatusExpectationFailed // 417
 	} else if err == base.NoSuchMetricError {
