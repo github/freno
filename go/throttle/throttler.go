@@ -1,6 +1,7 @@
 package throttle
 
 import (
+	"expvar"
 	"fmt"
 	"sync/atomic"
 	"time"
@@ -21,6 +22,9 @@ const mysqlAggreateInterval = 50 * time.Millisecond
 
 const aggregatedMetricsExpiration = 5 * time.Second
 const aggregatedMetricsCleanup = 1 * time.Second
+const throttledAppsSnapshotInterval = 100 * time.Millisecond
+
+var throttledAppsExpVar = expvar.NewMap("throttled.apps")
 
 type Throttler struct {
 	isLeader     bool
@@ -65,6 +69,7 @@ func (throttler *Throttler) Operate() {
 	mysqlCollectTick := time.Tick(mysqlCollectInterval)
 	mysqlRefreshTick := time.Tick(mysqlRefreshInterval)
 	mysqlAggregateTick := time.Tick(mysqlAggreateInterval)
+	throttledAppsTick := time.Tick(throttledAppsSnapshotInterval)
 	for {
 		select {
 		case <-leaderCheckTick:
@@ -95,6 +100,10 @@ func (throttler *Throttler) Operate() {
 		case <-mysqlAggregateTick:
 			{
 				throttler.aggregateMySQLMetrics()
+			}
+		case <-throttledAppsTick:
+			{
+				go throttler.pushStatusToExpVar()
 			}
 		}
 		if !throttler.isLeader {
@@ -243,6 +252,31 @@ func (throttler *Throttler) aggregateMySQLMetrics() error {
 		go throttler.aggregatedMetrics.Set(metricName, aggregatedMetric, cache.DefaultExpiration)
 	}
 	return nil
+}
+
+func (throttler *Throttler) pushStatusToExpVar() {
+	apps := make(chan string)
+	throttledAppsExpVar.Do(func(appThrottlerStatus expvar.KeyValue) {
+		apps <- appThrottlerStatus.Key
+	})
+	close(apps)
+
+	for appName := range apps {
+		throttled := new(expvar.Int)
+		throttled.Set(0)
+		throttledAppsExpVar.Set(appName, throttled)
+	}
+
+	for appName := range throttler.ThrottledAppsSnapshot() {
+		throttled := throttledAppsExpVar.Get(appName)
+		if throttled != nil {
+			throttled.(*expvar.Int).Set(1)
+		} else {
+			throttled = new(expvar.Int)
+			throttled.(*expvar.Int).Set(1)
+			throttledAppsExpVar.Set(appName, throttled)
+		}
+	}
 }
 
 func (throttler *Throttler) GetMySQLClusterMetrics(clusterName string) (metricResult base.MetricResult, threshold float64) {
