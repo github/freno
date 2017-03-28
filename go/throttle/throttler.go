@@ -255,7 +255,7 @@ func (throttler *Throttler) aggregateMySQLMetrics() error {
 }
 
 func (throttler *Throttler) pushStatusToExpVar() {
-	apps := make([]string, 1)
+	apps := []string{}
 	throttledAppsExpVar.Do(func(appThrottlerStatus expvar.KeyValue) {
 		apps = append(apps, appThrottlerStatus.Key)
 	})
