@@ -85,7 +85,7 @@ This project is under active development.
 
 ### Contributing
 
-This repository is [open to contributions](.github/CONTRIBUTING.md).
+This repository is [open to contributions](.github/CONTRIBUTING.md). Please also see [code of conduct](.github/CODE_OF_CONDUCT.md)
 
 ### License
 
