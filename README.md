@@ -83,6 +83,10 @@ This reminded us of the 80's and that was it.
 
 This repository is [open to contributions](.github/CONTRIBUTING.md).
 
+### License
+
+This repository is released un the [MIT LICENSE](LICENSE)
+
 ### Authors
 
 Authored by GitHub engineering
