@@ -9,6 +9,8 @@ import (
 	"github.com/github/freno/go/base"
 	"github.com/github/freno/go/group"
 	"github.com/github/freno/go/throttle"
+	metrics "github.com/rcrowley/go-metrics"
+	"github.com/rcrowley/go-metrics/exp"
 
 	"github.com/julienschmidt/httprouter"
 )
@@ -134,6 +136,18 @@ func (api *APIImpl) checkAppMetricResult(w http.ResponseWriter, r *http.Request,
 	value, err := metricResult.Get()
 
 	statusCode := http.StatusInternalServerError // 500
+
+	defer func(appName string, statusCode *int) {
+		go func() {
+			metrics.GetOrRegisterCounter("check.any.total", nil).Inc(1)
+			metrics.GetOrRegisterCounter(fmt.Sprintf("check.%s.total", appName), nil).Inc(1)
+			if *statusCode != http.StatusOK {
+				metrics.GetOrRegisterCounter("check.any.error", nil).Inc(1)
+				metrics.GetOrRegisterCounter(fmt.Sprintf("check.%s.error", appName), nil).Inc(1)
+			}
+		}()
+	}(appName, &statusCode)
+
 	if err == base.AppDeniedError {
 		// app specifically not allowed to get metrics
 		statusCode = http.StatusExpectationFailed // 417
@@ -203,6 +217,11 @@ func register(router *httprouter.Router, path string, f httprouter.Handle) {
 	router.GET(path, f)
 }
 
+func metricsHandle(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
+	handler := exp.ExpHandler(metrics.DefaultRegistry)
+	handler.ServeHTTP(w, r)
+}
+
 // ConfigureRoutes configures a set of HTTP routes to be actions dispatched by the
 // given api's methods.
 func ConfigureRoutes(api API) *httprouter.Router {
@@ -215,5 +234,9 @@ func ConfigureRoutes(api API) *httprouter.Router {
 	register(router, "/aggregated-metrics", api.AggregatedMetrics)
 	register(router, "/throttle-app/:app", api.ThrottleApp)
 	register(router, "/unthrottle-app/:app", api.UnthrottleApp)
+
+	router.GET("/debug/vars", metricsHandle)
+	router.GET("/debug/metrics", metricsHandle)
+
 	return router
 }
