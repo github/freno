@@ -22,7 +22,7 @@ const mysqlAggreateInterval = 50 * time.Millisecond
 
 const aggregatedMetricsExpiration = 5 * time.Second
 const aggregatedMetricsCleanup = 1 * time.Second
-const throttledAppsSnapshotInterval = 100 * time.Millisecond
+const throttledAppsSnapshotInterval = 5 * time.Second
 
 var throttledAppsExpVar = expvar.NewMap("throttled.apps")
 
