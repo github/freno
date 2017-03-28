@@ -79,6 +79,10 @@ You may find various [resources](resources/) for setting up `freno` in your envi
 
 This reminded us of the 80's and that was it.
 
+### Project status
+
+This project is under active development.
+
 ### Contributing
 
 This repository is [open to contributions](.github/CONTRIBUTING.md).
