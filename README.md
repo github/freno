@@ -85,7 +85,7 @@ This repository is [open to contributions](.github/CONTRIBUTING.md).
 
 ### License
 
-This repository is released un the [MIT LICENSE](LICENSE)
+This repository is released under the [MIT LICENSE](LICENSE)
 
 ### Authors
 
