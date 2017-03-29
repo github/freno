@@ -44,40 +44,7 @@ func Setup(throttler *throttle.Throttler) (ConsensusService, error) {
 		return nil, log.Errorf("failed to open raft store: %s", err.Error())
 	}
 
-	subscribeToLeaderChanges()
-
 	return store, nil
-}
-
-// subscribeToLeaderChanges adds a new observer to the raft setup, the observer will filter
-// only those events related to leader changes, which are enqueued in a channel.
-// asyncronously another goroutine sits waiting for leader changes upon which, it exports
-// them into the raft.leader expvar, and some 1/0 gauges indicating who is the leader and the other
-// nodes that are not the leader
-func subscribeToLeaderChanges() {
-	expvar.NewString("raft.leader").Set(getRaft().Leader())
-	observationsChannel := make(chan raft.Observation)
-
-	observer := raft.NewObserver(observationsChannel, false, func(o *raft.Observation) bool {
-		_, isLeaderObservation := o.Data.(raft.LeaderObservation)
-		return isLeaderObservation
-	})
-	getRaft().RegisterObserver(observer)
-
-	go func() {
-		for observation := range observationsChannel {
-			leader_observation, ok := observation.Data.(raft.LeaderObservation)
-			if ok {
-				leader := leader_observation.Leader
-				expvar.Get("raft.leader").(*expvar.String).Set(leader)
-				if IsLeader() {
-					metrics.GetOrRegisterGauge("raft.is_leader", nil).Update(1)
-				} else {
-					metrics.GetOrRegisterGauge("raft.is_leader", nil).Update(0)
-				}
-			}
-		}
-	}()
 }
 
 // getRaft is a convenience method
@@ -119,8 +86,18 @@ func Monitor() {
 		select {
 		case <-t.C:
 			leaderHint := GetLeader()
+
+			leaderExpVar := expvar.Get("raft.leader")
+			if leaderExpVar == nil {
+				leaderExpVar = expvar.NewString("raft.leader")
+			}
+			leaderExpVar.(*expvar.String).Set(leaderHint)
+
 			if IsLeader() {
 				leaderHint = fmt.Sprintf("%s (this host)", leaderHint)
+				metrics.GetOrRegisterGauge("raft.is_leader", nil).Update(1)
+			} else {
+				metrics.GetOrRegisterGauge("raft.is_leader", nil).Update(0)
 			}
 			log.Debugf("raft leader is %s", leaderHint)
 		}
