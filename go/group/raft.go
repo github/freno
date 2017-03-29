@@ -16,6 +16,7 @@ import (
 	"github.com/github/freno/go/config"
 	"github.com/github/freno/go/throttle"
 	"github.com/outbrain/golib/log"
+	metrics "github.com/rcrowley/go-metrics"
 
 	"github.com/hashicorp/raft"
 )
@@ -51,7 +52,8 @@ func Setup(throttler *throttle.Throttler) (ConsensusService, error) {
 // subscribeToLeaderChanges adds a new observer to the raft setup, the observer will filter
 // only those events related to leader changes, which are enqueued in a channel.
 // asyncronously another goroutine sits waiting for leader changes upon which, it exports
-// them into the raft.leader expvar
+// them into the raft.leader expvar, and some 1/0 gauges indicating who is the leader and the other
+// nodes that are not the leader
 func subscribeToLeaderChanges() {
 	expvar.NewString("raft.leader").Set(getRaft().Leader())
 	observationsChannel := make(chan raft.Observation)
@@ -66,7 +68,15 @@ func subscribeToLeaderChanges() {
 		for observation := range observationsChannel {
 			leader_observation, ok := observation.Data.(raft.LeaderObservation)
 			if ok {
+				leader := leader_observation.Leader
 				expvar.Get("raft.leader").(*expvar.String).Set(leader_observation.Leader)
+				for _, node := range config.Settings().RaftNodes {
+					if strings.Compare(node, leader) == 0 {
+						metrics.GetOrRegisterGauge(fmt.Sprintf("raft.is_leader.%s", node), nil).Update(1)
+					} else {
+						metrics.GetOrRegisterGauge(fmt.Sprintf("raft.is_leader.%s", node), nil).Update(0)
+					}
+				}
 			}
 		}
 	}()
