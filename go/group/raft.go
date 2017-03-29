@@ -102,10 +102,15 @@ func GetLeader() string {
 	return getRaft().Leader()
 }
 
+// GetState returns current raft state
+func GetState() raft.RaftState {
+	return getRaft().State()
+}
+
 // Monitor is a utility function to routinely observe leadership state.
 // It doesn't actually do much; merely takes notes.
 func Monitor() {
-	t := time.NewTicker(time.Duration(5) * time.Second)
+	t := time.NewTicker(5 * time.Second)
 
 	for {
 		select {
@@ -114,7 +119,7 @@ func Monitor() {
 			if IsLeader() {
 				leaderHint = fmt.Sprintf("%s (this host)", leaderHint)
 			}
-			log.Debugf("raft leader is %s", leaderHint)
+			log.Debugf("raft leader is %s; state: %s", leaderHint, GetState().String())
 		}
 	}
 }
