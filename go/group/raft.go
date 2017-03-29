@@ -69,14 +69,11 @@ func subscribeToLeaderChanges() {
 			leader_observation, ok := observation.Data.(raft.LeaderObservation)
 			if ok {
 				leader := leader_observation.Leader
-				leader = leader[:strings.Index(leader, ":")]
-				expvar.Get("raft.leader").(*expvar.String).Set(leader_observation.Leader)
-				for _, node := range config.Settings().RaftNodes {
-					if strings.Compare(node, leader) == 0 {
-						metrics.GetOrRegisterGauge(fmt.Sprintf("raft.is_leader.%s", node), nil).Update(1)
-					} else {
-						metrics.GetOrRegisterGauge(fmt.Sprintf("raft.is_leader.%s", node), nil).Update(0)
-					}
+				expvar.Get("raft.leader").(*expvar.String).Set(leader)
+				if IsLeader() {
+					metrics.GetOrRegisterGauge("raft.is_leader", nil).Update(1)
+				} else {
+					metrics.GetOrRegisterGauge("raft.is_leader", nil).Update(0)
 				}
 			}
 		}
