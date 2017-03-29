@@ -1,8 +1,8 @@
 package throttle
 
 import (
-	"expvar"
 	"fmt"
+	"strings"
 	"sync/atomic"
 	"time"
 
@@ -13,6 +13,8 @@ import (
 
 	"github.com/outbrain/golib/log"
 	"github.com/patrickmn/go-cache"
+
+	metrics "github.com/rcrowley/go-metrics"
 )
 
 const leaderCheckInterval = 1 * time.Second
@@ -23,8 +25,6 @@ const mysqlAggreateInterval = 50 * time.Millisecond
 const aggregatedMetricsExpiration = 5 * time.Second
 const aggregatedMetricsCleanup = 1 * time.Second
 const throttledAppsSnapshotInterval = 5 * time.Second
-
-var throttledAppsExpVar = expvar.NewMap("throttled.apps")
 
 type Throttler struct {
 	isLeader     bool
@@ -255,26 +255,14 @@ func (throttler *Throttler) aggregateMySQLMetrics() error {
 }
 
 func (throttler *Throttler) pushStatusToExpVar() {
-	apps := []string{}
-	throttledAppsExpVar.Do(func(appThrottlerStatus expvar.KeyValue) {
-		apps = append(apps, appThrottlerStatus.Key)
+	metrics.DefaultRegistry.Each(func(metricName string, _ interface{}) {
+		if strings.HasPrefix(metricName, "throttled_states.") {
+			metrics.Get(metricName).(metrics.Gauge).Update(0)
+		}
 	})
 
-	for _, appName := range apps {
-		throttled := new(expvar.Int)
-		throttled.Set(0)
-		throttledAppsExpVar.Set(appName, throttled)
-	}
-
 	for appName := range throttler.ThrottledAppsSnapshot() {
-		throttled := throttledAppsExpVar.Get(appName)
-		if throttled != nil {
-			throttled.(*expvar.Int).Set(1)
-		} else {
-			throttled = new(expvar.Int)
-			throttled.(*expvar.Int).Set(1)
-			throttledAppsExpVar.Set(appName, throttled)
-		}
+		metrics.GetOrRegisterGauge(fmt.Sprintf("throttled_states.%s", appName), nil).Update(1)
 	}
 }
 
