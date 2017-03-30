@@ -2,6 +2,7 @@ package throttle
 
 import (
 	"fmt"
+	"strings"
 	"sync/atomic"
 	"time"
 
@@ -12,6 +13,8 @@ import (
 
 	"github.com/outbrain/golib/log"
 	"github.com/patrickmn/go-cache"
+
+	metrics "github.com/rcrowley/go-metrics"
 )
 
 const leaderCheckInterval = 1 * time.Second
@@ -21,6 +24,7 @@ const mysqlAggreateInterval = 50 * time.Millisecond
 
 const aggregatedMetricsExpiration = 5 * time.Second
 const aggregatedMetricsCleanup = 1 * time.Second
+const throttledAppsSnapshotInterval = 5 * time.Second
 
 type Throttler struct {
 	isLeader     bool
@@ -65,6 +69,7 @@ func (throttler *Throttler) Operate() {
 	mysqlCollectTick := time.Tick(mysqlCollectInterval)
 	mysqlRefreshTick := time.Tick(mysqlRefreshInterval)
 	mysqlAggregateTick := time.Tick(mysqlAggreateInterval)
+	throttledAppsTick := time.Tick(throttledAppsSnapshotInterval)
 	for {
 		select {
 		case <-leaderCheckTick:
@@ -95,6 +100,10 @@ func (throttler *Throttler) Operate() {
 		case <-mysqlAggregateTick:
 			{
 				throttler.aggregateMySQLMetrics()
+			}
+		case <-throttledAppsTick:
+			{
+				go throttler.pushStatusToExpVar()
 			}
 		}
 		if !throttler.isLeader {
@@ -243,6 +252,18 @@ func (throttler *Throttler) aggregateMySQLMetrics() error {
 		go throttler.aggregatedMetrics.Set(metricName, aggregatedMetric, cache.DefaultExpiration)
 	}
 	return nil
+}
+
+func (throttler *Throttler) pushStatusToExpVar() {
+	metrics.DefaultRegistry.Each(func(metricName string, _ interface{}) {
+		if strings.HasPrefix(metricName, "throttled_states.") {
+			metrics.Get(metricName).(metrics.Gauge).Update(0)
+		}
+	})
+
+	for appName := range throttler.ThrottledAppsSnapshot() {
+		metrics.GetOrRegisterGauge(fmt.Sprintf("throttled_states.%s", appName), nil).Update(1)
+	}
 }
 
 func (throttler *Throttler) GetMySQLClusterMetrics(clusterName string) (metricResult base.MetricResult, threshold float64) {
