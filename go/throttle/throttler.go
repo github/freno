@@ -52,7 +52,7 @@ func NewThrottler(isLeaderFunc func() bool) *Throttler {
 		mysqlClusterProbesChan: make(chan *mysql.ClusterProbes),
 		mysqlInventory:         mysql.NewMySQLInventory(),
 
-		throttledApps:          cache.New(cache.NoExpiration, 0),
+		throttledApps:          cache.New(cache.NoExpiration, 10*time.Second),
 		mysqlClusterThresholds: cache.New(cache.NoExpiration, 0),
 		aggregatedMetrics:      cache.New(aggregatedMetricsExpiration, aggregatedMetricsCleanup),
 	}
@@ -291,8 +291,8 @@ func (throttler *Throttler) AggregatedMetrics() map[string]base.MetricResult {
 	return snapshot
 }
 
-func (throttler *Throttler) ThrottleApp(appName string) {
-	throttler.throttledApps.Set(appName, true, cache.DefaultExpiration)
+func (throttler *Throttler) ThrottleApp(appName string, ttl time.Duration) {
+	throttler.throttledApps.Set(appName, true, ttl)
 }
 
 func (throttler *Throttler) UnthrottleApp(appName string) {
@@ -302,6 +302,14 @@ func (throttler *Throttler) UnthrottleApp(appName string) {
 func (throttler *Throttler) IsAppThrottled(appName string) bool {
 	_, found := throttler.throttledApps.Get(appName)
 	return found
+}
+
+func (throttler *Throttler) ThrottledAppExpiration(appName string) int64 {
+	item, found := throttler.throttledApps.Get(appName)
+	if !found {
+		return 0
+	}
+	return item.Expiration
 }
 
 func (throttler *Throttler) AppRequestMetricResult(appName string, metricResultFunc base.MetricResultFunc) (metricResult base.MetricResult, threshold float64) {
