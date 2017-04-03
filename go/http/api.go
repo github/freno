@@ -25,6 +25,7 @@ type API interface {
 	AggregatedMetrics(w http.ResponseWriter, r *http.Request, _ httprouter.Params)
 	ThrottleApp(w http.ResponseWriter, r *http.Request, _ httprouter.Params)
 	UnthrottleApp(w http.ResponseWriter, r *http.Request, _ httprouter.Params)
+	ThrottledApps(w http.ResponseWriter, r *http.Request, _ httprouter.Params)
 }
 
 type CheckResponse struct {
@@ -211,6 +212,17 @@ func (api *APIImpl) UnthrottleApp(w http.ResponseWriter, r *http.Request, ps htt
 	api.respondGeneric(w, r, err)
 }
 
+// ThrottledApps returns a snapshot of all currently throttled apps
+func (api *APIImpl) ThrottledApps(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
+	w.Header().Set("Content-Type", "application/json")
+	throttledApps := api.throttler.ThrottledAppsSnapshot()
+	responseMap := map[string]interface{}
+	for appName, item := range throttledApps {
+		responseMap[appName] = item.Object
+	}
+	json.NewEncoder(w).Encode(responseMap)
+}
+
 // register is a wrapper function for accepting both GET and HEAD requests
 func register(router *httprouter.Router, path string, f httprouter.Handle) {
 	router.HEAD(path, f)
@@ -230,10 +242,12 @@ func ConfigureRoutes(api API) *httprouter.Router {
 	register(router, "/leader-check", api.LeaderCheck)
 	register(router, "/raft/leader", api.RaftLeader)
 	register(router, "/hostname", api.Hostname)
+
 	register(router, "/check/:app/mysql/:clusterName", api.CheckMySQLCluster)
 	register(router, "/aggregated-metrics", api.AggregatedMetrics)
 	register(router, "/throttle-app/:app", api.ThrottleApp)
 	register(router, "/unthrottle-app/:app", api.UnthrottleApp)
+	register(router, "/throttled-apps", api.ThrottledApps)
 
 	router.GET("/debug/vars", metricsHandle)
 	router.GET("/debug/metrics", metricsHandle)
