@@ -20,6 +20,13 @@ sub before_bulk_delete {
   return 1;
 }
 
+sub before_bulk_insert {
+  while(! head($freno_url)) {
+    select(undef, undef, undef, 0.25); # sleep
+  }
+  return 1;
+}
+
 sub before_insert {} # Take no action
 sub custom_sth    {} # Take no action
 sub after_finish  {} # Take no action
