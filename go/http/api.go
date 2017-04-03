@@ -95,7 +95,7 @@ func (api *APIImpl) respondGeneric(w http.ResponseWriter, r *http.Request, e err
 
 // LbCheck responds to LbCheck with HTTP 200
 func (api *APIImpl) LbCheck(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
-	w.WriteHeader(http.StatusOK)
+	api.respondGeneric(w, r, nil)
 }
 
 // LeaderCheck responds with HTTP 200 when this node is a raft leader, otherwise 404
@@ -233,6 +233,8 @@ func metricsHandle(w http.ResponseWriter, r *http.Request, p httprouter.Params) 
 func ConfigureRoutes(api API) *httprouter.Router {
 	router := httprouter.New()
 	register(router, "/lb-check", api.LbCheck)
+	register(router, "/_ping", api.LbCheck)
+	register(router, "/status", api.LbCheck)
 	register(router, "/leader-check", api.LeaderCheck)
 	register(router, "/raft/leader", api.RaftLeader)
 	register(router, "/raft/state", api.RaftState)
