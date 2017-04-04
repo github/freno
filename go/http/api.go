@@ -260,7 +260,7 @@ func ConfigureRoutes(api API) *httprouter.Router {
 
 func (api *APIImpl) selfAppCheck() {
 	aggregatedMetrics := api.throttler.AggregatedMetrics()
-	for metricName, _ := range aggregatedMetrics {
+	for metricName := range aggregatedMetrics {
 		tokens := strings.Split(metricName, "/")
 		if tokens[0] == "mysql" {
 			clusterName := tokens[1]
