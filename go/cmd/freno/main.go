@@ -123,7 +123,19 @@ func printHelp() {
 
 func printUsage() {
 	fmt.Println(`Usage: freno [OPTIONS]
+	To run the freno service, execute:
+		freno --http
 
 	For more help options use: freno -help.
+
+	freno is a free and open source software.
+	  Please see https://github.com/github/freno/blob/master/README.md#license for license.
+	  Sources and binaries are found on https://github.com/github/freno/releases.
+	  Sources are also available by cloning https://github.com/github/freno.
+
+  Issues can be sumbitted on https://github.com/github/freno/issues
+	Please see https://github.com/github/freno/blob/master/README.md#contributing for contributions
+
+	Authored by GitHub engineering
 	`)
 }
