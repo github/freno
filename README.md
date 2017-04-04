@@ -89,7 +89,7 @@ This repository is [open to contributions](.github/CONTRIBUTING.md). Please also
 
 ### License
 
-This project is released under the [MIT LICENSE](LICENSE). Please note it includes 3rd party dependencies release under their own licenses.
+This project is released under the [MIT LICENSE](LICENSE). Please note it includes 3rd party dependencies release under their own licenses; these are found under [vendor](https://github.com/github/freno/tree/master/vendor).
 
 ### Authors
 
