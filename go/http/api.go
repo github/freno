@@ -17,8 +17,6 @@ import (
 	"github.com/julienschmidt/httprouter"
 )
 
-const frenoAppName = "freno"
-
 // API exposes the contract for the throttler's web API
 type API interface {
 	LbCheck(w http.ResponseWriter, _ *http.Request, _ httprouter.Params)
@@ -152,6 +150,9 @@ func (api *APIImpl) checkAppMetricResult(w http.ResponseWriter, r *http.Request,
 
 	defer func(appName string, statusCode *int) {
 		go func() {
+			if appName == "" {
+				return
+			}
 			metrics.GetOrRegisterCounter("check.any.total", nil).Inc(1)
 			metrics.GetOrRegisterCounter(fmt.Sprintf("check.%s.total", appName), nil).Inc(1)
 			if *statusCode != http.StatusOK {
@@ -177,10 +178,6 @@ func (api *APIImpl) checkAppMetricResult(w http.ResponseWriter, r *http.Request,
 	} else {
 		// all good!
 		statusCode = http.StatusOK // 200
-	}
-	if r == nil || w == nil {
-		// Can happen on simulated requests
-		return
 	}
 	if r.Method == http.MethodGet {
 		w.Header().Set("Content-Type", "application/json")
@@ -259,28 +256,4 @@ func ConfigureRoutes(api API) *httprouter.Router {
 	router.GET("/debug/metrics", metricsHandle)
 
 	return router
-}
-
-func (api *APIImpl) selfAppCheck() {
-	aggregatedMetrics := api.throttler.AggregatedMetrics()
-	for metricName := range aggregatedMetrics {
-		tokens := strings.Split(metricName, "/")
-		if tokens[0] == "mysql" {
-			clusterName := tokens[1]
-			params := httprouter.Params{
-				httprouter.Param{Key: "clusterName", Value: clusterName},
-				httprouter.Param{Key: "app", Value: frenoAppName},
-			}
-			api.CheckMySQLCluster(nil, nil, params)
-		}
-	}
-}
-
-func (api *APIImpl) SelfAppChecks() {
-	selfChecksTick := time.Tick(time.Second)
-	go func() {
-		for range selfChecksTick {
-			api.selfAppCheck()
-		}
-	}()
 }
