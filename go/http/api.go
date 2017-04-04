@@ -20,6 +20,7 @@ type API interface {
 	LbCheck(w http.ResponseWriter, _ *http.Request, _ httprouter.Params)
 	LeaderCheck(w http.ResponseWriter, _ *http.Request, _ httprouter.Params)
 	RaftLeader(w http.ResponseWriter, _ *http.Request, _ httprouter.Params)
+	RaftState(w http.ResponseWriter, _ *http.Request, _ httprouter.Params)
 	Hostname(w http.ResponseWriter, _ *http.Request, _ httprouter.Params)
 	CheckMySQLCluster(w http.ResponseWriter, r *http.Request, _ httprouter.Params)
 	AggregatedMetrics(w http.ResponseWriter, r *http.Request, _ httprouter.Params)
@@ -118,6 +119,11 @@ func (api *APIImpl) RaftLeader(w http.ResponseWriter, r *http.Request, _ httprou
 	} else {
 		w.WriteHeader(http.StatusInternalServerError)
 	}
+}
+
+// RaftState returns the state of the raft node
+func (api *APIImpl) RaftState(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+	fmt.Fprintf(w, group.GetState().String())
 }
 
 // Hostname returns the hostname this process executes on
@@ -231,6 +237,7 @@ func ConfigureRoutes(api API) *httprouter.Router {
 	register(router, "/status", api.LbCheck)
 	register(router, "/leader-check", api.LeaderCheck)
 	register(router, "/raft/leader", api.RaftLeader)
+	register(router, "/raft/state", api.RaftState)
 	register(router, "/hostname", api.Hostname)
 	register(router, "/check/:app/mysql/:clusterName", api.CheckMySQLCluster)
 	register(router, "/aggregated-metrics", api.AggregatedMetrics)
