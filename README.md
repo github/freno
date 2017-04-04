@@ -44,11 +44,22 @@ Read more about [freno and MySQL throttling](doc/mysql.md)
 `freno` serves requests via `HTTP`. The most important request is the `check` request: "May this app write to this store?". `freno` appreciates `HEAD` requests (`GET` are also accepted, with more overhead) and responds with status codes:
 
 - `200` (OK): Application may write to data store
+- `404` (Not Found): Unknown metric name.
 - `417` (Expectation Failed): Requesting application is explicitly forbidden to write.
 - `429` (Too Many Requests): Do not write. A normal state indicating the store's state does not meet expected threshold.
 - `500` (Internal Server Error): Internal error. Do not write.
 
 Read more on [HTTP requests & responses](doc/http.md)
+
+### Clients
+
+Clients will commonly issue `/check/...` requests via `HEAD`.
+
+Clients can be expected to issue many requests per second. `freno` is lightweight in resources. It should be just fine to hit `freno` hundreds of times per second. It depends on your hardware and resources, of course.
+
+It makes sense to hit `freno` in the whereabouts of the granularity one is looking at. If your client is to throttle on a `1000ms` replication lag, checking `freno` `200` times per sec may be overdoing it. However if you wish to keep your clients naive and without caching this should be fine.
+
+Read more on [clients](doc/clients.md)
 
 ### Raft
 
