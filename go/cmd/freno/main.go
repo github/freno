@@ -112,6 +112,7 @@ func httpServe() error {
 
 	api := http.NewAPIImpl(throttler, consensusService)
 	router := http.ConfigureRoutes(api)
+	api.SelfAppChecks()
 	port := config.Settings().ListenPort
 	log.Infof("Starting server in port %d", port)
 	return gohttp.ListenAndServe(fmt.Sprintf(":%d", port), router)

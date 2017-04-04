@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"strings"
+	"time"
 
 	"github.com/github/freno/go/base"
 	"github.com/github/freno/go/group"
@@ -14,6 +16,8 @@ import (
 
 	"github.com/julienschmidt/httprouter"
 )
+
+const frenoAppName = "freno"
 
 // API exposes the contract for the throttler's web API
 type API interface {
@@ -171,6 +175,10 @@ func (api *APIImpl) checkAppMetricResult(w http.ResponseWriter, r *http.Request,
 		// all good!
 		statusCode = http.StatusOK // 200
 	}
+	if r == nil || w == nil {
+		// Can happen on simulated requests
+		return
+	}
 	if r.Method == http.MethodGet {
 		w.Header().Set("Content-Type", "application/json")
 	}
@@ -248,4 +256,24 @@ func ConfigureRoutes(api API) *httprouter.Router {
 	router.GET("/debug/metrics", metricsHandle)
 
 	return router
+}
+
+func (api *APIImpl) selfAppCheck() {
+	aggregatedMetrics := api.throttler.AggregatedMetrics()
+	for metricName, _ := range aggregatedMetrics {
+		tokens := strings.Split(metricName, "/")
+		if tokens[0] == "mysql" {
+			clusterName := tokens[1]
+			api.CheckMySQLCluster(nil, nil, httprouter.Params{httprouter.Param{Key: "clusterName", Value: clusterName}})
+		}
+	}
+}
+
+func (api *APIImpl) SelfAppChecks() {
+	selfChecksTick := time.Tick(time.Second)
+	go func() {
+		for range selfChecksTick {
+			api.selfAppCheck()
+		}
+	}()
 }
