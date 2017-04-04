@@ -144,6 +144,9 @@ func (api *APIImpl) checkAppMetricResult(w http.ResponseWriter, r *http.Request,
 	appName := ps.ByName("app")
 	metricResult, threshold := api.throttler.AppRequestMetricResult(appName, metricResultFunc)
 	value, err := metricResult.Get()
+	if appName == "" {
+		err = base.AppDeniedError
+	}
 
 	statusCode := http.StatusInternalServerError // 500
 
@@ -264,7 +267,11 @@ func (api *APIImpl) selfAppCheck() {
 		tokens := strings.Split(metricName, "/")
 		if tokens[0] == "mysql" {
 			clusterName := tokens[1]
-			api.CheckMySQLCluster(nil, nil, httprouter.Params{httprouter.Param{Key: "clusterName", Value: clusterName}})
+			params := httprouter.Params{
+				httprouter.Param{Key: "clusterName", Value: clusterName},
+				httprouter.Param{Key: "app", Value: frenoAppName},
+			}
+			api.CheckMySQLCluster(nil, nil, params)
 		}
 	}
 }
