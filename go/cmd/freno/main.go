@@ -110,7 +110,7 @@ func httpServe() error {
 	go group.Monitor()
 	go throttler.Operate()
 
-	api := http.NewAPIImpl(throttler, consensusService)
+	api := http.NewAPIImpl(throttle.NewThrottlerCheck(throttler), consensusService)
 	router := http.ConfigureRoutes(api)
 	port := config.Settings().ListenPort
 	log.Infof("Starting server in port %d", port)
