@@ -112,7 +112,8 @@ func (check *ThrottlerCheck) SelfChecks() {
 	go func() {
 		for range selfCheckTick {
 			for metricName := range check.AggregatedMetrics() {
-				check.CheckMetric(frenoAppName, metricName)
+				metricName := metricName
+				go check.CheckMetric(frenoAppName, metricName)
 			}
 		}
 	}()
