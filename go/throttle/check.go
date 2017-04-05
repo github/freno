@@ -3,6 +3,7 @@ package throttle
 import (
 	"net/http"
 	"strings"
+	"time"
 
 	"fmt"
 	"github.com/github/freno/go/base"
@@ -10,6 +11,7 @@ import (
 )
 
 const frenoAppName = "freno"
+const selfCheckInterval = 5 * time.Second
 
 // ThrottlerCheck provides methdos for an app checking on metrics
 type ThrottlerCheck struct {
@@ -103,4 +105,15 @@ func (check *ThrottlerCheck) CheckMetric(appName string, metricName string) (che
 // AggregatedMetrics is a convenience acces method into throttler's `aggregatedMetricsSnapshot`
 func (check *ThrottlerCheck) AggregatedMetrics() map[string]base.MetricResult {
 	return check.throttler.aggregatedMetricsSnapshot()
+}
+
+func (check *ThrottlerCheck) SelfChecks() {
+	selfCheckTick := time.Tick(selfCheckInterval)
+	go func() {
+		for range selfCheckTick {
+			for metricName := range check.AggregatedMetrics() {
+				check.CheckMetric(frenoAppName, metricName)
+			}
+		}
+	}()
 }
