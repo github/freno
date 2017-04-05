@@ -1,5 +1,10 @@
 package throttle
 
+import (
+	"github.com/github/freno/go/base"
+	"net/http"
+)
+
 // CheckResult is the result for an app inquiring on a metric. It also exports as JSON via the API
 type CheckResult struct {
 	StatusCode int     `json:"StatusCode"`
@@ -21,3 +26,9 @@ func NewCheckResult(statusCode int, value float64, threshold float64, err error)
 	}
 	return result
 }
+
+func NewErrorCheckResult(statusCode int, err error) *CheckResult {
+	return NewCheckResult(statusCode, 0, 0, err)
+}
+
+var NoSuchMetricCheckResult = NewErrorCheckResult(http.StatusNotFound, base.NoSuchMetricError)

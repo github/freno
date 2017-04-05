@@ -2,6 +2,7 @@ package throttle
 
 import (
 	"net/http"
+	"strings"
 
 	"fmt"
 	"github.com/github/freno/go/base"
@@ -63,11 +64,40 @@ func (check *ThrottlerCheck) checkAppMetricResult(appName string, metricResultFu
 }
 
 // CheckMySQLCluster allows an app to check on a MySQL cluster
-func (check *ThrottlerCheck) CheckMySQLCluster(appName string, clusterName string) (checkResult *CheckResult) {
+func (check *ThrottlerCheck) CheckMySQLClusterMetric(appName string, clusterName string) (checkResult *CheckResult) {
 	var metricResultFunc base.MetricResultFunc = func() (metricResult base.MetricResult, threshold float64) {
 		return check.throttler.GetMySQLClusterMetrics(clusterName)
 	}
 	return check.checkAppMetricResult(appName, metricResultFunc)
+}
+
+// CheckAppStoreMetric
+func (check *ThrottlerCheck) Check(appName string, storeType string, storeName string) (checkResult *CheckResult) {
+	var metricResultFunc base.MetricResultFunc
+	switch storeType {
+	case "mysql":
+		{
+			metricResultFunc = func() (metricResult base.MetricResult, threshold float64) {
+				return check.throttler.GetMySQLClusterMetrics(storeName)
+			}
+		}
+	}
+	if metricResultFunc == nil {
+		return NoSuchMetricCheckResult
+	}
+
+	return check.checkAppMetricResult(appName, metricResultFunc)
+}
+
+// CheckMySQLCluster allows an app to check on a MySQL cluster
+func (check *ThrottlerCheck) CheckMetric(appName string, metricName string) (checkResult *CheckResult) {
+	metricTokens := strings.Split(metricName, "/")
+	if len(metricTokens) != 2 {
+		return NoSuchMetricCheckResult
+	}
+	storeType := metricTokens[0]
+	storeName := metricTokens[1]
+	return check.Check(appName, storeType, storeName)
 }
 
 // AggregatedMetrics is a convenience acces method into throttler's `aggregatedMetricsSnapshot`

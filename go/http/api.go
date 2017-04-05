@@ -21,7 +21,7 @@ type API interface {
 	RaftLeader(w http.ResponseWriter, _ *http.Request, _ httprouter.Params)
 	RaftState(w http.ResponseWriter, _ *http.Request, _ httprouter.Params)
 	Hostname(w http.ResponseWriter, _ *http.Request, _ httprouter.Params)
-	CheckMySQLCluster(w http.ResponseWriter, r *http.Request, _ httprouter.Params)
+	Check(w http.ResponseWriter, r *http.Request, _ httprouter.Params)
 	AggregatedMetrics(w http.ResponseWriter, r *http.Request, _ httprouter.Params)
 	ThrottleApp(w http.ResponseWriter, r *http.Request, _ httprouter.Params)
 	UnthrottleApp(w http.ResponseWriter, r *http.Request, _ httprouter.Params)
@@ -127,10 +127,11 @@ func (api *APIImpl) respondToCheckRequest(w http.ResponseWriter, r *http.Request
 }
 
 // CheckMySQLCluster checks whether a cluster's collected metric is within its threshold
-func (api *APIImpl) CheckMySQLCluster(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
+func (api *APIImpl) Check(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 	appName := ps.ByName("app")
-	clusterName := ps.ByName("clusterName")
-	checkResult := api.throttlerCheck.CheckMySQLCluster(appName, clusterName)
+	storeType := ps.ByName("storeType")
+	storeName := ps.ByName("storeName")
+	checkResult := api.throttlerCheck.Check(appName, storeType, storeName)
 	api.respondToCheckRequest(w, r, checkResult)
 }
 
@@ -180,12 +181,15 @@ func ConfigureRoutes(api API) *httprouter.Router {
 	register(router, "/lb-check", api.LbCheck)
 	register(router, "/_ping", api.LbCheck)
 	register(router, "/status", api.LbCheck)
+
 	register(router, "/leader-check", api.LeaderCheck)
 	register(router, "/raft/leader", api.RaftLeader)
 	register(router, "/raft/state", api.RaftState)
 	register(router, "/hostname", api.Hostname)
-	register(router, "/check/:app/mysql/:clusterName", api.CheckMySQLCluster)
+
+	register(router, "/check/:app/:storeType/:storeName", api.Check)
 	register(router, "/aggregated-metrics", api.AggregatedMetrics)
+
 	register(router, "/throttle-app/:app", api.ThrottleApp)
 	register(router, "/unthrottle-app/:app", api.UnthrottleApp)
 
