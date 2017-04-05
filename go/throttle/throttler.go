@@ -282,7 +282,7 @@ func (throttler *Throttler) GetMySQLClusterMetrics(clusterName string) (metricRe
 	return metricResult, threshold
 }
 
-func (throttler *Throttler) AggregatedMetrics() map[string]base.MetricResult {
+func (throttler *Throttler) aggregatedMetricsSnapshot() map[string]base.MetricResult {
 	snapshot := make(map[string]base.MetricResult)
 	for key, value := range throttler.aggregatedMetrics.Items() {
 		metricResult, _ := value.Object.(base.MetricResult)

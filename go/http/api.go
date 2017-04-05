@@ -116,7 +116,7 @@ func (api *APIImpl) Hostname(w http.ResponseWriter, r *http.Request, _ httproute
 	}
 }
 
-func (api *APIImpl) checkResponse(w http.ResponseWriter, r *http.Request, checkResult *throttle.CheckResult) {
+func (api *APIImpl) respondToCheckRequest(w http.ResponseWriter, r *http.Request, checkResult *throttle.CheckResult) {
 	if r.Method == http.MethodGet {
 		w.Header().Set("Content-Type", "application/json")
 	}
@@ -131,7 +131,7 @@ func (api *APIImpl) CheckMySQLCluster(w http.ResponseWriter, r *http.Request, ps
 	appName := ps.ByName("app")
 	clusterName := ps.ByName("clusterName")
 	checkResult := api.throttlerCheck.CheckMySQLCluster(appName, clusterName)
-	api.checkResponse(w, r, checkResult)
+	api.respondToCheckRequest(w, r, checkResult)
 }
 
 // AggregatedMetrics returns a snapshot of all current aggregated metrics

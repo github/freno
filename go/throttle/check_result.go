@@ -1,5 +1,6 @@
 package throttle
 
+// CheckResult is the result for an app inquiring on a metric. It also exports as JSON via the API
 type CheckResult struct {
 	StatusCode int     `json:"StatusCode"`
 	Value      float64 `json:"Value"`

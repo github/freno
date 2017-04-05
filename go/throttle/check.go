@@ -10,6 +10,7 @@ import (
 
 const frenoAppName = "freno"
 
+// ThrottlerCheck provides methdos for an app checking on metrics
 type ThrottlerCheck struct {
 	throttler *Throttler
 }
@@ -20,7 +21,8 @@ func NewThrottlerCheck(throttler *Throttler) *ThrottlerCheck {
 	}
 }
 
-func (check *ThrottlerCheck) CheckAppMetricResult(appName string, metricResultFunc base.MetricResultFunc) (checkResult *CheckResult) {
+// checkAppMetricResult allows an app to check on a metric
+func (check *ThrottlerCheck) checkAppMetricResult(appName string, metricResultFunc base.MetricResultFunc) (checkResult *CheckResult) {
 	metricResult, threshold := check.throttler.AppRequestMetricResult(appName, metricResultFunc)
 	value, err := metricResult.Get()
 	if appName == "" {
@@ -31,9 +33,6 @@ func (check *ThrottlerCheck) CheckAppMetricResult(appName string, metricResultFu
 
 	defer func(appName string, statusCode *int) {
 		go func() {
-			if appName == "" {
-				return
-			}
 			metrics.GetOrRegisterCounter("check.any.total", nil).Inc(1)
 			metrics.GetOrRegisterCounter(fmt.Sprintf("check.%s.total", appName), nil).Inc(1)
 			if *statusCode != http.StatusOK {
@@ -63,14 +62,15 @@ func (check *ThrottlerCheck) CheckAppMetricResult(appName string, metricResultFu
 	return NewCheckResult(statusCode, value, threshold, err)
 }
 
-// CheckMySQLCluster checks whether a cluster's collected metric is within its threshold
+// CheckMySQLCluster allows an app to check on a MySQL cluster
 func (check *ThrottlerCheck) CheckMySQLCluster(appName string, clusterName string) (checkResult *CheckResult) {
 	var metricResultFunc base.MetricResultFunc = func() (metricResult base.MetricResult, threshold float64) {
 		return check.throttler.GetMySQLClusterMetrics(clusterName)
 	}
-	return check.CheckAppMetricResult(appName, metricResultFunc)
+	return check.checkAppMetricResult(appName, metricResultFunc)
 }
 
+// AggregatedMetrics is a convenience acces method into throttler's `aggregatedMetricsSnapshot`
 func (check *ThrottlerCheck) AggregatedMetrics() map[string]base.MetricResult {
-	return check.throttler.AggregatedMetrics()
+	return check.throttler.aggregatedMetricsSnapshot()
 }
