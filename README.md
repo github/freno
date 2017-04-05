@@ -90,6 +90,18 @@ You may find various [resources](resources/) for setting up `freno` in your envi
 
 This reminded us of the 80's and that was it.
 
+### Project status
+
+This project is under active development.
+
+### Contributing
+
+This repository is [open to contributions](.github/CONTRIBUTING.md). Please also see [code of conduct](.github/CODE_OF_CONDUCT.md)
+
+### License
+
+This project is released under the [MIT LICENSE](LICENSE). Please note it includes 3rd party dependencies release under their own licenses; these are found under [vendor](https://github.com/github/freno/tree/master/vendor).
+
 ### Authors
 
 Authored by GitHub engineering
