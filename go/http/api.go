@@ -6,7 +6,6 @@ import (
 	"net/http"
 	"os"
 
-	"github.com/github/freno/go/base"
 	"github.com/github/freno/go/group"
 	"github.com/github/freno/go/throttle"
 	metrics "github.com/rcrowley/go-metrics"
@@ -22,29 +21,10 @@ type API interface {
 	RaftLeader(w http.ResponseWriter, _ *http.Request, _ httprouter.Params)
 	RaftState(w http.ResponseWriter, _ *http.Request, _ httprouter.Params)
 	Hostname(w http.ResponseWriter, _ *http.Request, _ httprouter.Params)
-	CheckMySQLCluster(w http.ResponseWriter, r *http.Request, _ httprouter.Params)
+	Check(w http.ResponseWriter, r *http.Request, _ httprouter.Params)
 	AggregatedMetrics(w http.ResponseWriter, r *http.Request, _ httprouter.Params)
 	ThrottleApp(w http.ResponseWriter, r *http.Request, _ httprouter.Params)
 	UnthrottleApp(w http.ResponseWriter, r *http.Request, _ httprouter.Params)
-}
-
-type CheckResponse struct {
-	StatusCode int
-	Message    string
-	Value      float64
-	Threshold  float64
-}
-
-func NewCheckResponse(statusCode int, err error, value float64, threshold float64) *CheckResponse {
-	response := &CheckResponse{
-		StatusCode: statusCode,
-		Value:      value,
-		Threshold:  threshold,
-	}
-	if err != nil {
-		response.Message = err.Error()
-	}
-	return response
 }
 
 type GeneralResponse struct {
@@ -58,15 +38,15 @@ func NewGeneralResponse(statusCode int, message string) *GeneralResponse {
 
 // APIImpl implements the API
 type APIImpl struct {
-	throttler        *throttle.Throttler
+	throttlerCheck   *throttle.ThrottlerCheck
 	consensusService group.ConsensusService
 	hostname         string
 }
 
 // NewAPIImpl creates a new instance of the API implementation
-func NewAPIImpl(throttler *throttle.Throttler, consensusService group.ConsensusService) *APIImpl {
+func NewAPIImpl(throttlerCheck *throttle.ThrottlerCheck, consensusService group.ConsensusService) *APIImpl {
 	api := &APIImpl{
-		throttler:        throttler,
+		throttlerCheck:   throttlerCheck,
 		consensusService: consensusService,
 	}
 	if hostname, err := os.Hostname(); err == nil {
@@ -136,63 +116,29 @@ func (api *APIImpl) Hostname(w http.ResponseWriter, r *http.Request, _ httproute
 	}
 }
 
-func (api *APIImpl) checkAppMetricResult(w http.ResponseWriter, r *http.Request, ps httprouter.Params, metricResultFunc base.MetricResultFunc) {
-	appName := ps.ByName("app")
-	metricResult, threshold := api.throttler.AppRequestMetricResult(appName, metricResultFunc)
-	value, err := metricResult.Get()
-
-	statusCode := http.StatusInternalServerError // 500
-
-	defer func(appName string, statusCode *int) {
-		go func() {
-			metrics.GetOrRegisterCounter("check.any.total", nil).Inc(1)
-			metrics.GetOrRegisterCounter(fmt.Sprintf("check.%s.total", appName), nil).Inc(1)
-			if *statusCode != http.StatusOK {
-				metrics.GetOrRegisterCounter("check.any.error", nil).Inc(1)
-				metrics.GetOrRegisterCounter(fmt.Sprintf("check.%s.error", appName), nil).Inc(1)
-			}
-		}()
-	}(appName, &statusCode)
-
-	if err == base.AppDeniedError {
-		// app specifically not allowed to get metrics
-		statusCode = http.StatusExpectationFailed // 417
-	} else if err == base.NoSuchMetricError {
-		// not collected yet, or metric does not exist
-		statusCode = http.StatusNotFound // 404
-	} else if err != nil {
-		// any error
-		statusCode = http.StatusInternalServerError // 500
-	} else if value > threshold {
-		// casual throttling
-		statusCode = http.StatusTooManyRequests // 429
-		err = base.ThresholdExceededError
-	} else {
-		// all good!
-		statusCode = http.StatusOK // 200
-	}
+func (api *APIImpl) respondToCheckRequest(w http.ResponseWriter, r *http.Request, checkResult *throttle.CheckResult) {
 	if r.Method == http.MethodGet {
 		w.Header().Set("Content-Type", "application/json")
 	}
-	w.WriteHeader(statusCode)
+	w.WriteHeader(checkResult.StatusCode)
 	if r.Method == http.MethodGet {
-		json.NewEncoder(w).Encode(NewCheckResponse(statusCode, err, value, threshold))
+		json.NewEncoder(w).Encode(checkResult)
 	}
 }
 
 // CheckMySQLCluster checks whether a cluster's collected metric is within its threshold
-func (api *APIImpl) CheckMySQLCluster(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
-	clusterName := ps.ByName("clusterName")
-	var metricResultFunc base.MetricResultFunc = func() (metricResult base.MetricResult, threshold float64) {
-		return api.throttler.GetMySQLClusterMetrics(clusterName)
-	}
-	api.checkAppMetricResult(w, r, ps, metricResultFunc)
+func (api *APIImpl) Check(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
+	appName := ps.ByName("app")
+	storeType := ps.ByName("storeType")
+	storeName := ps.ByName("storeName")
+	checkResult := api.throttlerCheck.Check(appName, storeType, storeName)
+	api.respondToCheckRequest(w, r, checkResult)
 }
 
 // AggregatedMetrics returns a snapshot of all current aggregated metrics
 func (api *APIImpl) AggregatedMetrics(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 	w.Header().Set("Content-Type", "application/json")
-	aggregatedMetrics := api.throttler.AggregatedMetrics()
+	aggregatedMetrics := api.throttlerCheck.AggregatedMetrics()
 	responseMap := map[string]string{}
 	for metricName, metric := range aggregatedMetrics {
 		value, err := metric.Get()
@@ -235,12 +181,15 @@ func ConfigureRoutes(api API) *httprouter.Router {
 	register(router, "/lb-check", api.LbCheck)
 	register(router, "/_ping", api.LbCheck)
 	register(router, "/status", api.LbCheck)
+
 	register(router, "/leader-check", api.LeaderCheck)
 	register(router, "/raft/leader", api.RaftLeader)
 	register(router, "/raft/state", api.RaftState)
 	register(router, "/hostname", api.Hostname)
-	register(router, "/check/:app/mysql/:clusterName", api.CheckMySQLCluster)
+
+	register(router, "/check/:app/:storeType/:storeName", api.Check)
 	register(router, "/aggregated-metrics", api.AggregatedMetrics)
+
 	register(router, "/throttle-app/:app", api.ThrottleApp)
 	register(router, "/unthrottle-app/:app", api.UnthrottleApp)
 
