@@ -86,3 +86,28 @@ Noteworthy:
 - `prod4` list of servers is dictated by `HAProxy`. `freno` will routinely and dynamically poll given HAProxy server for list of hosts. These will include any hosts not in `NOLB`.
 - `local` cluster chooses to override `User` & `Password`.
 - `local` cluster defines a static list of hosts.
+
+
+### Non lag metrics
+
+`freno` isn't necessarily about replication lag. You may choose to use different thresholds appropriate for your setup and workload. For example, you may choose to monitor the master (as opposed of the replicas) and read some metric such as `threads_running`. An example configuration would be:
+
+```json
+"Clusters": {
+  "master8": {
+    "MetricQuery": "show global variables like 'threads_running'",
+    "ThrottleThreshold": 50,
+    "User": "msandbox",
+    "Password": "msandbox",
+    "StaticHostsSettings" : {
+        "Hosts": [
+          "my.master8.vip.com:3306"
+        ]
+    }
+  }
+}
+```
+
+`freno` explicitly recognizes `show global ...` statements and reads the result's numeric value.
+
+Otherwise you may provide any query that returns a single row, single numeric column.
