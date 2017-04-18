@@ -34,17 +34,6 @@ func (check *ThrottlerCheck) checkAppMetricResult(appName string, metricResultFu
 
 	statusCode := http.StatusInternalServerError // 500
 
-	defer func(appName string, statusCode *int) {
-		go func() {
-			metrics.GetOrRegisterCounter("check.any.total", nil).Inc(1)
-			metrics.GetOrRegisterCounter(fmt.Sprintf("check.%s.total", appName), nil).Inc(1)
-			if *statusCode != http.StatusOK {
-				metrics.GetOrRegisterCounter("check.any.error", nil).Inc(1)
-				metrics.GetOrRegisterCounter(fmt.Sprintf("check.%s.error", appName), nil).Inc(1)
-			}
-		}()
-	}(appName, &statusCode)
-
 	if err == base.AppDeniedError {
 		// app specifically not allowed to get metrics
 		statusCode = http.StatusExpectationFailed // 417
@@ -65,14 +54,6 @@ func (check *ThrottlerCheck) checkAppMetricResult(appName string, metricResultFu
 	return NewCheckResult(statusCode, value, threshold, err)
 }
 
-// CheckMySQLCluster allows an app to check on a MySQL cluster
-func (check *ThrottlerCheck) CheckMySQLClusterMetric(appName string, clusterName string) (checkResult *CheckResult) {
-	var metricResultFunc base.MetricResultFunc = func() (metricResult base.MetricResult, threshold float64) {
-		return check.throttler.GetMySQLClusterMetrics(clusterName)
-	}
-	return check.checkAppMetricResult(appName, metricResultFunc)
-}
-
 // CheckAppStoreMetric
 func (check *ThrottlerCheck) Check(appName string, storeType string, storeName string) (checkResult *CheckResult) {
 	var metricResultFunc base.MetricResultFunc
@@ -88,7 +69,25 @@ func (check *ThrottlerCheck) Check(appName string, storeType string, storeName s
 		return NoSuchMetricCheckResult
 	}
 
-	return check.checkAppMetricResult(appName, metricResultFunc)
+	checkResult = check.checkAppMetricResult(appName, metricResultFunc)
+
+	go func(statusCode int) {
+		metrics.GetOrRegisterCounter("check.any.total", nil).Inc(1)
+		metrics.GetOrRegisterCounter(fmt.Sprintf("check.%s.total", appName), nil).Inc(1)
+
+		metrics.GetOrRegisterCounter(fmt.Sprintf("check.any.%s.%s.total", storeType, storeName), nil).Inc(1)
+		metrics.GetOrRegisterCounter(fmt.Sprintf("check.%s.%s.%s.total", appName, storeType, storeName), nil).Inc(1)
+
+		if statusCode != http.StatusOK {
+			metrics.GetOrRegisterCounter("check.any.error", nil).Inc(1)
+			metrics.GetOrRegisterCounter(fmt.Sprintf("check.%s.error", appName), nil).Inc(1)
+
+			metrics.GetOrRegisterCounter(fmt.Sprintf("check.any.%s.%s.error", storeType, storeName), nil).Inc(1)
+			metrics.GetOrRegisterCounter(fmt.Sprintf("check.%s.%s.%s.error", appName, storeType, storeName), nil).Inc(1)
+		}
+	}(checkResult.StatusCode)
+
+	return checkResult
 }
 
 // CheckMySQLCluster allows an app to check on a MySQL cluster
