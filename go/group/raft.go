@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/github/freno/go/base"
 	"github.com/github/freno/go/config"
 	"github.com/github/freno/go/throttle"
 	"github.com/outbrain/golib/log"
@@ -27,7 +28,8 @@ var store *Store
 
 // ConsensusService is a freno-oriented interface for making requests that require consensus.
 type ConsensusService interface {
-	ThrottleApp(appName string) error
+	ThrottleApp(appName string, ttl time.Duration, ratio float64) error
+	ThrottledAppsMap() (result map[string](*base.AppThrottle))
 	UnthrottleApp(appName string) error
 }
 

@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"strconv"
+	"time"
 
 	"github.com/github/freno/go/group"
 	"github.com/github/freno/go/throttle"
@@ -24,7 +26,6 @@ type API interface {
 	Check(w http.ResponseWriter, r *http.Request, _ httprouter.Params)
 	AggregatedMetrics(w http.ResponseWriter, r *http.Request, _ httprouter.Params)
 	ThrottleApp(w http.ResponseWriter, r *http.Request, _ httprouter.Params)
-	ThrottleAppTTL(w http.ResponseWriter, r *http.Request, _ httprouter.Params)
 	UnthrottleApp(w http.ResponseWriter, r *http.Request, _ httprouter.Params)
 	ThrottledApps(w http.ResponseWriter, r *http.Request, _ httprouter.Params)
 }
@@ -152,16 +153,18 @@ func (api *APIImpl) AggregatedMetrics(w http.ResponseWriter, r *http.Request, ps
 // ThrottleApp forcibly marks given app as throttled. Future requests by this app will be denied.
 func (api *APIImpl) ThrottleApp(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 	appName := ps.ByName("app")
-	err := api.consensusService.ThrottleApp(appName)
+	var ttlMinutes int64
+	var ratio float64
+	var err error
+	if ttlMinutes, err = strconv.ParseInt(ps.ByName("ttlMinutes"), 10, 64); err != nil {
+		goto response
+	}
+	if ratio, err = strconv.ParseFloat(ps.ByName("ratio"), 64); err != nil {
+		goto response
+	}
+	err = api.consensusService.ThrottleApp(appName, time.Duration(ttlMinutes)*time.Minute, ratio)
 
-	api.respondGeneric(w, r, err)
-}
-
-// ThrottleApp forcibly marks given app as throttled. Future requests by this app will be denied.
-func (api *APIImpl) ThrottleAppTTL(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
-	appName := ps.ByName("app")
-	err := api.consensusService.ThrottleApp(appName)
-
+response:
 	api.respondGeneric(w, r, err)
 }
 
@@ -176,12 +179,9 @@ func (api *APIImpl) UnthrottleApp(w http.ResponseWriter, r *http.Request, ps htt
 // ThrottledApps returns a snapshot of all currently throttled apps
 func (api *APIImpl) ThrottledApps(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 	w.Header().Set("Content-Type", "application/json")
-	throttledApps := api.throttler.ThrottledAppsSnapshot()
-	responseMap := map[string]interface{}
-	for appName, item := range throttledApps {
-		responseMap[appName] = item.Object
-	}
-	json.NewEncoder(w).Encode(responseMap)
+	throttledApps := api.consensusService.ThrottledAppsMap()
+	fmt.Println(fmt.Sprintf(" *********** len: %+v", len(throttledApps)))
+	json.NewEncoder(w).Encode(throttledApps)
 }
 
 // register is a wrapper function for accepting both GET and HEAD requests
@@ -211,8 +211,7 @@ func ConfigureRoutes(api API) *httprouter.Router {
 	register(router, "/check/:app/:storeType/:storeName", api.Check)
 	register(router, "/aggregated-metrics", api.AggregatedMetrics)
 
-	register(router, "/throttle-app/:app/ttl/:ttl", api.ThrottleAppTTL)
-	register(router, "/throttle-app/:app", api.ThrottleApp)
+	register(router, "/throttle-app/:app/:ttlMinutes/:ratio", api.ThrottleApp)
 	register(router, "/unthrottle-app/:app", api.UnthrottleApp)
 	register(router, "/throttled-apps", api.ThrottledApps)
 

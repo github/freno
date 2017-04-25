@@ -3,6 +3,7 @@ package throttle
 import (
 	"fmt"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -26,6 +27,9 @@ const aggregatedMetricsExpiration = 5 * time.Second
 const aggregatedMetricsCleanup = 1 * time.Second
 const throttledAppsSnapshotInterval = 5 * time.Second
 
+const defaultThrottleTTL = 60 * time.Minute
+const defaultThrottleRatio = 1.0
+
 type Throttler struct {
 	isLeader     bool
 	isLeaderFunc func() bool
@@ -39,6 +43,8 @@ type Throttler struct {
 	mysqlClusterThresholds *cache.Cache
 	aggregatedMetrics      *cache.Cache
 	throttledApps          *cache.Cache
+
+	throttledAppsMutex sync.Mutex
 }
 
 func NewThrottler(isLeaderFunc func() bool) *Throttler {
@@ -56,7 +62,7 @@ func NewThrottler(isLeaderFunc func() bool) *Throttler {
 		mysqlClusterThresholds: cache.New(cache.NoExpiration, 0),
 		aggregatedMetrics:      cache.New(aggregatedMetricsExpiration, aggregatedMetricsCleanup),
 	}
-	throttler.ThrottleApp("abusing-app")
+	throttler.ThrottleApp("abusing-app", time.Hour*24*365*10, defaultThrottleRatio)
 	return throttler
 }
 
@@ -103,6 +109,7 @@ func (throttler *Throttler) Operate() {
 			}
 		case <-throttledAppsTick:
 			{
+				go throttler.expireThrottledApps()
 				go throttler.pushStatusToExpVar()
 			}
 		}
@@ -291,8 +298,39 @@ func (throttler *Throttler) aggregatedMetricsSnapshot() map[string]base.MetricRe
 	return snapshot
 }
 
-func (throttler *Throttler) ThrottleApp(appName string, ttl time.Duration) {
-	throttler.throttledApps.Set(appName, true, ttl)
+func (throttler *Throttler) expireThrottledApps() {
+	now := time.Now()
+	for appName, item := range throttler.throttledApps.Items() {
+		appThrottle := item.Object.(*base.AppThrottle)
+		if appThrottle.ExpiresAt.After(now) {
+			throttler.UnthrottleApp(appName)
+		}
+	}
+}
+
+func (throttler *Throttler) ThrottleApp(appName string, ttl time.Duration, ratio float64) {
+	throttler.throttledAppsMutex.Lock()
+	defer throttler.throttledAppsMutex.Unlock()
+
+	var appThrottle *base.AppThrottle
+	if object, found := throttler.throttledApps.Get(appName); found {
+		appThrottle = object.(*base.AppThrottle)
+		if ttl != 0 {
+			appThrottle.ExpiresAt = time.Now().Add(ttl)
+		}
+		if ratio >= 0 {
+			appThrottle.Ratio = ratio
+		}
+	} else {
+		if ttl <= 0 {
+			ttl = defaultThrottleTTL
+		}
+		if ratio < 0 {
+			ratio = defaultThrottleRatio
+		}
+		appThrottle = base.NewAppThrottle(time.Now().Add(ttl), ratio)
+	}
+	throttler.throttledApps.Set(appName, appThrottle, cache.DefaultExpiration)
 }
 
 func (throttler *Throttler) UnthrottleApp(appName string) {
@@ -300,16 +338,21 @@ func (throttler *Throttler) UnthrottleApp(appName string) {
 }
 
 func (throttler *Throttler) IsAppThrottled(appName string) bool {
-	_, found := throttler.throttledApps.Get(appName)
-	return found
+	if item, found := throttler.throttledApps.Get(appName); found {
+		appThrottle := item.(base.AppThrottle)
+		return appThrottle.ExpiresAt.Before(time.Now())
+	}
+	return false
 }
 
-func (throttler *Throttler) ThrottledAppExpiration(appName string) int64 {
-	item, found := throttler.throttledApps.Get(appName)
-	if !found {
-		return 0
+func (throttler *Throttler) ThrottledAppsMap() (result map[string](*base.AppThrottle)) {
+	result = make(map[string](*base.AppThrottle))
+
+	for appName, item := range throttler.throttledApps.Items() {
+		appThrottle := item.Object.(*base.AppThrottle)
+		result[appName] = appThrottle
 	}
-	return item.Expiration
+	return result
 }
 
 func (throttler *Throttler) AppRequestMetricResult(appName string, metricResultFunc base.MetricResultFunc) (metricResult base.MetricResult, threshold float64) {
