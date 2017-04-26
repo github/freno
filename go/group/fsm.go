@@ -24,7 +24,7 @@ func (f *fsm) Apply(l *raft.Log) interface{} {
 	log.Debugf("freno/raft: applying command: %+v", c)
 	switch c.Operation {
 	case "throttle":
-		return f.applyThrottleApp(c.Key, c.TTL, c.Ratio)
+		return f.applyThrottleApp(c.Key, c.ExpireAt, c.Ratio)
 	case "unthrottle":
 		return f.applyUnthrottleApp(c.Key)
 	default:
@@ -51,19 +51,16 @@ func (f *fsm) Restore(rc io.ReadCloser) error {
 	if err := json.NewDecoder(rc).Decode(&data); err != nil {
 		return err
 	}
-	now := time.Now()
 	for appName, appThrottle := range data.throttledApps {
-		if ttl := appThrottle.ExpiresAt.Sub(now); ttl > 0 {
-			f.throttler.ThrottleApp(appName, ttl, appThrottle.Ratio)
-		}
+		f.throttler.ThrottleApp(appName, appThrottle.ExpireAt, appThrottle.Ratio)
 	}
 	log.Debugf("freno/raft: restored from snapshot: %d elements restored", len(data.throttledApps))
 	return nil
 }
 
 // applyThrottleApp will apply a "throttle" command locally (this applies as result of the raft consensus algorithm)
-func (f *fsm) applyThrottleApp(appName string, ttl time.Duration, ratio float64) interface{} {
-	f.throttler.ThrottleApp(appName, ttl, ratio)
+func (f *fsm) applyThrottleApp(appName string, expireAt time.Time, ratio float64) interface{} {
+	f.throttler.ThrottleApp(appName, expireAt, ratio)
 	return nil
 }
 

@@ -150,19 +150,28 @@ func (api *APIImpl) AggregatedMetrics(w http.ResponseWriter, r *http.Request, ps
 	json.NewEncoder(w).Encode(responseMap)
 }
 
-// ThrottleApp forcibly marks given app as throttled. Future requests by this app will be denied.
+// ThrottleApp forcibly marks given app as throttled. Future requests by this app may be denied.
 func (api *APIImpl) ThrottleApp(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 	appName := ps.ByName("app")
+	var expireAt time.Time // default zero
 	var ttlMinutes int64
 	var ratio float64
 	var err error
 	if ttlMinutes, err = strconv.ParseInt(ps.ByName("ttlMinutes"), 10, 64); err != nil {
 		goto response
 	}
+	if ttlMinutes != 0 {
+		expireAt = time.Now().Add(time.Duration(ttlMinutes) * time.Minute)
+	}
+	// if ttlMinutes is zero, we keep expireAt as zero, which is handled in a special way
 	if ratio, err = strconv.ParseFloat(ps.ByName("ratio"), 64); err != nil {
 		goto response
 	}
-	err = api.consensusService.ThrottleApp(appName, time.Duration(ttlMinutes)*time.Minute, ratio)
+	if ratio < 0 || ratio > 1 {
+		err = fmt.Errorf("ratio must be in [0..1] range; got %+v", ratio)
+		goto response
+	}
+	err = api.consensusService.ThrottleApp(appName, expireAt, ratio)
 
 response:
 	api.respondGeneric(w, r, err)
@@ -180,7 +189,6 @@ func (api *APIImpl) UnthrottleApp(w http.ResponseWriter, r *http.Request, ps htt
 func (api *APIImpl) ThrottledApps(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 	w.Header().Set("Content-Type", "application/json")
 	throttledApps := api.consensusService.ThrottledAppsMap()
-	fmt.Println(fmt.Sprintf(" *********** len: %+v", len(throttledApps)))
 	json.NewEncoder(w).Encode(throttledApps)
 }
 

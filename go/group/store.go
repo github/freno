@@ -30,11 +30,11 @@ const (
 // command struct is the data type we move around as raft events. We can easily model all
 // our events using op/key/value setup.
 type command struct {
-	Operation string        `json:"op,omitempty"`
-	Key       string        `json:"key,omitempty"`
-	Value     string        `json:"value,omitempty"`
-	TTL       time.Duration `json:"ttl,omitempty"`
-	Ratio     float64       `json:"ratio,omitempty"`
+	Operation string    `json:"op,omitempty"`
+	Key       string    `json:"key,omitempty"`
+	Value     string    `json:"value,omitempty"`
+	ExpireAt  time.Time `json:"expire,omitempty"`
+	Ratio     float64   `json:"ratio,omitempty"`
 }
 
 // The store is a raft store that is freno-aware.
@@ -134,11 +134,11 @@ func (store *Store) genericCommand(c *command) error {
 
 // ThrottleApp, as implied by consensusService, is a raft oepration request which
 // will ask for consensus.
-func (store *Store) ThrottleApp(appName string, ttl time.Duration, ratio float64) error {
+func (store *Store) ThrottleApp(appName string, expireAt time.Time, ratio float64) error {
 	c := &command{
 		Operation: "throttle",
 		Key:       appName,
-		TTL:       ttl,
+		ExpireAt:  expireAt,
 		Ratio:     ratio,
 	}
 	return store.genericCommand(c)
