@@ -1,3 +1,14 @@
+#
+# This is a pt-archiver plugin that checks freno for throttling.
+# Base on pt-archiver extensions, see https://www.percona.com/doc/percona-toolkit/2.2/pt-archiver.html
+#
+# You will want to put this file in your perl search path (@INC). Find that value via:
+#   perl -e 'print "@INC"'
+# A reasonable path would be /usr/share/perl5/FrenoThrottler.pm
+#
+# You will need to edit this file to let pt-archiver know where freno is located on your system, and what cluster name to use.
+# More information in the `new` function.
+
 package FrenoThrottler;
 
 use LWP::Simple;
@@ -25,14 +36,14 @@ sub new {
 
   $freno_url = "TODO: Setup your freno URL here";
 
-  # As example, you may read URL or URL hint from your database:
+  # As example, you may read URL or cluster hint from your database:
   #
   #  my $dbh = %args{"dbh"};
   #  my ($cluster) = $dbh->selectrow_array("select cluster_name from meta.cluster limit 1");
   #  if ($cluster eq "" || not defined $cluster) {
   #    die "Cannot find cluster";
   #  }
-  #  $freno_url = "http://my.freno.service:12345/check/pt-archiver/mysql/$cluster";
+  #  $freno_url = "http://my.freno.com:9777/check/pt-archiver/mysql/$cluster";
 
   return bless(\%args, $class);
 }
