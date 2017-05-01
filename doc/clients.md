@@ -29,6 +29,7 @@ It makes sense to hit `freno` in the whereabouts of the granularity one is looki
       source => 'puppet:///modules/percona/usr/share/perl5/FrenoThrottler.pm';
   }
 ```
+
   This assumes `/usr/share/perl5` is in your `@INC` path (run `perl -e 'print "@INC"'` to confirm).
 
 ### shell
