@@ -28,7 +28,7 @@ const aggregatedMetricsCleanup = 1 * time.Second
 const throttledAppsSnapshotInterval = 5 * time.Second
 
 const defaultThrottleTTL = 60 * time.Minute
-const defaultThrottleRatio = 1.0
+const DefaultThrottleRatio = 1.0
 
 func init() {
 	rand.Seed(time.Now().UnixNano())
@@ -66,7 +66,7 @@ func NewThrottler(isLeaderFunc func() bool) *Throttler {
 		mysqlClusterThresholds: cache.New(cache.NoExpiration, 0),
 		aggregatedMetrics:      cache.New(aggregatedMetricsExpiration, aggregatedMetricsCleanup),
 	}
-	throttler.ThrottleApp("abusing-app", time.Now().Add(time.Hour*24*365*10), defaultThrottleRatio)
+	throttler.ThrottleApp("abusing-app", time.Now().Add(time.Hour*24*365*10), DefaultThrottleRatio)
 	return throttler
 }
 
@@ -331,7 +331,7 @@ func (throttler *Throttler) ThrottleApp(appName string, expireAt time.Time, rati
 			expireAt = now.Add(defaultThrottleTTL)
 		}
 		if ratio < 0 {
-			ratio = defaultThrottleRatio
+			ratio = DefaultThrottleRatio
 		}
 		appThrottle = base.NewAppThrottle(expireAt, ratio)
 	}

@@ -157,14 +157,18 @@ func (api *APIImpl) ThrottleApp(w http.ResponseWriter, r *http.Request, ps httpr
 	var ttlMinutes int64
 	var ratio float64
 	var err error
-	if ttlMinutes, err = strconv.ParseInt(ps.ByName("ttlMinutes"), 10, 64); err != nil {
+	if ps.ByName("ttlMinutes") == "" {
+		ttlMinutes = 0
+	} else if ttlMinutes, err = strconv.ParseInt(ps.ByName("ttlMinutes"), 10, 64); err != nil {
 		goto response
 	}
 	if ttlMinutes != 0 {
 		expireAt = time.Now().Add(time.Duration(ttlMinutes) * time.Minute)
 	}
 	// if ttlMinutes is zero, we keep expireAt as zero, which is handled in a special way
-	if ratio, err = strconv.ParseFloat(ps.ByName("ratio"), 64); err != nil {
+	if ps.ByName("ratio") == "" {
+		ratio = throttle.DefaultThrottleRatio
+	} else if ratio, err = strconv.ParseFloat(ps.ByName("ratio"), 64); err != nil {
 		goto response
 	}
 	if ratio < 0 || ratio > 1 {
@@ -220,6 +224,8 @@ func ConfigureRoutes(api API) *httprouter.Router {
 	register(router, "/aggregated-metrics", api.AggregatedMetrics)
 
 	register(router, "/throttle-app/:app/:ttlMinutes/:ratio", api.ThrottleApp)
+	register(router, "/throttle-app/:app/:ttlMinutes", api.ThrottleApp)
+	register(router, "/throttle-app/:app", api.ThrottleApp)
 	register(router, "/unthrottle-app/:app", api.UnthrottleApp)
 	register(router, "/throttled-apps", api.ThrottledApps)
 
