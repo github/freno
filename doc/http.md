@@ -28,7 +28,7 @@ Notes:
 - `429` (Too Many Requests) is just a normal "do not write" response, and is a frequent response if the store is busy.
 - `500` (Internal Server Error) can happen if the node just started, or otherwise `freno` met an unexpected error. Try a `GET` (more informative) request or search the logs.
 
-# Other requests
+# API
 
 `freno` supports the following:
 
@@ -46,7 +46,7 @@ Notes:
 
   - `/throttle-app/archive/30/1`: completely refuse `/check/archive/*` requests for a duration of `30` minutes
   - `/throttle-app/archive/30`: same, shorthand
-  - `/throttle-app/archive/30/0.9`: _mostly_ refuse `/check/archive/*` requests for a duration of `30` minutes. On average (random dice roll), `9` out of `10` requests will be denied, and one approved.
+  - `/throttle-app/archive/30/0.9`: _mostly_ refuse `/check/archive/*` requests for a duration of `30` minutes. On average (random dice roll), `9` out of `10` requests (i.e. `90%`) will be denied, and one approved.
   - `/throttle-app/archive/30/0.5`: refuse `50%` of `/check/archive/*` requests for a duration of `30` minutes
   - `/throttle-app/archive/0/0.3`: if already throttled, maintain same TTL and change ratio to `0.3` (`30%` refused). If not already throttled, TTL is one hour
   - `/throttle-app/archive`: completely refuse `/check/archive/*` requests for a duration of 1 hour
