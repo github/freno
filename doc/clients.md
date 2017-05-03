@@ -13,6 +13,25 @@ It makes sense to hit `freno` in the whereabouts of the granularity one is looki
 
 # Usage samples
 
+
+### pt-archiver
+
+[pt-archiver](https://www.percona.com/doc/percona-toolkit/2.2/pt-archiver.html) is probably the most popular tool for archiving table data. `pt-archiver` can use `freno` with a plugin. A plugin is available on [FrenoThrottler.pm](../resources/pt-archiver/FrenoThrottler.pm). To make it usable, you will need to:
+
+- Let the plugin know where to find `freno` and which cluster to use (see sample code in comment in plugin file)
+- Deploy the plugin. Sample `puppet` deployment would look something like:
+  ```
+  file { '/usr/share/perl5/FrenoThrottler.pm':
+      ensure => file,
+      owner  => 'root',
+      group  => 'root',
+      mode   => '0755',
+      source => 'puppet:///modules/percona/usr/share/perl5/FrenoThrottler.pm';
+  }
+  ```
+
+  This assumes `/usr/share/perl5` is in your `@INC` path (run `perl -e 'print "@INC"'` to confirm).
+
 ### shell
 
 ```shell
