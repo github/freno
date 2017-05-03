@@ -41,11 +41,19 @@ Notes:
   - `<store-name>` must be defined in the configuration file
   - Example: `/check/archive/mysql/main1`
 
-- `/throttle-app/<app-name>`: instructs `freno` to deny writes to the `archive` app. `/check/archive/...` requests will be responded by `417` (Expectation Failed).
+### Control requests
+- `/throttle-app/<app-name>/<ttlMinutes>/ratio`: refuse partial/complete access to an app for a limited amount of time. Examples:
 
-   Example: `/throttle-app/archive`
+  - `/throttle-app/archive/30/1`: completely refuse `/check/archive/*` requests for a duration of `30` minutes
+  - `/throttle-app/archive/30`: same, shorthand
+  - `/throttle-app/archive/30/0.9`: _mostly_ refuse `/check/archive/*` requests for a duration of `30` minutes. On average (random dice roll), `9` out of `10` requests will be denied, and one approved.
+  - `/throttle-app/archive/30/0.5`: refuse `50%` of `/check/archive/*` requests for a duration of `30` minutes
+  - `/throttle-app/archive/0/0.3`: if already throttled, maintain same TTL and change ratio to `0.3` (`30%` refused). If not already throttled, TTL is one hour
+  - `/throttle-app/archive`: completely refuse `/check/archive/*` requests for a duration of 1 hour
 
-- `/unthrottle-app/<app-name>`: Undoes a `/throttle-app` request. App will be able to proceed as normal, based on store status.
+- `/unthrottle-app/archive`: remove any imposed throttling constraint from `/check/archive`. Throttling will of course still consider cluster status, which is never overridden.
+
+- `/throttled-apps`: list currently throttled apps.
 
 ### General requests
 
