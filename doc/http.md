@@ -51,7 +51,9 @@ Notes:
   - `/throttle-app/archive/0/0.3`: if already throttled, maintain same TTL and change ratio to `0.3` (`30%` refused). If not already throttled, TTL is one hour
   - `/throttle-app/archive`: completely refuse `/check/archive/*` requests for a duration of 1 hour
 
-- `/unthrottle-app/archive`: remove any imposed throttling constraint from `/check/archive`. Throttling will of course still consider cluster status, which is never overridden.
+- `/unthrottle-app/<app-name>`: remove any imposed throttling constraint from given app. Example:
+  `/throttled-apps` will re-allow the `archive` app to get valid response from `/check/archive/*` requests.
+  Throttling will of course still consider cluster status, which is never overridden.
 
 - `/throttled-apps`: list currently throttled apps.
 
