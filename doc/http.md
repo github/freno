@@ -52,7 +52,9 @@ Notes:
   - `/throttle-app/archive`: completely refuse `/check/archive/*` requests for a duration of 1 hour
 
 - `/unthrottle-app/<app-name>`: remove any imposed throttling constraint from given app. Example:
+
   `/throttled-apps` will re-allow the `archive` app to get valid response from `/check/archive/*` requests.
+
   Throttling will of course still consider cluster status, which is never overridden.
 
 - `/throttled-apps`: list currently throttled apps.
