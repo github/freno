@@ -53,7 +53,7 @@ Notes:
 
 - `/unthrottle-app/<app-name>`: remove any imposed throttling constraint from given app. Example:
 
-  `/throttled-apps` will re-allow the `archive` app to get valid response from `/check/archive/*` requests.
+  `/unthrottle-app/archive` will re-allow the `archive` app to get valid response from `/check/archive/*` requests.
 
   Throttling will of course still consider cluster status, which is never overridden.
 
