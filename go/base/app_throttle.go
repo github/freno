@@ -7,7 +7,6 @@ import (
 // AppThrottle is the definition for an app throtting instruction
 // - Ratio: [0..1], 0 == no throttle, 1 == fully throttle
 type AppThrottle struct {
-	AppName  string
 	ExpireAt time.Time
 	Ratio    float64
 }
