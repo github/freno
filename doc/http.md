@@ -79,6 +79,10 @@ Notes:
 - `/leader-check`: returns `HTTP 200` when the node is the `raft` leader, or `404` otherwise.
 - `/hostname`: node host name
 
+### Other requests
+
+- `/help`: show all supported request paths
+
 # GET method
 
 `GET` and `HEAD` respond with same status codes. But `GET` requests compute and return additional data. Automated requests should not be interested in this data; the status code is what should guide the clients. However humans or manual requests may benefit from extra information supplied by the `GET` request.
