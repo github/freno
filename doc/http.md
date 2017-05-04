@@ -50,11 +50,15 @@ Notes:
   - `/throttle-app/archive/ttl/30/ratio/0.9`: _mostly_ refuse `/check/archive/*` requests for a duration of `30` minutes. On average (random dice roll), `9` out of `10` requests (i.e. `90%`) will be denied, and one approved.
   - `/throttle-app/archive/ttl/30/ratio/0.5`: refuse `50%` of `/check/archive/*` requests for a duration of `30` minutes
 
-- `/throttle-app/<app-name>/ttl/<ttlMinutes>`: refuse access to an app for a limited amount of time. This is the same as invoking `/throttle-app/<app-name>/ttl/<ttlMinutes>/ratio/1`
+- `/throttle-app/<app-name>/ttl/<ttlMinutes>`:
+
+  - If app is already throttled, modify TTL portion only, without changing the ratio.
+  - If app is not already throttled, fully throttle for a duration of `1` hour (`ratio` is implicitly `1`).
+
 
 - `/throttle-app/<app-name>/ratio/<ratio>`:
 
-  - If app is already throttled, modify ratio portion only, without changing the TTL
+  - If app is already throttled, modify ratio portion only, without changing the TTL.
   - If app is not already throttled, throttle with given ratio, for a duration of `1` hour.
 
 - `/throttle-app/<app-name>`: refuse access to an app for `1` hour.
