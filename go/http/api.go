@@ -170,11 +170,10 @@ func (api *APIImpl) ThrottleApp(w http.ResponseWriter, r *http.Request, ps httpr
 	}
 	// if ttlMinutes is zero, we keep expireAt as zero, which is handled in a special way
 	if ps.ByName("ratio") == "" {
-		ratio = throttle.DefaultThrottleRatio
+		ratio = -1
 	} else if ratio, err = strconv.ParseFloat(ps.ByName("ratio"), 64); err != nil {
 		goto response
-	}
-	if ratio < 0 || ratio > 1 {
+	} else if ratio < 0 || ratio > 1 {
 		err = fmt.Errorf("ratio must be in [0..1] range; got %+v", ratio)
 		goto response
 	}
