@@ -28,7 +28,10 @@ type API interface {
 	ThrottleApp(w http.ResponseWriter, r *http.Request, _ httprouter.Params)
 	UnthrottleApp(w http.ResponseWriter, r *http.Request, _ httprouter.Params)
 	ThrottledApps(w http.ResponseWriter, r *http.Request, _ httprouter.Params)
+	Help(w http.ResponseWriter, r *http.Request, _ httprouter.Params)
 }
+
+var endpoints = []string{} // known API URIs
 
 type GeneralResponse struct {
 	StatusCode int
@@ -196,10 +199,18 @@ func (api *APIImpl) ThrottledApps(w http.ResponseWriter, r *http.Request, ps htt
 	json.NewEncoder(w).Encode(throttledApps)
 }
 
+// ThrottledApps returns a snapshot of all currently throttled apps
+func (api *APIImpl) Help(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(endpoints)
+}
+
 // register is a wrapper function for accepting both GET and HEAD requests
 func register(router *httprouter.Router, path string, f httprouter.Handle) {
 	router.HEAD(path, f)
 	router.GET(path, f)
+
+	endpoints = append(endpoints, path)
 }
 
 func metricsHandle(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
@@ -230,8 +241,10 @@ func ConfigureRoutes(api API) *httprouter.Router {
 	register(router, "/unthrottle-app/:app", api.UnthrottleApp)
 	register(router, "/throttled-apps", api.ThrottledApps)
 
-	router.GET("/debug/vars", metricsHandle)
-	router.GET("/debug/metrics", metricsHandle)
+	register(router, "/debug/vars", metricsHandle)
+	register(router, "/debug/metrics", metricsHandle)
+
+	register(router, "/help", api.Help)
 
 	return router
 }
