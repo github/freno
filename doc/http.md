@@ -44,13 +44,13 @@ Notes:
 ### Control requests
 
 ##### Throttle
-- `/throttle-app/<app-name>/<ttlMinutes>/<ratio>`: refuse partial/complete access to an app for a limited amount of time. Examples:
+- `/throttle-app/<app-name>/ttl/<ttlMinutes>/ratio/<ratio>`: refuse partial/complete access to an app for a limited amount of time. Examples:
 
-  - `/throttle-app/archive/30/1`: completely refuse `/check/archive/*` requests for a duration of `30` minutes
-  - `/throttle-app/archive/30/0.9`: _mostly_ refuse `/check/archive/*` requests for a duration of `30` minutes. On average (random dice roll), `9` out of `10` requests (i.e. `90%`) will be denied, and one approved.
-  - `/throttle-app/archive/30/0.5`: refuse `50%` of `/check/archive/*` requests for a duration of `30` minutes
+  - `/throttle-app/archive/ttl/30/ratio/1`: completely refuse `/check/archive/*` requests for a duration of `30` minutes
+  - `/throttle-app/archive/ttl/30/ratio/0.9`: _mostly_ refuse `/check/archive/*` requests for a duration of `30` minutes. On average (random dice roll), `9` out of `10` requests (i.e. `90%`) will be denied, and one approved.
+  - `/throttle-app/archive/ttl/30/ratio/0.5`: refuse `50%` of `/check/archive/*` requests for a duration of `30` minutes
 
-- `/throttle-app/<app-name>/ttl/<ttlMinutes>`: refuse access to an app for a limited amount of time. This is the same as invoking `/throttle-app/<app-name>/<ttlMinutes>/1`
+- `/throttle-app/<app-name>/ttl/<ttlMinutes>`: refuse access to an app for a limited amount of time. This is the same as invoking `/throttle-app/<app-name>/ttl/<ttlMinutes>/ratio/1`
 
 - `/throttle-app/<app-name>/ratio/<ratio>`:
 

@@ -237,7 +237,7 @@ func ConfigureRoutes(api API) *httprouter.Router {
 	register(router, "/throttle-app/:app", api.ThrottleApp)
 	register(router, "/throttle-app/:app/ttl/:ttlMinutes", api.ThrottleApp)
 	register(router, "/throttle-app/:app/ratio/:ratio", api.ThrottleApp)
-	register(router, "/throttle-app/:app/:ttlMinutes/:ratio", api.ThrottleApp)
+	register(router, "/throttle-app/:app/ttl/:ttlMinutes/ratio/:ratio", api.ThrottleApp)
 	register(router, "/unthrottle-app/:app", api.UnthrottleApp)
 	register(router, "/throttled-apps", api.ThrottledApps)
 
