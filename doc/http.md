@@ -42,14 +42,22 @@ Notes:
   - Example: `/check/archive/mysql/main1`
 
 ### Control requests
-- `/throttle-app/<app-name>/<ttlMinutes>/ratio`: refuse partial/complete access to an app for a limited amount of time. Examples:
+- `/throttle-app/<app-name>/<ttlMinutes>/<ratio>`: refuse partial/complete access to an app for a limited amount of time. Examples:
 
   - `/throttle-app/archive/30/1`: completely refuse `/check/archive/*` requests for a duration of `30` minutes
-  - `/throttle-app/archive/30`: same, shorthand
   - `/throttle-app/archive/30/0.9`: _mostly_ refuse `/check/archive/*` requests for a duration of `30` minutes. On average (random dice roll), `9` out of `10` requests (i.e. `90%`) will be denied, and one approved.
   - `/throttle-app/archive/30/0.5`: refuse `50%` of `/check/archive/*` requests for a duration of `30` minutes
-  - `/throttle-app/archive/0/0.3`: if already throttled, maintain same TTL and change ratio to `0.3` (`30%` refused). If not already throttled, TTL is one hour
-  - `/throttle-app/archive`: completely refuse `/check/archive/*` requests for a duration of 1 hour
+
+Variations:
+
+  - `/throttle-app/<app-name>/ttl/<ttlMinutes>`: refuse access to an app for a limited amount of time. This is the same as invoking `/throttle-app/<app-name>/<ttlMinutes>/1`
+
+  - `/throttle-app/<app-name>/ratio/<ratio>`:
+
+    - If app is already throttled, modify ratio portion only, without changing the TTL
+    - If app is not already throttled, throttle with given ratio, for a duration of `1` hour.
+
+  - `/throttle-app/<app-name>`: refuse access to an app for `1` hour.
 
 - `/unthrottle-app/<app-name>`: remove any imposed throttling constraint from given app. Example:
 
