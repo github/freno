@@ -3,18 +3,20 @@ package group
 import (
 	"encoding/json"
 
+	"github.com/github/freno/go/base"
+
 	"github.com/hashicorp/raft"
 )
 
 // snapshotData holds whatever data we wish to persist as part of raft snapshotting
 // it will mostly duplicate data stored in `throttler`.
 type snapshotData struct {
-	throttledApps map[string]bool
+	throttledApps map[string](base.AppThrottle)
 }
 
 func newSnapshotData() *snapshotData {
 	return &snapshotData{
-		throttledApps: make(map[string]bool),
+		throttledApps: make(map[string](base.AppThrottle)),
 	}
 }
 

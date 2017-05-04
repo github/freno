@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"time"
 
 	"github.com/hashicorp/raft"
 	"github.com/outbrain/golib/log"
@@ -23,7 +24,7 @@ func (f *fsm) Apply(l *raft.Log) interface{} {
 	log.Debugf("freno/raft: applying command: %+v", c)
 	switch c.Operation {
 	case "throttle":
-		return f.applyThrottleApp(c.Key)
+		return f.applyThrottleApp(c.Key, c.ExpireAt, c.Ratio)
 	case "unthrottle":
 		return f.applyUnthrottleApp(c.Key)
 	default:
@@ -36,8 +37,8 @@ func (f *fsm) Snapshot() (raft.FSMSnapshot, error) {
 	log.Debugf("freno/raft: creating snapshot")
 	snapshot := newFsmSnapshot()
 
-	for appName := range f.throttler.ThrottledAppsSnapshot() {
-		snapshot.data.throttledApps[appName] = true
+	for appName, appThrottle := range f.throttler.ThrottledAppsMap() {
+		snapshot.data.throttledApps[appName] = *appThrottle
 	}
 	return snapshot, nil
 }
@@ -50,16 +51,16 @@ func (f *fsm) Restore(rc io.ReadCloser) error {
 	if err := json.NewDecoder(rc).Decode(&data); err != nil {
 		return err
 	}
-	for appName := range data.throttledApps {
-		f.throttler.ThrottleApp(appName)
+	for appName, appThrottle := range data.throttledApps {
+		f.throttler.ThrottleApp(appName, appThrottle.ExpireAt, appThrottle.Ratio)
 	}
 	log.Debugf("freno/raft: restored from snapshot: %d elements restored", len(data.throttledApps))
 	return nil
 }
 
 // applyThrottleApp will apply a "throttle" command locally (this applies as result of the raft consensus algorithm)
-func (f *fsm) applyThrottleApp(appName string) interface{} {
-	f.throttler.ThrottleApp(appName)
+func (f *fsm) applyThrottleApp(appName string, expireAt time.Time, ratio float64) interface{} {
+	f.throttler.ThrottleApp(appName, expireAt, ratio)
 	return nil
 }
 

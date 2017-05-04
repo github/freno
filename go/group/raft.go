@@ -25,12 +25,6 @@ const RaftDBFile = "freno-raft.db"
 
 var store *Store
 
-// ConsensusService is a freno-oriented interface for making requests that require consensus.
-type ConsensusService interface {
-	ThrottleApp(appName string) error
-	UnthrottleApp(appName string) error
-}
-
 // Setup creates the entire raft shananga. Creates the store, associates with the throttler,
 // contacts peer nodes, and subscribes to leader changes to export them.
 func Setup(throttler *throttle.Throttler) (ConsensusService, error) {
