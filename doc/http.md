@@ -28,7 +28,7 @@ Notes:
 - `429` (Too Many Requests) is just a normal "do not write" response, and is a frequent response if the store is busy.
 - `500` (Internal Server Error) can happen if the node just started, or otherwise `freno` met an unexpected error. Try a `GET` (more informative) request or search the logs.
 
-# Other requests
+# API
 
 `freno` supports the following:
 
@@ -41,17 +41,47 @@ Notes:
   - `<store-name>` must be defined in the configuration file
   - Example: `/check/archive/mysql/main1`
 
-- `/throttle-app/<app-name>`: instructs `freno` to deny writes to the `archive` app. `/check/archive/...` requests will be responded by `417` (Expectation Failed).
+### Control requests
 
-   Example: `/throttle-app/archive`
+##### Throttle
+- `/throttle-app/<app-name>/ttl/<ttlMinutes>/ratio/<ratio>`: refuse partial/complete access to an app for a limited amount of time. Examples:
 
-- `/unthrottle-app/<app-name>`: Undoes a `/throttle-app` request. App will be able to proceed as normal, based on store status.
+  - `/throttle-app/archive/ttl/30/ratio/1`: completely refuse `/check/archive/*` requests for a duration of `30` minutes
+  - `/throttle-app/archive/ttl/30/ratio/0.9`: _mostly_ refuse `/check/archive/*` requests for a duration of `30` minutes. On average (random dice roll), `9` out of `10` requests (i.e. `90%`) will be denied, and one approved.
+  - `/throttle-app/archive/ttl/30/ratio/0.5`: refuse `50%` of `/check/archive/*` requests for a duration of `30` minutes
+
+- `/throttle-app/<app-name>/ttl/<ttlMinutes>`:
+
+  - If app is already throttled, modify TTL portion only, without changing the ratio.
+  - If app is not already throttled, fully throttle for a duration of `1` hour (`ratio` is implicitly `1`).
+
+
+- `/throttle-app/<app-name>/ratio/<ratio>`:
+
+  - If app is already throttled, modify ratio portion only, without changing the TTL.
+  - If app is not already throttled, throttle with given ratio, for a duration of `1` hour.
+
+- `/throttle-app/<app-name>`: refuse access to an app for `1` hour.
+
+  Same as calling `/throttle-app/<app-name>/ttl/60/ratio/1`. Provided as convenience endpoint.
+
+- `/unthrottle-app/<app-name>`: remove any imposed throttling constraint from given app. Example:
+
+  `/unthrottle-app/archive` will re-allow the `archive` app to get valid response from `/check/archive/*` requests.
+
+  Throttling will of course still consider cluster status, which is never overridden.
+
+- `/throttled-apps`: list currently throttled apps.
 
 ### General requests
 
 - `/lb-check`: returns `HTTP 200`. Indicates the node is alive
 - `/leader-check`: returns `HTTP 200` when the node is the `raft` leader, or `404` otherwise.
 - `/hostname`: node host name
+
+### Other requests
+
+- `/help`: show all supported request paths
 
 # GET method
 
