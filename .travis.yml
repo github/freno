@@ -1,0 +1,14 @@
+# http://docs.travis-ci.com/user/languages/go/
+language: go
+
+go: 1.8
+
+os:
+  - linux
+
+install: true
+
+script: script/cibuild
+
+notifications:
+  email: false
