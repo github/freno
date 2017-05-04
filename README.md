@@ -1,5 +1,7 @@
 # freno
 
+[![build status](https://travis-ci.org/github/freno.svg)](https://travis-ci.org/github/freno) [![downloads](https://img.shields.io/github/downloads/github/freno/total.svg)](https://github.com/github/freno/releases) [![release](https://img.shields.io/github/release/github/freno.svg)](https://github.com/github/freno/releases)
+
 Cooperative, highly available throttler service: clients use `freno` to throttle writes to a resource.
 
 Current implementation can throttle writes to (multiple) MySQL clusters, based on replication status for those clusters. `freno` will throttle cooperative clients when replication lag exceeds a pre-defined threshold.
