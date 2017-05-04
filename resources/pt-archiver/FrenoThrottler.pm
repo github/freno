@@ -38,7 +38,7 @@ sub new {
 
   # As example, you may read URL or cluster hint from your database:
   #
-  #  my $dbh = %args{"dbh"};
+  #  my $dbh = $args{"dbh"};
   #  my ($cluster) = $dbh->selectrow_array("select cluster_name from meta.cluster limit 1");
   #  if ($cluster eq "" || not defined $cluster) {
   #    die "Cannot find cluster";
