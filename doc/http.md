@@ -63,6 +63,8 @@ Notes:
 
 - `/throttle-app/<app-name>`: refuse access to an app for `1` hour.
 
+  Same as calling `/throttle-app/<app-name>/ttl/60/ratio/1`. Provided as convenience endpoint.
+
 - `/unthrottle-app/<app-name>`: remove any imposed throttling constraint from given app. Example:
 
   `/unthrottle-app/archive` will re-allow the `archive` app to get valid response from `/check/archive/*` requests.
