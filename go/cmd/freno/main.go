@@ -78,7 +78,12 @@ func main() {
 
 	switch {
 	case *http:
-		err := httpServe()
+		var err error
+		if config.Settings().ListenPort == 0 && config.Settings().HTTPSListenPort == 0 {
+			err = fmt.Errorf("To serve HTTP either ListenPort or HTTPSListenPort (or both) must be defined")
+		} else {
+			err = httpServe()
+		}
 		log.Errore(err)
 	case *help:
 		printHelp()
@@ -115,9 +120,21 @@ func httpServe() error {
 	api := http.NewAPIImpl(throttlerCheck, consensusService)
 	router := http.ConfigureRoutes(api)
 	api.ConfigureChatops(router)
-	port := config.Settings().ListenPort
-	log.Infof("Starting server in port %d", port)
-	return gohttp.ListenAndServe(fmt.Sprintf(":%d", port), router)
+
+	result := make(chan error)
+	if port := config.Settings().HTTPSListenPort; port != 0 {
+		log.Infof("Starting HTTPS server in port %d", port)
+		go func() {
+			result <- gohttp.ListenAndServeTLS(fmt.Sprintf(":%d", port), config.Settings().SSLCertFile, config.Settings().SSLPrivateKeyFile, router)
+		}()
+	}
+	if port := config.Settings().ListenPort; port != 0 {
+		log.Infof("Starting server in port %d", port)
+		go func() {
+			result <- gohttp.ListenAndServe(fmt.Sprintf(":%d", port), router)
+		}()
+	}
+	return <-result
 }
 
 func printHelp() {

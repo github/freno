@@ -87,29 +87,29 @@ func (config *Configuration) Reload() error {
 // Some of the settinges have reasonable default values, and some other
 // (like database credentials) are strictly expected from user.
 type ConfigurationSettings struct {
-	ListenPort      int
+	ListenPort        int    // HTTP port. 0 disables
+	HTTPSListenPort   int    // HTTPS port. Value of 0 disables (default: 0)
+	SSLPrivateKeyFile string //
+	SSLCertFile       string //
+
 	RaftBind        string
 	RaftDataDir     string
 	DefaultRaftPort int      // if a RaftNodes entry does not specify port, use this one
 	RaftNodes       []string // Raft nodes to make initial connection with
-	// Debug                                        bool   // set debug mode (similar to --debug option)
-	// ListenSocket                                 string // Where freno HTTP should listen for unix socket (default: empty; when given, TCP is disabled)
-	// AnExampleSliceOfStrings                    []string // Add a comment here
-	// AnExampleMapOfStringsToStrings    map[string]string // Add a comment here
+
 	Stores StoresSettings
 }
 
 func newConfigurationSettings() *ConfigurationSettings {
 	return &ConfigurationSettings{
-		ListenPort:      8087,
-		RaftBind:        "127.0.0.1:10008",
-		RaftDataDir:     "",
-		DefaultRaftPort: 0,
-		RaftNodes:       []string{},
-		//Debug:                                        false,
-		//ListenSocket:                                 "",
-		//AnExampleListOfStrings:                       []string{"*"},
-		//AnExampleMapOfStringsToStrings:               make(map[string]string),
+		ListenPort:        8087,
+		HTTPSListenPort:   0,
+		SSLPrivateKeyFile: "",
+		SSLCertFile:       "",
+		RaftBind:          "127.0.0.1:10008",
+		RaftDataDir:       "",
+		DefaultRaftPort:   0,
+		RaftNodes:         []string{},
 	}
 }
 
