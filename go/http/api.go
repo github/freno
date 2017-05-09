@@ -148,7 +148,11 @@ func (api *APIImpl) AggregatedMetrics(w http.ResponseWriter, r *http.Request, ps
 	responseMap := map[string]string{}
 	for metricName, metric := range aggregatedMetrics {
 		value, err := metric.Get()
-		responseMap[metricName] = fmt.Sprintf("%+v, %+v", value, err)
+		description := fmt.Sprintf("%+v", value)
+		if err != nil {
+			description = fmt.Sprintf("%+v, %+s", description, err.Error())
+		}
+		responseMap[metricName] = description
 	}
 	json.NewEncoder(w).Encode(responseMap)
 }
