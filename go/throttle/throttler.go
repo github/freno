@@ -80,6 +80,10 @@ func (throttler *Throttler) Operate() {
 	mysqlRefreshTick := time.Tick(mysqlRefreshInterval)
 	mysqlAggregateTick := time.Tick(mysqlAggreateInterval)
 	throttledAppsTick := time.Tick(throttledAppsSnapshotInterval)
+
+	// initial read of inventory:
+	go throttler.refreshMySQLInventory()
+
 	for {
 		select {
 		case <-leaderCheckTick:
