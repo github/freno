@@ -116,7 +116,7 @@ func (api *APIImpl) RaftState(w http.ResponseWriter, r *http.Request, _ httprout
 func (api *APIImpl) Hostname(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
 	if api.hostname != "" {
 		w.WriteHeader(http.StatusOK)
-		fmt.Fprint(w, api.hostname)
+		json.NewEncoder(w).Encode(api.hostname)
 	} else {
 		w.WriteHeader(http.StatusInternalServerError)
 	}
