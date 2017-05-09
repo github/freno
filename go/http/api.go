@@ -101,7 +101,7 @@ func (api *APIImpl) LeaderCheck(w http.ResponseWriter, r *http.Request, _ httpro
 func (api *APIImpl) RaftLeader(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
 	if leader := group.GetLeader(); leader != "" {
 		w.WriteHeader(http.StatusOK)
-		fmt.Fprintf(w, leader)
+		json.NewEncoder(w).Encode(leader)
 	} else {
 		w.WriteHeader(http.StatusInternalServerError)
 	}
@@ -109,7 +109,7 @@ func (api *APIImpl) RaftLeader(w http.ResponseWriter, r *http.Request, _ httprou
 
 // RaftState returns the state of the raft node
 func (api *APIImpl) RaftState(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
-	fmt.Fprintf(w, group.GetState().String())
+	json.NewEncoder(w).Encode(group.GetState().String())
 }
 
 // Hostname returns the hostname this process executes on
