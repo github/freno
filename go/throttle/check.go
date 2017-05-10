@@ -55,7 +55,7 @@ func (check *ThrottlerCheck) checkAppMetricResult(appName string, metricResultFu
 }
 
 // CheckAppStoreMetric
-func (check *ThrottlerCheck) Check(appName string, storeType string, storeName string) (checkResult *CheckResult) {
+func (check *ThrottlerCheck) Check(appName string, storeType string, storeName string, remoteAddr string) (checkResult *CheckResult) {
 	var metricResultFunc base.MetricResultFunc
 	switch storeType {
 	case "mysql":
@@ -85,20 +85,22 @@ func (check *ThrottlerCheck) Check(appName string, storeType string, storeName s
 			metrics.GetOrRegisterCounter(fmt.Sprintf("check.any.%s.%s.error", storeType, storeName), nil).Inc(1)
 			metrics.GetOrRegisterCounter(fmt.Sprintf("check.%s.%s.%s.error", appName, storeType, storeName), nil).Inc(1)
 		}
+
+		check.throttler.markRecentApp(appName, remoteAddr)
 	}(checkResult.StatusCode)
 
 	return checkResult
 }
 
-// CheckMySQLCluster allows an app to check on a MySQL cluster
-func (check *ThrottlerCheck) CheckMetric(appName string, metricName string) (checkResult *CheckResult) {
+// localCheck
+func (check *ThrottlerCheck) localCheck(appName string, metricName string) (checkResult *CheckResult) {
 	metricTokens := strings.Split(metricName, "/")
 	if len(metricTokens) != 2 {
 		return NoSuchMetricCheckResult
 	}
 	storeType := metricTokens[0]
 	storeName := metricTokens[1]
-	return check.Check(appName, storeType, storeName)
+	return check.Check(appName, storeType, storeName, "local")
 }
 
 // AggregatedMetrics is a convenience acces method into throttler's `aggregatedMetricsSnapshot`
@@ -112,7 +114,7 @@ func (check *ThrottlerCheck) SelfChecks() {
 		for range selfCheckTick {
 			for metricName := range check.AggregatedMetrics() {
 				metricName := metricName
-				go check.CheckMetric(frenoAppName, metricName)
+				go check.localCheck(frenoAppName, metricName)
 			}
 		}
 	}()

@@ -11,4 +11,5 @@ type ConsensusService interface {
 	ThrottleApp(appName string, expireAt time.Time, ratio float64) error
 	ThrottledAppsMap() (result map[string](*base.AppThrottle))
 	UnthrottleApp(appName string) error
+	RecentAppsMap() (result map[string](*base.RecentApp))
 }

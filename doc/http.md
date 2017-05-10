@@ -73,6 +73,14 @@ Notes:
 
 - `/throttled-apps`: list currently throttled apps.
 
+##### Usage
+
+- `/recent-apps/<lastMinutes>`: list app/host that have `/check`ed `freno` in the past given minutes. Example:
+
+  - `/recent-apps/30` show which apps from which hosts have issued `check` requests in the past `30` minutes
+
+- `/recent-apps`: no time limit; `freno` keeps up to `24h` of `check` requests.
+
 ### General requests
 
 - `/lb-check`: returns `HTTP 200`. Indicates the node is alive

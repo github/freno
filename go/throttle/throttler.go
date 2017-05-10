@@ -2,15 +2,16 @@ package throttle
 
 import (
 	"fmt"
-	"github.com/github/freno/go/base"
-	"github.com/github/freno/go/config"
-	"github.com/github/freno/go/haproxy"
-	"github.com/github/freno/go/mysql"
 	"math/rand"
 	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/github/freno/go/base"
+	"github.com/github/freno/go/config"
+	"github.com/github/freno/go/haproxy"
+	"github.com/github/freno/go/mysql"
 
 	"github.com/outbrain/golib/log"
 	"github.com/patrickmn/go-cache"
@@ -26,6 +27,7 @@ const mysqlAggreateInterval = 50 * time.Millisecond
 const aggregatedMetricsExpiration = 5 * time.Second
 const aggregatedMetricsCleanup = 1 * time.Second
 const throttledAppsSnapshotInterval = 5 * time.Second
+const recentAppsExpiration = time.Hour * 24
 
 const defaultThrottleTTL = 60 * time.Minute
 const DefaultThrottleRatio = 1.0
@@ -47,6 +49,7 @@ type Throttler struct {
 	mysqlClusterThresholds *cache.Cache
 	aggregatedMetrics      *cache.Cache
 	throttledApps          *cache.Cache
+	recentApps             *cache.Cache
 
 	throttledAppsMutex sync.Mutex
 }
@@ -65,6 +68,7 @@ func NewThrottler(isLeaderFunc func() bool) *Throttler {
 		throttledApps:          cache.New(cache.NoExpiration, 10*time.Second),
 		mysqlClusterThresholds: cache.New(cache.NoExpiration, 0),
 		aggregatedMetrics:      cache.New(aggregatedMetricsExpiration, aggregatedMetricsCleanup),
+		recentApps:             cache.New(recentAppsExpiration, time.Minute),
 	}
 	throttler.ThrottleApp("abusing-app", time.Now().Add(time.Hour*24*365*10), DefaultThrottleRatio)
 	return throttler
@@ -371,6 +375,21 @@ func (throttler *Throttler) ThrottledAppsMap() (result map[string](*base.AppThro
 	for appName, item := range throttler.throttledApps.Items() {
 		appThrottle := item.Object.(*base.AppThrottle)
 		result[appName] = appThrottle
+	}
+	return result
+}
+
+func (throttler *Throttler) markRecentApp(appName string, remoteAddr string) {
+	recentAppKey := fmt.Sprintf("%s/%s", appName, remoteAddr)
+	throttler.recentApps.Set(recentAppKey, time.Now(), cache.DefaultExpiration)
+}
+
+func (throttler *Throttler) RecentAppsMap() (result map[string](*base.RecentApp)) {
+	result = make(map[string](*base.RecentApp))
+
+	for recentAppKey, item := range throttler.recentApps.Items() {
+		recentApp := base.NewRecentApp(item.Object.(time.Time))
+		result[recentAppKey] = recentApp
 	}
 	return result
 }
