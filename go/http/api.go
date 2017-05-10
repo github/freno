@@ -28,6 +28,7 @@ type API interface {
 	ThrottleApp(w http.ResponseWriter, r *http.Request, _ httprouter.Params)
 	UnthrottleApp(w http.ResponseWriter, r *http.Request, _ httprouter.Params)
 	ThrottledApps(w http.ResponseWriter, r *http.Request, _ httprouter.Params)
+	RecentApps(w http.ResponseWriter, r *http.Request, _ httprouter.Params)
 	Help(w http.ResponseWriter, r *http.Request, _ httprouter.Params)
 }
 
@@ -137,7 +138,8 @@ func (api *APIImpl) Check(w http.ResponseWriter, r *http.Request, ps httprouter.
 	appName := ps.ByName("app")
 	storeType := ps.ByName("storeType")
 	storeName := ps.ByName("storeName")
-	checkResult := api.throttlerCheck.Check(appName, storeType, storeName)
+	checkResult := api.throttlerCheck.Check(appName, storeType, storeName, r.RemoteAddr)
+
 	api.respondToCheckRequest(w, r, checkResult)
 }
 
@@ -203,6 +205,27 @@ func (api *APIImpl) ThrottledApps(w http.ResponseWriter, r *http.Request, ps htt
 }
 
 // ThrottledApps returns a snapshot of all currently throttled apps
+func (api *APIImpl) RecentApps(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
+	w.Header().Set("Content-Type", "application/json")
+	recentApps := api.consensusService.RecentAppsMap()
+	json.NewEncoder(w).Encode(throttledApps)
+	// 	var err error
+	// 	var lastMinutes int64
+	// 	if ps.ByName("lastMinutes") != "" {
+	// 		if lastMinutes, err = strconv.ParseInt(ps.ByName("lastMinutes"), 10, 64); err != nil {
+	// 			goto response
+	// 		}
+	// 	}
+	//
+	// 	w.Header().Set("Content-Type", "application/json")
+	// 	throttledApps := api.consensusService.ThrottledAppsMap()
+	// 	json.NewEncoder(w).Encode(throttledApps)
+	//
+	// response:
+	// 	api.respondGeneric(w, r, err)
+}
+
+// ThrottledApps returns a snapshot of all currently throttled apps
 func (api *APIImpl) Help(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(endpoints)
@@ -243,6 +266,8 @@ func ConfigureRoutes(api API) *httprouter.Router {
 	register(router, "/throttle-app/:app/ttl/:ttlMinutes/ratio/:ratio", api.ThrottleApp)
 	register(router, "/unthrottle-app/:app", api.UnthrottleApp)
 	register(router, "/throttled-apps", api.ThrottledApps)
+	register(router, "/recent-apps", api.RecentApps)
+	register(router, "/recent-apps/:lastMinutes", api.RecentApps)
 
 	register(router, "/debug/vars", metricsHandle)
 	register(router, "/debug/metrics", metricsHandle)

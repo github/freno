@@ -158,6 +158,10 @@ func (store *Store) ThrottledAppsMap() (result map[string](*base.AppThrottle)) {
 	return store.throttler.ThrottledAppsMap()
 }
 
+func (store *Store) RecentAppsMap() (result map[string](*base.RecentApp)) {
+	return store.throttler.RecentAppsMap()
+}
+
 // Join joins a node, located at addr, to this store. The node must be ready to
 // respond to Raft communications at that address.
 func (store *Store) Join(addr string) error {
