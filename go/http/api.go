@@ -208,7 +208,7 @@ func (api *APIImpl) ThrottledApps(w http.ResponseWriter, r *http.Request, ps htt
 func (api *APIImpl) RecentApps(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 	w.Header().Set("Content-Type", "application/json")
 	recentApps := api.consensusService.RecentAppsMap()
-	json.NewEncoder(w).Encode(throttledApps)
+	json.NewEncoder(w).Encode(recentApps)
 	// 	var err error
 	// 	var lastMinutes int64
 	// 	if ps.ByName("lastMinutes") != "" {
