@@ -212,23 +212,25 @@ func (api *APIImpl) ThrottledApps(w http.ResponseWriter, r *http.Request, ps htt
 
 // ThrottledApps returns a snapshot of all currently throttled apps
 func (api *APIImpl) RecentApps(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
+	var err error
+	var lastMinutes int64
+	if ps.ByName("lastMinutes") != "" {
+		if lastMinutes, err = strconv.ParseInt(ps.ByName("lastMinutes"), 10, 64); err != nil {
+			api.respondGeneric(w, r, err)
+			return
+		}
+	}
+
 	w.Header().Set("Content-Type", "application/json")
 	recentApps := api.consensusService.RecentAppsMap()
+	if lastMinutes > 0 {
+		for key, recentApp := range recentApps {
+			if recentApp.MinutesSinceChecked > lastMinutes {
+				delete(recentApps, key)
+			}
+		}
+	}
 	json.NewEncoder(w).Encode(recentApps)
-	// 	var err error
-	// 	var lastMinutes int64
-	// 	if ps.ByName("lastMinutes") != "" {
-	// 		if lastMinutes, err = strconv.ParseInt(ps.ByName("lastMinutes"), 10, 64); err != nil {
-	// 			goto response
-	// 		}
-	// 	}
-	//
-	// 	w.Header().Set("Content-Type", "application/json")
-	// 	throttledApps := api.consensusService.ThrottledAppsMap()
-	// 	json.NewEncoder(w).Encode(throttledApps)
-	//
-	// response:
-	// 	api.respondGeneric(w, r, err)
 }
 
 // ThrottledApps returns a snapshot of all currently throttled apps
