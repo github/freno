@@ -3,10 +3,10 @@ package http
 import (
 	"encoding/json"
 	"fmt"
-	"net"
 	"net/http"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/github/freno/go/group"
@@ -142,12 +142,8 @@ func (api *APIImpl) Check(w http.ResponseWriter, r *http.Request, ps httprouter.
 	remoteAddr := r.Header.Get("X-Forwarded-For")
 	if remoteAddr == "" {
 		remoteAddr = r.RemoteAddr
+		remoteAddr = strings.Split(remoteAddr, ":")[0]
 	}
-	fmt.Println(fmt.Sprintf("zzzzzzzzz  X-Forwarded-For headers: %+v, %+v", len(r.Header[" X-Forwarded-For"]), r.Header[" X-Forwarded-For"]))
-	for k, v := range r.Header {
-		fmt.Println(fmt.Sprintf("zzzzzzzzz  header: %+v, %+v", k, v))
-	}
-	remoteAddr, _, _ = net.SplitHostPort(remoteAddr)
 	checkResult := api.throttlerCheck.Check(appName, storeType, storeName, remoteAddr)
 
 	api.respondToCheckRequest(w, r, checkResult)
