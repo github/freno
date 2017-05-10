@@ -143,6 +143,7 @@ func (api *APIImpl) Check(w http.ResponseWriter, r *http.Request, ps httprouter.
 	if remoteAddr == "" {
 		remoteAddr = r.RemoteAddr
 	}
+	fmt.Println(fmt.Sprintf("zzzzzzzzz  X-Forwarded-For headers: %+v, %+v", len(r.Header[" X-Forwarded-For"]), r.Header[" X-Forwarded-For"]))
 	for k, v := range r.Header {
 		fmt.Println(fmt.Sprintf("zzzzzzzzz  header: %+v, %+v", k, v))
 	}
