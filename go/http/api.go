@@ -143,9 +143,6 @@ func (api *APIImpl) Check(w http.ResponseWriter, r *http.Request, ps httprouter.
 	if remoteAddr == "" {
 		remoteAddr = r.RemoteAddr
 	}
-	for k, v := range r.Header {
-		fmt.Println(fmt.Sprintf("zzzzzzzzz  header: %+v, %+v", k, v))
-	}
 	remoteAddr, _, _ = net.SplitHostPort(remoteAddr)
 	checkResult := api.throttlerCheck.Check(appName, storeType, storeName, remoteAddr)
 
