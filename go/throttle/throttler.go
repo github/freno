@@ -3,7 +3,6 @@ package throttle
 import (
 	"fmt"
 	"math/rand"
-	"net"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -381,8 +380,7 @@ func (throttler *Throttler) ThrottledAppsMap() (result map[string](*base.AppThro
 }
 
 func (throttler *Throttler) markRecentApp(appName string, remoteAddr string) {
-	remoteAddrHost, _, _ := net.SplitHostPort(remoteAddr)
-	recentAppKey := fmt.Sprintf("%s/%s", appName, remoteAddrHost)
+	recentAppKey := fmt.Sprintf("%s/%s", appName, remoteAddr)
 	throttler.recentApps.Set(recentAppKey, time.Now(), cache.DefaultExpiration)
 }
 
