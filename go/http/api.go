@@ -139,9 +139,12 @@ func (api *APIImpl) Check(w http.ResponseWriter, r *http.Request, ps httprouter.
 	appName := ps.ByName("app")
 	storeType := ps.ByName("storeType")
 	storeName := ps.ByName("storeName")
-	remoteAddr := r.Header.Get("x-forwarded-for")
+	remoteAddr := r.Header.Get("X-Forwarded-For")
 	if remoteAddr == "" {
 		remoteAddr = r.RemoteAddr
+	}
+	for k, v := range r.Header {
+		fmt.Println(fmt.Sprintf("zzzzzzzzz  header: %+v, %+v", k, v))
 	}
 	remoteAddr, _, _ = net.SplitHostPort(remoteAddr)
 	checkResult := api.throttlerCheck.Check(appName, storeType, storeName, remoteAddr)
