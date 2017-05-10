@@ -2,15 +2,17 @@ package throttle
 
 import (
 	"fmt"
-	"github.com/github/freno/go/base"
-	"github.com/github/freno/go/config"
-	"github.com/github/freno/go/haproxy"
-	"github.com/github/freno/go/mysql"
 	"math/rand"
+	"net"
 	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/github/freno/go/base"
+	"github.com/github/freno/go/config"
+	"github.com/github/freno/go/haproxy"
+	"github.com/github/freno/go/mysql"
 
 	"github.com/outbrain/golib/log"
 	"github.com/patrickmn/go-cache"
@@ -379,7 +381,7 @@ func (throttler *Throttler) ThrottledAppsMap() (result map[string](*base.AppThro
 }
 
 func (throttler *Throttler) markRecentApp(appName string, remoteAddr string) {
-	remoteAddrHost := strings.Split(remoteAddr, ":")[0]
+	remoteAddrHost, _, _ := net.SplitHostPort(remoteAddr)
 	recentAppKey := fmt.Sprintf("%s/%s", appName, remoteAddrHost)
 	throttler.recentApps.Set(recentAppKey, time.Now(), cache.DefaultExpiration)
 }

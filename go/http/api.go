@@ -138,7 +138,11 @@ func (api *APIImpl) Check(w http.ResponseWriter, r *http.Request, ps httprouter.
 	appName := ps.ByName("app")
 	storeType := ps.ByName("storeType")
 	storeName := ps.ByName("storeName")
-	checkResult := api.throttlerCheck.Check(appName, storeType, storeName, r.RemoteAddr)
+	remoteAddr := r.Header.Get("x-forwarded-for")
+	if remoteAddr == "" {
+		remoteAddr = r.RemoteAddr
+	}
+	checkResult := api.throttlerCheck.Check(appName, storeType, storeName, remoteAddr)
 
 	api.respondToCheckRequest(w, r, checkResult)
 }
