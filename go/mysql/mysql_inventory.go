@@ -9,10 +9,12 @@ import (
 	"github.com/github/freno/go/base"
 )
 
+type InstanceMetricResultMap map[InstanceKey]base.MetricResult
+
 type MySQLInventory struct {
 	ClustersProbes     map[string](*Probes)
 	IgnoreHostsCount   map[string]int
-	InstanceKeyMetrics map[InstanceKey]base.MetricResult
+	InstanceKeyMetrics InstanceMetricResultMap
 }
 
 func NewMySQLInventory() *MySQLInventory {
