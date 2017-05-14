@@ -16,6 +16,7 @@ type MySQLClusterConfigurationSettings struct {
 	MetricQuery       string  // override MySQLConfigurationSettings's, or leave empty to inherit those settings
 	ThrottleThreshold float64 // override MySQLConfigurationSettings's, or leave empty to inherit those settings
 	Port              int     // Specify if different than 3306 or if different than specified by MySQLConfigurationSettings
+	IgnoreHostsCount  int     // Number of hosts that can be skipped/ignored even on error or on exceeding theesholds
 
 	HAProxySettings     HAProxyConfigurationSettings // If list of servers is to be acquired via HAProxy, provide this field
 	StaticHostsSettings StaticHostsConfigurationSettings
@@ -41,6 +42,7 @@ type MySQLConfigurationSettings struct {
 	MetricQuery       string
 	ThrottleThreshold float64
 	Port              int // Specify if different than 3306; applies to all clusters
+	IgnoreHostsCount  int // Number of hosts that can be skipped/ignored even on error or on exceeding theesholds
 
 	Clusters map[string](*MySQLClusterConfigurationSettings) // cluster name -> cluster config
 }
@@ -78,6 +80,9 @@ func (settings *MySQLConfigurationSettings) postReadAdjustments() error {
 		}
 		if clusterSettings.Port == 0 {
 			clusterSettings.Port = settings.Port
+		}
+		if clusterSettings.IgnoreHostsCount == 0 {
+			clusterSettings.IgnoreHostsCount = settings.IgnoreHostsCount
 		}
 	}
 	return nil

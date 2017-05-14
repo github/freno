@@ -3,6 +3,7 @@ package throttle
 import (
 	"fmt"
 	"math/rand"
+	"sort"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -198,8 +199,9 @@ func (throttler *Throttler) refreshMySQLInventory() error {
 				}
 				log.Debugf("Read %+v hosts from haproxy %s:%d/%s", len(hosts), clusterSettings.HAProxySettings.Host, clusterSettings.HAProxySettings.Port, clusterSettings.HAProxySettings.PoolName)
 				clusterProbes := &mysql.ClusterProbes{
-					ClusterName: clusterName,
-					Probes:      mysql.NewProbes(),
+					ClusterName:      clusterName,
+					IgnoreHostsCount: clusterSettings.IgnoreHostsCount,
+					Probes:           mysql.NewProbes(),
 				}
 				for _, host := range hosts {
 					key := mysql.InstanceKey{Hostname: host, Port: clusterSettings.Port}
@@ -233,6 +235,7 @@ func (throttler *Throttler) refreshMySQLInventory() error {
 func (throttler *Throttler) updateMySQLClusterProbes(clusterProbes *mysql.ClusterProbes) error {
 	log.Debugf("onMySQLClusterProbes: %s", clusterProbes.ClusterName)
 	throttler.mysqlInventory.ClustersProbes[clusterProbes.ClusterName] = clusterProbes.Probes
+	throttler.mysqlInventory.IgnoreHostsCount[clusterProbes.ClusterName] = clusterProbes.IgnoreHostsCount
 	return nil
 }
 
@@ -243,14 +246,14 @@ func (throttler *Throttler) aggregateMySQLMetrics() error {
 	}
 	for clusterName, probes := range throttler.mysqlInventory.ClustersProbes {
 		metricName := fmt.Sprintf("mysql/%s", clusterName)
+		ignoreHostsCount := throttler.mysqlInventory.IgnoreHostsCount[clusterName]
 		aggregatedMetric := func() (worstMetric base.MetricResult) {
-			var worstMetricValue float64
-
 			// probes is known not to change. It can be *replaced*, but not changed.
 			// so it's safe to iterate it
 			if len(*probes) == 0 {
 				return base.NoHostsMetricResult
 			}
+			probeValues := make([]float64, len(*probes))
 			for _, probe := range *probes {
 				instanceMetricResult, ok := throttler.mysqlInventory.InstanceKeyMetrics[probe.Key]
 				if !ok {
@@ -259,13 +262,27 @@ func (throttler *Throttler) aggregateMySQLMetrics() error {
 
 				value, err := instanceMetricResult.Get()
 				if err != nil {
+					if ignoreHostsCount > 0 {
+						// ok to skip this error
+						ignoreHostsCount = ignoreHostsCount - 1
+						continue
+					}
 					return instanceMetricResult
 				}
-				if value >= worstMetricValue {
-					worstMetricValue = value
-					worstMetric = instanceMetricResult
-				}
+
+				// No error
+				probeValues = append(probeValues, value)
 			}
+			// If we got here, that means no errors (or good to skip errors)
+			sort.Float64s(probeValues)
+			for ignoreHostsCount > 0 {
+				if len(probeValues) > 1 {
+					probeValues = probeValues[0 : len(probeValues)-1]
+				}
+				ignoreHostsCount = ignoreHostsCount - 1
+			}
+			worstValue := probeValues[len(probeValues)-1]
+			worstMetric = base.NewSimpleMetricResult(worstValue)
 			return worstMetric
 		}()
 		go throttler.aggregatedMetrics.Set(metricName, aggregatedMetric, cache.DefaultExpiration)
