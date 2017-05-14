@@ -38,7 +38,7 @@ func TestAggregateMySQLProbesNoErrors(t *testing.T) {
 		key5: base.NewSimpleMetricResult(1.1),
 	}
 	var probes mysql.Probes = map[mysql.InstanceKey](*mysql.Probe){}
-	for key, _ := range instanceResultsMap {
+	for key := range instanceResultsMap {
 		probes[key] = &mysql.Probe{Key: key}
 	}
 	{
@@ -90,7 +90,7 @@ func TestAggregateMySQLProbesWithErrors(t *testing.T) {
 		key5: base.NewSimpleMetricResult(1.1),
 	}
 	var probes mysql.Probes = map[mysql.InstanceKey](*mysql.Probe){}
-	for key, _ := range instanceResultsMap {
+	for key := range instanceResultsMap {
 		probes[key] = &mysql.Probe{Key: key}
 	}
 	{
