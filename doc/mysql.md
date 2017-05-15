@@ -36,6 +36,7 @@ You will find the top-level configuration:
   "Password": "${mysql_password_env_variable}",
   "MetricQuery": "select unix_timestamp(now(6)) - unix_timestamp(ts) as lag_check from meta.heartbeat order by ts desc limit 1",
   "ThrottleThreshold": 1.0,
+  "IgnoreHostsCount": 0,
   "Clusters": {
   }
 }
@@ -51,6 +52,7 @@ These params apply in general to all MySQL clusters, unless specified differentl
   - Note: the sefault time unit for replication lag is _seconds_
 - `ThrottleThreshold`: an upper limit for valid collected values. If value collected (via `MetricQuery`) is below or equal to `ThrottleThreshold`, cluster is considered to be good to write to. If higher, then cluster writes will need to be throttled.
   - Note: use _seconds_ as replication lag time unit. In the above we throttle above `1.0` seconds.
+- `IgnoreHostsCount`: number of hosts that can be ignored while aggregating cluster's values. For example, if `IgnoreHostsCount` is `2`, then up to `2` hosts that have errors are silently ignored. Or, if there's no errors, the two highest values will be ignored (so if these two values exceed the cluster's threshold, `freno` may still be happy to allow writes to the cluster).
 
 Looking at clusters configuration:
 
@@ -67,6 +69,7 @@ Looking at clusters configuration:
   "local": {
     "User": "msandbox",
     "Password": "msandbox",
+    "IgnoreHostsCount": 1,
     "StaticHostsSettings" : {
         "Hosts": [
           "127.0.0.1:22293",
@@ -84,7 +87,7 @@ Noteworthy:
 
 - `prod4` chooses to (but doesn't have to) override the `ThrottleThreshold` to `0.8` seconds
 - `prod4` list of servers is dictated by `HAProxy`. `freno` will routinely and dynamically poll given HAProxy server for list of hosts. These will include any hosts not in `NOLB`.
-- `local` cluster chooses to override `User` & `Password`.
+- `local` cluster chooses to override `User`, `Password` and `IgnoreHostsCount`.
 - `local` cluster defines a static list of hosts.
 
 
