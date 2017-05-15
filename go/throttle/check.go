@@ -61,7 +61,7 @@ func (check *ThrottlerCheck) Check(appName string, storeType string, storeName s
 	case "mysql":
 		{
 			metricResultFunc = func() (metricResult base.MetricResult, threshold float64) {
-				return check.throttler.GetMySQLClusterMetrics(storeName)
+				return check.throttler.getMySQLClusterMetrics(storeName)
 			}
 		}
 	}
