@@ -28,8 +28,6 @@ func init() {
 }
 
 func TestAggregateMySQLProbesNoErrors(t *testing.T) {
-	throttler := NewThrottler(func() bool { return false })
-
 	instanceResultsMap := mysql.InstanceMetricResultMap{
 		key1: base.NewSimpleMetricResult(1.2),
 		key2: base.NewSimpleMetricResult(1.7),
@@ -42,37 +40,37 @@ func TestAggregateMySQLProbesNoErrors(t *testing.T) {
 		probes[key] = &mysql.Probe{Key: key}
 	}
 	{
-		worstMetric := throttler.aggregateMySQLProbes(&probes, instanceResultsMap, 0)
+		worstMetric := aggregateMySQLProbes(&probes, instanceResultsMap, 0)
 		value, err := worstMetric.Get()
 		test.S(t).ExpectNil(err)
 		test.S(t).ExpectEquals(value, 1.7)
 	}
 	{
-		worstMetric := throttler.aggregateMySQLProbes(&probes, instanceResultsMap, 1)
+		worstMetric := aggregateMySQLProbes(&probes, instanceResultsMap, 1)
 		value, err := worstMetric.Get()
 		test.S(t).ExpectNil(err)
 		test.S(t).ExpectEquals(value, 1.2)
 	}
 	{
-		worstMetric := throttler.aggregateMySQLProbes(&probes, instanceResultsMap, 2)
+		worstMetric := aggregateMySQLProbes(&probes, instanceResultsMap, 2)
 		value, err := worstMetric.Get()
 		test.S(t).ExpectNil(err)
 		test.S(t).ExpectEquals(value, 1.1)
 	}
 	{
-		worstMetric := throttler.aggregateMySQLProbes(&probes, instanceResultsMap, 3)
+		worstMetric := aggregateMySQLProbes(&probes, instanceResultsMap, 3)
 		value, err := worstMetric.Get()
 		test.S(t).ExpectNil(err)
 		test.S(t).ExpectEquals(value, 0.6)
 	}
 	{
-		worstMetric := throttler.aggregateMySQLProbes(&probes, instanceResultsMap, 4)
+		worstMetric := aggregateMySQLProbes(&probes, instanceResultsMap, 4)
 		value, err := worstMetric.Get()
 		test.S(t).ExpectNil(err)
 		test.S(t).ExpectEquals(value, 0.3)
 	}
 	{
-		worstMetric := throttler.aggregateMySQLProbes(&probes, instanceResultsMap, 5)
+		worstMetric := aggregateMySQLProbes(&probes, instanceResultsMap, 5)
 		value, err := worstMetric.Get()
 		test.S(t).ExpectNil(err)
 		test.S(t).ExpectEquals(value, 0.3)
@@ -80,8 +78,6 @@ func TestAggregateMySQLProbesNoErrors(t *testing.T) {
 }
 
 func TestAggregateMySQLProbesWithErrors(t *testing.T) {
-	throttler := NewThrottler(func() bool { return false })
-
 	instanceResultsMap := mysql.InstanceMetricResultMap{
 		key1: base.NewSimpleMetricResult(1.2),
 		key2: base.NewSimpleMetricResult(1.7),
@@ -94,19 +90,19 @@ func TestAggregateMySQLProbesWithErrors(t *testing.T) {
 		probes[key] = &mysql.Probe{Key: key}
 	}
 	{
-		worstMetric := throttler.aggregateMySQLProbes(&probes, instanceResultsMap, 0)
+		worstMetric := aggregateMySQLProbes(&probes, instanceResultsMap, 0)
 		_, err := worstMetric.Get()
 		test.S(t).ExpectNotNil(err)
 		test.S(t).ExpectEquals(err, base.NoSuchMetricError)
 	}
 	{
-		worstMetric := throttler.aggregateMySQLProbes(&probes, instanceResultsMap, 1)
+		worstMetric := aggregateMySQLProbes(&probes, instanceResultsMap, 1)
 		value, err := worstMetric.Get()
 		test.S(t).ExpectNil(err)
 		test.S(t).ExpectEquals(value, 1.7)
 	}
 	{
-		worstMetric := throttler.aggregateMySQLProbes(&probes, instanceResultsMap, 2)
+		worstMetric := aggregateMySQLProbes(&probes, instanceResultsMap, 2)
 		value, err := worstMetric.Get()
 		test.S(t).ExpectNil(err)
 		test.S(t).ExpectEquals(value, 1.2)
@@ -114,19 +110,19 @@ func TestAggregateMySQLProbesWithErrors(t *testing.T) {
 
 	instanceResultsMap[key1] = base.NoSuchMetric
 	{
-		worstMetric := throttler.aggregateMySQLProbes(&probes, instanceResultsMap, 0)
+		worstMetric := aggregateMySQLProbes(&probes, instanceResultsMap, 0)
 		_, err := worstMetric.Get()
 		test.S(t).ExpectNotNil(err)
 		test.S(t).ExpectEquals(err, base.NoSuchMetricError)
 	}
 	{
-		worstMetric := throttler.aggregateMySQLProbes(&probes, instanceResultsMap, 1)
+		worstMetric := aggregateMySQLProbes(&probes, instanceResultsMap, 1)
 		_, err := worstMetric.Get()
 		test.S(t).ExpectNotNil(err)
 		test.S(t).ExpectEquals(err, base.NoSuchMetricError)
 	}
 	{
-		worstMetric := throttler.aggregateMySQLProbes(&probes, instanceResultsMap, 2)
+		worstMetric := aggregateMySQLProbes(&probes, instanceResultsMap, 2)
 		value, err := worstMetric.Get()
 		test.S(t).ExpectNil(err)
 		test.S(t).ExpectEquals(value, 1.7)
