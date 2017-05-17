@@ -43,3 +43,15 @@ func (metricResult *noSuchMetric) Get() (float64, error) {
 }
 
 var NoSuchMetric = &noSuchMetric{}
+
+type simpleMetricResult struct {
+	Value float64
+}
+
+func NewSimpleMetricResult(value float64) MetricResult {
+	return &simpleMetricResult{Value: value}
+}
+
+func (metricResult *simpleMetricResult) Get() (float64, error) {
+	return metricResult.Value, nil
+}

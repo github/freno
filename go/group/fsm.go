@@ -2,7 +2,6 @@ package group
 
 import (
 	"encoding/json"
-	"fmt"
 	"io"
 	"time"
 
@@ -18,7 +17,7 @@ type fsm Store
 func (f *fsm) Apply(l *raft.Log) interface{} {
 	var c command
 	if err := json.Unmarshal(l.Data, &c); err != nil {
-		panic(fmt.Sprintf("failed to unmarshal command: %s", err.Error()))
+		log.Errorf("failed to unmarshal command: %s", err.Error())
 	}
 
 	log.Debugf("freno/raft: applying command: %+v", c)
@@ -27,9 +26,8 @@ func (f *fsm) Apply(l *raft.Log) interface{} {
 		return f.applyThrottleApp(c.Key, c.ExpireAt, c.Ratio)
 	case "unthrottle":
 		return f.applyUnthrottleApp(c.Key)
-	default:
-		panic(fmt.Sprintf("unrecognized command operation: %s", c.Operation))
 	}
+	return log.Errorf("unrecognized command operation: %s", c.Operation)
 }
 
 // Snapshot returns a snapshot object of freno's state

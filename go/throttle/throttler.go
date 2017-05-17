@@ -198,8 +198,9 @@ func (throttler *Throttler) refreshMySQLInventory() error {
 				}
 				log.Debugf("Read %+v hosts from haproxy %s:%d/%s", len(hosts), clusterSettings.HAProxySettings.Host, clusterSettings.HAProxySettings.Port, clusterSettings.HAProxySettings.PoolName)
 				clusterProbes := &mysql.ClusterProbes{
-					ClusterName: clusterName,
-					Probes:      mysql.NewProbes(),
+					ClusterName:      clusterName,
+					IgnoreHostsCount: clusterSettings.IgnoreHostsCount,
+					Probes:           mysql.NewProbes(),
 				}
 				for _, host := range hosts {
 					key := mysql.InstanceKey{Hostname: host, Port: clusterSettings.Port}
@@ -233,6 +234,7 @@ func (throttler *Throttler) refreshMySQLInventory() error {
 func (throttler *Throttler) updateMySQLClusterProbes(clusterProbes *mysql.ClusterProbes) error {
 	log.Debugf("onMySQLClusterProbes: %s", clusterProbes.ClusterName)
 	throttler.mysqlInventory.ClustersProbes[clusterProbes.ClusterName] = clusterProbes.Probes
+	throttler.mysqlInventory.IgnoreHostsCount[clusterProbes.ClusterName] = clusterProbes.IgnoreHostsCount
 	return nil
 }
 
@@ -243,31 +245,8 @@ func (throttler *Throttler) aggregateMySQLMetrics() error {
 	}
 	for clusterName, probes := range throttler.mysqlInventory.ClustersProbes {
 		metricName := fmt.Sprintf("mysql/%s", clusterName)
-		aggregatedMetric := func() (worstMetric base.MetricResult) {
-			var worstMetricValue float64
-
-			// probes is known not to change. It can be *replaced*, but not changed.
-			// so it's safe to iterate it
-			if len(*probes) == 0 {
-				return base.NoHostsMetricResult
-			}
-			for _, probe := range *probes {
-				instanceMetricResult, ok := throttler.mysqlInventory.InstanceKeyMetrics[probe.Key]
-				if !ok {
-					return base.NoMetricResultYet
-				}
-
-				value, err := instanceMetricResult.Get()
-				if err != nil {
-					return instanceMetricResult
-				}
-				if value >= worstMetricValue {
-					worstMetricValue = value
-					worstMetric = instanceMetricResult
-				}
-			}
-			return worstMetric
-		}()
+		ignoreHostsCount := throttler.mysqlInventory.IgnoreHostsCount[clusterName]
+		aggregatedMetric := aggregateMySQLProbes(probes, throttler.mysqlInventory.InstanceKeyMetrics, ignoreHostsCount)
 		go throttler.aggregatedMetrics.Set(metricName, aggregatedMetric, cache.DefaultExpiration)
 	}
 	return nil
@@ -285,7 +264,14 @@ func (throttler *Throttler) pushStatusToExpVar() {
 	}
 }
 
-func (throttler *Throttler) GetMySQLClusterMetrics(clusterName string) (metricResult base.MetricResult, threshold float64) {
+func (throttler *Throttler) getNamedMetric(metricName string) (metricResult base.MetricResult) {
+	if metricResultVal, found := throttler.aggregatedMetrics.Get(metricName); found {
+		return metricResultVal.(base.MetricResult)
+	}
+	return base.NoSuchMetric
+}
+
+func (throttler *Throttler) getMySQLClusterMetrics(clusterName string) (metricResult base.MetricResult, threshold float64) {
 	if thresholdVal, found := throttler.mysqlClusterThresholds.Get(clusterName); found {
 		threshold, _ = thresholdVal.(float64)
 	} else {
@@ -293,12 +279,7 @@ func (throttler *Throttler) GetMySQLClusterMetrics(clusterName string) (metricRe
 	}
 
 	metricName := fmt.Sprintf("mysql/%s", clusterName)
-	if metricResultVal, found := throttler.aggregatedMetrics.Get(metricName); found {
-		metricResult = metricResultVal.(base.MetricResult)
-	} else {
-		return base.NoSuchMetric, 0
-	}
-	return metricResult, threshold
+	return throttler.getNamedMetric(metricName), threshold
 }
 
 func (throttler *Throttler) aggregatedMetricsSnapshot() map[string]base.MetricResult {
