@@ -87,6 +87,16 @@ Notes:
 - `/leader-check`: returns `HTTP 200` when the node is the `raft` leader, or `404` otherwise.
 - `/hostname`: node host name
 
+### Specialized requests
+
+- `/check-read/<app>/<store-type>/<store-name>/<threshold>`: a specialized check to see whether current value is lower than given threshold.
+
+  As an example, consider `/check-read/archive/mysql/main1/2.5`. This checks whether the current `mysql/main1` store's value is smaller than or equals to `2.5`. The store's configured threshold value is ignored and not tested in this check.
+
+  This read-check _should not be used to approve writes_. Writes should only be approved by using the `/check` request.
+
+  However this check is known to be useful, at least in one common scenario: a monitoring of a MySQL cluster based on replication lag. In such case, we may have write requests followed by read requests. We may happen to know the elapsed time between write & read. As an example, say `2.5s` have passed between the write and read. The check `/check-read/archive/mysql/main1/2.5` confirms or denies that relevant replicas are up-to-date for the `2.5s` elapsed time. We can therefore read from the replicas and safely expect to find the data we wrote `2.5s` ago on the master.
+
 ### Other requests
 
 - `/help`: show all supported request paths

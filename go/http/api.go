@@ -144,7 +144,17 @@ func (api *APIImpl) Check(w http.ResponseWriter, r *http.Request, ps httprouter.
 		remoteAddr = r.RemoteAddr
 		remoteAddr = strings.Split(remoteAddr, ":")[0]
 	}
-	checkResult := api.throttlerCheck.Check(appName, storeType, storeName, remoteAddr)
+
+	var overrideThreshold float64
+	if overrideThresholdParam := ps.ByName("threshold"); overrideThresholdParam != "" {
+		var err error
+		if overrideThreshold, err = strconv.ParseFloat(overrideThresholdParam, 64); err != nil {
+			api.respondGeneric(w, r, err)
+			return
+		}
+	}
+
+	checkResult := api.throttlerCheck.Check(appName, storeType, storeName, remoteAddr, overrideThreshold)
 
 	api.respondToCheckRequest(w, r, checkResult)
 }
@@ -266,6 +276,7 @@ func ConfigureRoutes(api API) *httprouter.Router {
 	register(router, "/hostname", api.Hostname)
 
 	register(router, "/check/:app/:storeType/:storeName", api.Check)
+	register(router, "/check-read/:app/:storeType/:storeName/:threshold", api.Check)
 	register(router, "/aggregated-metrics", api.AggregatedMetrics)
 
 	register(router, "/throttle-app/:app", api.ThrottleApp)
