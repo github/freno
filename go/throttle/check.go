@@ -100,7 +100,15 @@ func (check *ThrottlerCheck) localCheck(appName string, metricName string) (chec
 	}
 	storeType := metricTokens[0]
 	storeName := metricTokens[1]
-	return check.Check(appName, storeType, storeName, "local")
+	checkResult = check.Check(appName, storeType, storeName, "local")
+
+	if checkResult.StatusCode == http.StatusOK {
+		check.throttler.markLastOK(metricName)
+	}
+	timeSinceLastOK := check.throttler.timeSinceLastMetricOK(metricName)
+	metrics.GetOrRegisterGauge(fmt.Sprintf("check.%s.%s.seconds_since_ok", storeType, storeName), nil).Update(int64(timeSinceLastOK.Seconds()))
+
+	return checkResult
 }
 
 // AggregatedMetrics is a convenience acces method into throttler's `aggregatedMetricsSnapshot`
