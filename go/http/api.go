@@ -24,7 +24,8 @@ type API interface {
 	RaftLeader(w http.ResponseWriter, _ *http.Request, _ httprouter.Params)
 	RaftState(w http.ResponseWriter, _ *http.Request, _ httprouter.Params)
 	Hostname(w http.ResponseWriter, _ *http.Request, _ httprouter.Params)
-	Check(w http.ResponseWriter, r *http.Request, _ httprouter.Params)
+	WriteCheck(w http.ResponseWriter, r *http.Request, _ httprouter.Params)
+	ReadCheck(w http.ResponseWriter, r *http.Request, _ httprouter.Params)
 	AggregatedMetrics(w http.ResponseWriter, r *http.Request, _ httprouter.Params)
 	ThrottleApp(w http.ResponseWriter, r *http.Request, _ httprouter.Params)
 	UnthrottleApp(w http.ResponseWriter, r *http.Request, _ httprouter.Params)
@@ -134,8 +135,8 @@ func (api *APIImpl) respondToCheckRequest(w http.ResponseWriter, r *http.Request
 	}
 }
 
-// CheckMySQLCluster checks whether a cluster's collected metric is within its threshold
-func (api *APIImpl) Check(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
+// Check checks whether a collected metric is within its threshold
+func (api *APIImpl) check(w http.ResponseWriter, r *http.Request, ps httprouter.Params, overrideThreshold float64) {
 	appName := ps.ByName("app")
 	storeType := ps.ByName("storeType")
 	storeName := ps.ByName("storeName")
@@ -145,18 +146,23 @@ func (api *APIImpl) Check(w http.ResponseWriter, r *http.Request, ps httprouter.
 		remoteAddr = strings.Split(remoteAddr, ":")[0]
 	}
 
-	var overrideThreshold float64
-	if overrideThresholdParam := ps.ByName("threshold"); overrideThresholdParam != "" {
-		var err error
-		if overrideThreshold, err = strconv.ParseFloat(overrideThresholdParam, 64); err != nil {
-			api.respondGeneric(w, r, err)
-			return
-		}
-	}
-
 	checkResult := api.throttlerCheck.Check(appName, storeType, storeName, remoteAddr, overrideThreshold)
 
 	api.respondToCheckRequest(w, r, checkResult)
+}
+
+// WriteCheck
+func (api *APIImpl) WriteCheck(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
+	api.check(w, r, ps, 0)
+}
+
+// ReadCheck
+func (api *APIImpl) ReadCheck(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
+	if overrideThreshold, err := strconv.ParseFloat(ps.ByName("threshold"), 64); err != nil {
+		api.respondGeneric(w, r, err)
+	} else {
+		api.check(w, r, ps, overrideThreshold)
+	}
 }
 
 // AggregatedMetrics returns a snapshot of all current aggregated metrics
@@ -275,8 +281,8 @@ func ConfigureRoutes(api API) *httprouter.Router {
 	register(router, "/raft/state", api.RaftState)
 	register(router, "/hostname", api.Hostname)
 
-	register(router, "/check/:app/:storeType/:storeName", api.Check)
-	register(router, "/check-read/:app/:storeType/:storeName/:threshold", api.Check)
+	register(router, "/check/:app/:storeType/:storeName", api.WriteCheck)
+	register(router, "/check-read/:app/:storeType/:storeName/:threshold", api.ReadCheck)
 	register(router, "/aggregated-metrics", api.AggregatedMetrics)
 
 	register(router, "/throttle-app/:app", api.ThrottleApp)
