@@ -25,8 +25,11 @@ func NewThrottlerCheck(throttler *Throttler) *ThrottlerCheck {
 }
 
 // checkAppMetricResult allows an app to check on a metric
-func (check *ThrottlerCheck) checkAppMetricResult(appName string, metricResultFunc base.MetricResultFunc) (checkResult *CheckResult) {
+func (check *ThrottlerCheck) checkAppMetricResult(appName string, metricResultFunc base.MetricResultFunc, overrideThreshold float64) (checkResult *CheckResult) {
 	metricResult, threshold := check.throttler.AppRequestMetricResult(appName, metricResultFunc)
+	if overrideThreshold > 0 {
+		threshold = overrideThreshold
+	}
 	value, err := metricResult.Get()
 	if appName == "" {
 		return NewCheckResult(http.StatusExpectationFailed, value, threshold, fmt.Errorf("no app indicated"))
@@ -55,7 +58,7 @@ func (check *ThrottlerCheck) checkAppMetricResult(appName string, metricResultFu
 }
 
 // CheckAppStoreMetric
-func (check *ThrottlerCheck) Check(appName string, storeType string, storeName string, remoteAddr string) (checkResult *CheckResult) {
+func (check *ThrottlerCheck) Check(appName string, storeType string, storeName string, remoteAddr string, overrideThreshold float64) (checkResult *CheckResult) {
 	var metricResultFunc base.MetricResultFunc
 	switch storeType {
 	case "mysql":
@@ -69,7 +72,7 @@ func (check *ThrottlerCheck) Check(appName string, storeType string, storeName s
 		return NoSuchMetricCheckResult
 	}
 
-	checkResult = check.checkAppMetricResult(appName, metricResultFunc)
+	checkResult = check.checkAppMetricResult(appName, metricResultFunc, overrideThreshold)
 
 	go func(statusCode int) {
 		metrics.GetOrRegisterCounter("check.any.total", nil).Inc(1)
@@ -100,7 +103,7 @@ func (check *ThrottlerCheck) localCheck(appName string, metricName string) (chec
 	}
 	storeType := metricTokens[0]
 	storeName := metricTokens[1]
-	checkResult = check.Check(appName, storeType, storeName, "local")
+	checkResult = check.Check(appName, storeType, storeName, "local", 0)
 
 	if checkResult.StatusCode == http.StatusOK {
 		check.throttler.markLastOK(metricName)
