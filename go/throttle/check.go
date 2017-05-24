@@ -106,10 +106,10 @@ func (check *ThrottlerCheck) localCheck(appName string, metricName string) (chec
 	checkResult = check.Check(appName, storeType, storeName, "local", 0)
 
 	if checkResult.StatusCode == http.StatusOK {
-		check.throttler.markLastOK(metricName)
+		check.throttler.markMetricHealthy(metricName)
 	}
-	timeSinceLastOK := check.throttler.timeSinceLastMetricOK(metricName)
-	metrics.GetOrRegisterGauge(fmt.Sprintf("check.%s.%s.seconds_since_ok", storeType, storeName), nil).Update(int64(timeSinceLastOK.Seconds()))
+	timeSinceLastOK := check.throttler.timeSinceMetricHealthy(metricName)
+	metrics.GetOrRegisterGauge(fmt.Sprintf("check.%s.%s.seconds_since_healthy", storeType, storeName), nil).Update(int64(timeSinceLastOK.Seconds()))
 
 	return checkResult
 }
@@ -117,6 +117,11 @@ func (check *ThrottlerCheck) localCheck(appName string, metricName string) (chec
 // AggregatedMetrics is a convenience acces method into throttler's `aggregatedMetricsSnapshot`
 func (check *ThrottlerCheck) AggregatedMetrics() map[string]base.MetricResult {
 	return check.throttler.aggregatedMetricsSnapshot()
+}
+
+// MetricsHealth is a convenience acces method into throttler's `metricsHealthSnapshot`
+func (check *ThrottlerCheck) MetricsHealth() map[string](*base.MetricHealth) {
+	return check.throttler.metricsHealthSnapshot()
 }
 
 func (check *ThrottlerCheck) SelfChecks() {
