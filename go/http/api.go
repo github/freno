@@ -27,6 +27,7 @@ type API interface {
 	WriteCheck(w http.ResponseWriter, r *http.Request, _ httprouter.Params)
 	ReadCheck(w http.ResponseWriter, r *http.Request, _ httprouter.Params)
 	AggregatedMetrics(w http.ResponseWriter, r *http.Request, _ httprouter.Params)
+	MetricsHealth(w http.ResponseWriter, r *http.Request, _ httprouter.Params)
 	ThrottleApp(w http.ResponseWriter, r *http.Request, _ httprouter.Params)
 	UnthrottleApp(w http.ResponseWriter, r *http.Request, _ httprouter.Params)
 	ThrottledApps(w http.ResponseWriter, r *http.Request, _ httprouter.Params)
@@ -181,6 +182,13 @@ func (api *APIImpl) AggregatedMetrics(w http.ResponseWriter, r *http.Request, ps
 	json.NewEncoder(w).Encode(responseMap)
 }
 
+// MetricsHealth returns the time since last "OK" check per-metric
+func (api *APIImpl) MetricsHealth(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
+	w.Header().Set("Content-Type", "application/json")
+	metricsHealth := api.throttlerCheck.MetricsHealth()
+	json.NewEncoder(w).Encode(metricsHealth)
+}
+
 // ThrottleApp forcibly marks given app as throttled. Future requests by this app may be denied.
 func (api *APIImpl) ThrottleApp(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 	appName := ps.ByName("app")
@@ -283,7 +291,9 @@ func ConfigureRoutes(api API) *httprouter.Router {
 
 	register(router, "/check/:app/:storeType/:storeName", api.WriteCheck)
 	register(router, "/check-read/:app/:storeType/:storeName/:threshold", api.ReadCheck)
+
 	register(router, "/aggregated-metrics", api.AggregatedMetrics)
+	register(router, "/metrics-health", api.MetricsHealth)
 
 	register(router, "/throttle-app/:app", api.ThrottleApp)
 	register(router, "/throttle-app/:app/ratio/:ratio", api.ThrottleApp)

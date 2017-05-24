@@ -50,6 +50,7 @@ type Throttler struct {
 	aggregatedMetrics      *cache.Cache
 	throttledApps          *cache.Cache
 	recentApps             *cache.Cache
+	metricsHealth          *cache.Cache
 
 	throttledAppsMutex sync.Mutex
 }
@@ -69,6 +70,7 @@ func NewThrottler(isLeaderFunc func() bool) *Throttler {
 		mysqlClusterThresholds: cache.New(cache.NoExpiration, 0),
 		aggregatedMetrics:      cache.New(aggregatedMetricsExpiration, aggregatedMetricsCleanup),
 		recentApps:             cache.New(recentAppsExpiration, time.Minute),
+		metricsHealth:          cache.New(cache.NoExpiration, 0),
 	}
 	throttler.ThrottleApp("abusing-app", time.Now().Add(time.Hour*24*365*10), DefaultThrottleRatio)
 	return throttler
@@ -373,6 +375,28 @@ func (throttler *Throttler) RecentAppsMap() (result map[string](*base.RecentApp)
 		result[recentAppKey] = recentApp
 	}
 	return result
+}
+
+// markMetricHealthy will mark the time "now" as the last time a given metric was checked to be "OK"
+func (throttler *Throttler) markMetricHealthy(metricName string) {
+	throttler.metricsHealth.Set(metricName, time.Now(), cache.DefaultExpiration)
+}
+
+// timeSinceMetricHealthy returns time elapsed since the last time a metric checked "OK"
+func (throttler *Throttler) timeSinceMetricHealthy(metricName string) (timeSinceHealthy time.Duration, found bool) {
+	if lastOKTime, found := throttler.metricsHealth.Get(metricName); found {
+		return time.Since(lastOKTime.(time.Time)), true
+	}
+	return 0, false
+}
+
+func (throttler *Throttler) metricsHealthSnapshot() map[string](*base.MetricHealth) {
+	snapshot := make(map[string](*base.MetricHealth))
+	for key, value := range throttler.metricsHealth.Items() {
+		lastHealthyAt, _ := value.Object.(time.Time)
+		snapshot[key] = base.NewMetricHealth(lastHealthyAt)
+	}
+	return snapshot
 }
 
 func (throttler *Throttler) AppRequestMetricResult(appName string, metricResultFunc base.MetricResultFunc) (metricResult base.MetricResult, threshold float64) {
