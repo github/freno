@@ -108,8 +108,9 @@ func (check *ThrottlerCheck) localCheck(appName string, metricName string) (chec
 	if checkResult.StatusCode == http.StatusOK {
 		check.throttler.markMetricHealthy(metricName)
 	}
-	timeSinceLastOK := check.throttler.timeSinceMetricHealthy(metricName)
-	metrics.GetOrRegisterGauge(fmt.Sprintf("check.%s.%s.seconds_since_healthy", storeType, storeName), nil).Update(int64(timeSinceLastOK.Seconds()))
+	if timeSinceHealthy, found := check.throttler.timeSinceMetricHealthy(metricName); found {
+		metrics.GetOrRegisterGauge(fmt.Sprintf("check.%s.%s.seconds_since_healthy", storeType, storeName), nil).Update(int64(timeSinceHealthy.Seconds()))
+	}
 
 	return checkResult
 }

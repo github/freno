@@ -383,13 +383,11 @@ func (throttler *Throttler) markMetricHealthy(metricName string) {
 }
 
 // timeSinceMetricHealthy returns time elapsed since the last time a metric checked "OK"
-func (throttler *Throttler) timeSinceMetricHealthy(metricName string) time.Duration {
+func (throttler *Throttler) timeSinceMetricHealthy(metricName string) (timeSinceHealthy time.Duration, found bool) {
 	if lastOKTime, found := throttler.metricsHealth.Get(metricName); found {
-		return time.Since(lastOKTime.(time.Time))
+		return time.Since(lastOKTime.(time.Time)), true
 	}
-	// Never been OK? This can happen; metric is bad ever since freno started running.
-	// There is no correct value to return here; we return a negative value to indicate "strange" or "Unknown"
-	return -time.Hour
+	return 0, false
 }
 
 func (throttler *Throttler) metricsHealthSnapshot() map[string](*base.MetricHealth) {
