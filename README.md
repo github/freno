@@ -106,4 +106,4 @@ This project is released under the [MIT LICENSE](LICENSE). Please note it includ
 
 ### Authors
 
-Authored by GitHub engineering
+Authored by GitHub Engineering
