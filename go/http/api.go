@@ -51,6 +51,7 @@ type APIImpl struct {
 	throttlerCheck   *throttle.ThrottlerCheck
 	consensusService group.ConsensusService
 	hostname         string
+	chatops          *Chatops
 }
 
 // NewAPIImpl creates a new instance of the API implementation
@@ -261,6 +262,20 @@ func (api *APIImpl) RecentApps(w http.ResponseWriter, r *http.Request, ps httpro
 func (api *APIImpl) Help(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(endpoints)
+}
+
+// ThrottledApps returns a snapshot of all currently throttled apps
+func (api *APIImpl) Chatops(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(api.chatops)
+}
+
+func (api *APIImpl) ConfigureChatops(router *httprouter.Router) {
+	api.chatops = NewChatops()
+	api.chatops.AddMethod("metrics", NewChatopsMethod("metrics", EmptyParams, "metrics", "all aggregated probed metrics"))
+
+	register(router, "/_chatops", api.Chatops)
+	register(router, "/_chatops/metrics", api.AggregatedMetrics)
 }
 
 // register is a wrapper function for accepting both GET and HEAD requests
