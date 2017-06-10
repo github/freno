@@ -92,11 +92,8 @@ type ConfigurationSettings struct {
 	RaftDataDir     string
 	DefaultRaftPort int      // if a RaftNodes entry does not specify port, use this one
 	RaftNodes       []string // Raft nodes to make initial connection with
-	// Debug                                        bool   // set debug mode (similar to --debug option)
-	// ListenSocket                                 string // Where freno HTTP should listen for unix socket (default: empty; when given, TCP is disabled)
-	// AnExampleSliceOfStrings                    []string // Add a comment here
-	// AnExampleMapOfStringsToStrings    map[string]string // Add a comment here
-	Stores StoresSettings
+	MemcacheServers []string // if given, freno will report to aggregated values to given memcache
+	Stores          StoresSettings
 }
 
 func newConfigurationSettings() *ConfigurationSettings {
