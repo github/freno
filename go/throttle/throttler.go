@@ -260,9 +260,9 @@ func (throttler *Throttler) aggregateMySQLMetrics() error {
 			go func() {
 				value, err := aggregatedMetric.Get()
 				if err != nil {
-					throttler.memcacheClient.Set(&memcache.Item{Key: metricName, Value: []byte("")})
+					throttler.memcacheClient.Delete(metricName)
 				} else {
-					throttler.memcacheClient.Set(&memcache.Item{Key: metricName, Value: []byte(fmt.Sprintf("%+v", value))})
+					throttler.memcacheClient.Set(&memcache.Item{Key: metricName, Value: []byte(fmt.Sprintf("%+v", value)), Expiration: 1})
 				}
 			}()
 		}
