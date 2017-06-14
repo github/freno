@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"fmt"
+
 	"github.com/github/freno/go/base"
 	metrics "github.com/rcrowley/go-metrics"
 )
@@ -28,7 +29,7 @@ func NewThrottlerCheck(throttler *Throttler) *ThrottlerCheck {
 func (check *ThrottlerCheck) checkAppMetricResult(appName string, metricResultFunc base.MetricResultFunc, overrideThreshold float64) (checkResult *CheckResult) {
 	metricResult, threshold := check.throttler.AppRequestMetricResult(appName, metricResultFunc)
 	if overrideThreshold > 0 {
-		threshold = overrideThreshold
+		threshold = overrideThreshold - float64(mysqlCollectInterval/time.Second)
 	}
 	value, err := metricResult.Get()
 	if appName == "" {
