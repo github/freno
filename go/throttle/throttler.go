@@ -263,7 +263,7 @@ func (throttler *Throttler) aggregateMySQLMetrics() error {
 					throttler.memcacheClient.Delete(metricName)
 				} else {
 					epochMillis := time.Now().UnixNano() / 1000000
-					entryVal := fmt.Sprintf("%d:%v", epochMillis, value)
+					entryVal := fmt.Sprintf("%d:%.6f", epochMillis, value)
 					throttler.memcacheClient.Set(&memcache.Item{Key: metricName, Value: []byte(entryVal), Expiration: 1})
 				}
 			}()
