@@ -16,6 +16,7 @@ import (
 	"github.com/outbrain/golib/log"
 	"github.com/patrickmn/go-cache"
 
+	"github.com/bradfitz/gomemcache/memcache"
 	metrics "github.com/rcrowley/go-metrics"
 )
 
@@ -52,6 +53,8 @@ type Throttler struct {
 	recentApps             *cache.Cache
 	metricsHealth          *cache.Cache
 
+	memcacheClient *memcache.Client
+
 	throttledAppsMutex sync.Mutex
 }
 
@@ -73,6 +76,9 @@ func NewThrottler(isLeaderFunc func() bool) *Throttler {
 		metricsHealth:          cache.New(cache.NoExpiration, 0),
 	}
 	throttler.ThrottleApp("abusing-app", time.Now().Add(time.Hour*24*365*10), DefaultThrottleRatio)
+	if memcacheServers := config.Settings().MemcacheServers; len(memcacheServers) > 0 {
+		throttler.memcacheClient = memcache.New(memcacheServers...)
+	}
 	return throttler
 }
 
@@ -250,6 +256,18 @@ func (throttler *Throttler) aggregateMySQLMetrics() error {
 		ignoreHostsCount := throttler.mysqlInventory.IgnoreHostsCount[clusterName]
 		aggregatedMetric := aggregateMySQLProbes(probes, throttler.mysqlInventory.InstanceKeyMetrics, ignoreHostsCount)
 		go throttler.aggregatedMetrics.Set(metricName, aggregatedMetric, cache.DefaultExpiration)
+		if throttler.memcacheClient != nil {
+			go func() {
+				value, err := aggregatedMetric.Get()
+				if err != nil {
+					throttler.memcacheClient.Delete(metricName)
+				} else {
+					epochMillis := time.Now().UnixNano() / 1000000
+					entryVal := fmt.Sprintf("%d:%.6f", epochMillis, value)
+					throttler.memcacheClient.Set(&memcache.Item{Key: metricName, Value: []byte(entryVal), Expiration: 1})
+				}
+			}()
+		}
 	}
 	return nil
 }
