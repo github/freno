@@ -284,22 +284,21 @@ func (throttler *Throttler) pushStatusToExpVar() {
 	}
 }
 
-func (throttler *Throttler) getNamedMetric(metricName string) (metricResult base.MetricResult) {
+func (throttler *Throttler) getNamedMetric(metricName string) base.MetricResult {
 	if metricResultVal, found := throttler.aggregatedMetrics.Get(metricName); found {
 		return metricResultVal.(base.MetricResult)
 	}
 	return base.NoSuchMetric
 }
 
-func (throttler *Throttler) getMySQLClusterMetrics(clusterName string) (metricResult base.MetricResult, threshold float64) {
+func (throttler *Throttler) getMySQLClusterMetrics(clusterName string) (base.MetricResult, float64) {
 	if thresholdVal, found := throttler.mysqlClusterThresholds.Get(clusterName); found {
-		threshold, _ = thresholdVal.(float64)
-	} else {
-		return base.NoSuchMetric, 0
+		threshold, _ := thresholdVal.(float64)
+		metricName := fmt.Sprintf("mysql/%s", clusterName)
+		return throttler.getNamedMetric(metricName), threshold
 	}
 
-	metricName := fmt.Sprintf("mysql/%s", clusterName)
-	return throttler.getNamedMetric(metricName), threshold
+	return base.NoSuchMetric, 0
 }
 
 func (throttler *Throttler) aggregatedMetricsSnapshot() map[string]base.MetricResult {
