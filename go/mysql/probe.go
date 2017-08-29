@@ -71,5 +71,5 @@ func (this *Probe) GetDBUri(databaseName string) string {
 		// Wrap IPv6 literals in square brackets
 		hostname = fmt.Sprintf("[%s]", hostname)
 	}
-	return fmt.Sprintf("%s:%s@tcp(%s:%d)/%s?charset=utf8mb4,utf8,latin1&timeout=%dms", this.User, this.Password, hostname, this.Key.Port, databaseName, timeoutMillis)
+	return fmt.Sprintf("%s:%s@tcp(%s:%d)/%s?interpolateParams=true&charset=utf8mb4,utf8,latin1&timeout=%dms", this.User, this.Password, hostname, this.Key.Port, databaseName, timeoutMillis)
 }
