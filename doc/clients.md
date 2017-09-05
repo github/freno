@@ -32,7 +32,7 @@ freno.replication_delay(app: :my_app, store_name: :my_cluster)
 # => 0.125
 ```
 
-### pt-archiver
+### pt-archiver / perl
 
 [pt-archiver](https://www.percona.com/doc/percona-toolkit/2.2/pt-archiver.html) is probably the most popular tool for archiving table data. `pt-archiver` can use `freno` with a plugin. A plugin is available on [FrenoThrottler.pm](../resources/pt-archiver/FrenoThrottler.pm). To make it usable, you will need to:
 
