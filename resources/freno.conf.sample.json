@@ -4,6 +4,7 @@
   "RaftDataDir": "/var/lib/freno",
   "RaftBind": "10.0.0.1",
   "RaftNodes": ["10.0.0.1", "10.0.0.2", "10.0.0.3"],
+  "MemcacheServers": [],
   "Stores": {
     "MySQL": {
       "User": "${mysql_user_env_variable}",

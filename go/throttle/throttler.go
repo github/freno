@@ -33,6 +33,8 @@ const recentAppsExpiration = time.Hour * 24
 const defaultThrottleTTL = 60 * time.Minute
 const DefaultThrottleRatio = 1.0
 
+const defaultMemcachePath = "freno"
+
 func init() {
 	rand.Seed(time.Now().UnixNano())
 }
@@ -54,6 +56,7 @@ type Throttler struct {
 	metricsHealth          *cache.Cache
 
 	memcacheClient *memcache.Client
+	memcachePath   string
 
 	throttledAppsMutex sync.Mutex
 }
@@ -78,6 +81,9 @@ func NewThrottler(isLeaderFunc func() bool) *Throttler {
 	throttler.ThrottleApp("abusing-app", time.Now().Add(time.Hour*24*365*10), DefaultThrottleRatio)
 	if memcacheServers := config.Settings().MemcacheServers; len(memcacheServers) > 0 {
 		throttler.memcacheClient = memcache.New(memcacheServers...)
+	}
+	if throttler.memcachePath = config.Settings().MemcachePath; throttler.memcachePath == "" {
+		throttler.memcachePath = defaultMemcachePath
 	}
 	return throttler
 }
@@ -258,13 +264,14 @@ func (throttler *Throttler) aggregateMySQLMetrics() error {
 		go throttler.aggregatedMetrics.Set(metricName, aggregatedMetric, cache.DefaultExpiration)
 		if throttler.memcacheClient != nil {
 			go func() {
+				memcacheKey := fmt.Sprintf("%s/%s", throttler.memcachePath, metricName)
 				value, err := aggregatedMetric.Get()
 				if err != nil {
-					throttler.memcacheClient.Delete(metricName)
+					throttler.memcacheClient.Delete(memcacheKey)
 				} else {
 					epochMillis := time.Now().UnixNano() / 1000000
 					entryVal := fmt.Sprintf("%d:%.6f", epochMillis, value)
-					throttler.memcacheClient.Set(&memcache.Item{Key: metricName, Value: []byte(entryVal), Expiration: 1})
+					throttler.memcacheClient.Set(&memcache.Item{Key: memcacheKey, Value: []byte(entryVal), Expiration: 1})
 				}
 			}()
 		}

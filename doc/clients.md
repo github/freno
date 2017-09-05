@@ -11,6 +11,8 @@ Clients can be expected to issue many requests per second. `freno` is lightweigh
 
 It makes sense to hit `freno` in the whereabouts of the granularity one is looking at. If your client is to throttle on a `1000ms` replication lag, checking `freno` `200` times per sec may be overdoing it. However if you wish to keep your clients naive and without caching this should be fine.
 
+It is also possible to ask `freno` to write metrics to [memcache](memcache.md), in which case clients can read metrics directly using their favorite `memcache` client.
+
 # Usage samples
 
 
