@@ -39,7 +39,7 @@ Read more about [freno and MySQL throttling](doc/mysql.md)
 
 `freno` is useful for bulk operations: massive loading/archiving tasks, schema migrations, mass updates. Such operations typically walk through thousands to millions of rows and may cause undesired effects such as MySQL replication lags. By breaking these tasks to small subtasks (e.g. `100` rows at a time), and by consulting `freno` before applying each such subtask, we are able to achieve the same result without ill effect to the database and to the application that uses it.
 
-`freno` is not suitable for OLTP queries.
+`freno` can also be used to determine actual lag to infer validity of replicas. This can assist in mitigating write-then-read pains of master reads. See [here](doc/http.md#specialized-requests).
 
 ### HTTP
 
@@ -83,6 +83,8 @@ See [deployment docs](doc/deploy.md) for suggestions on a recommended `freno` de
 ### Resources
 
 You may find various [resources](resources/) for setting up `freno` in your environment.
+
+[freno-client](https://github.com/github/freno-client) is our Ruby client for `freno`, open sourced and available as a Ruby Gem.
 
 ### What's in a name?
 
