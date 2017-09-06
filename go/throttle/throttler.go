@@ -33,8 +33,6 @@ const recentAppsExpiration = time.Hour * 24
 const defaultThrottleTTL = 60 * time.Minute
 const DefaultThrottleRatio = 1.0
 
-const defaultMemcachePath = "freno"
-
 func init() {
 	rand.Seed(time.Now().UnixNano())
 }
@@ -82,9 +80,8 @@ func NewThrottler(isLeaderFunc func() bool) *Throttler {
 	if memcacheServers := config.Settings().MemcacheServers; len(memcacheServers) > 0 {
 		throttler.memcacheClient = memcache.New(memcacheServers...)
 	}
-	if throttler.memcachePath = config.Settings().MemcachePath; throttler.memcachePath == "" {
-		throttler.memcachePath = defaultMemcachePath
-	}
+	throttler.memcachePath = config.Settings().MemcachePath
+
 	return throttler
 }
 

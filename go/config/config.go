@@ -119,5 +119,8 @@ func (settings *ConfigurationSettings) postReadAdjustments() error {
 	if err := settings.Stores.postReadAdjustments(); err != nil {
 		return err
 	}
+	if settings.MemcachePath == "" {
+		settings.MemcachePath = "freno"
+	}
 	return nil
 }
