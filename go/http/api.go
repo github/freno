@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/github/freno/go/config"
 	"github.com/github/freno/go/group"
 	"github.com/github/freno/go/throttle"
 	metrics "github.com/rcrowley/go-metrics"
@@ -33,6 +34,7 @@ type API interface {
 	ThrottledApps(w http.ResponseWriter, r *http.Request, _ httprouter.Params)
 	RecentApps(w http.ResponseWriter, r *http.Request, _ httprouter.Params)
 	Help(w http.ResponseWriter, r *http.Request, _ httprouter.Params)
+	MemcacheConfig(w http.ResponseWriter, r *http.Request, _ httprouter.Params)
 }
 
 var endpoints = []string{} // known API URIs
@@ -263,6 +265,21 @@ func (api *APIImpl) Help(w http.ResponseWriter, r *http.Request, ps httprouter.P
 	json.NewEncoder(w).Encode(endpoints)
 }
 
+// MemcacheConfig outputs the memcache configuration being used, so clients can
+// implement more efficient access strategies
+func (api *APIImpl) MemcacheConfig(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
+	memcacheConfig := struct {
+		MemcacheServers []string
+		MemcachePath    string
+	}{
+		config.Settings().MemcacheServers,
+		config.Settings().MemcachePath,
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(memcacheConfig)
+}
+
 // register is a wrapper function for accepting both GET and HEAD requests
 func register(router *httprouter.Router, path string, f httprouter.Handle) {
 	router.HEAD(path, f)
@@ -308,6 +325,8 @@ func ConfigureRoutes(api API) *httprouter.Router {
 	register(router, "/debug/metrics", metricsHandle)
 
 	register(router, "/help", api.Help)
+
+	router.GET("/config/memcache", api.MemcacheConfig)
 
 	return router
 }
