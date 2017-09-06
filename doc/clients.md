@@ -14,7 +14,25 @@ It makes sense to hit `freno` in the whereabouts of the granularity one is looki
 # Usage samples
 
 
-### pt-archiver
+### Ruby
+
+[freno-client](https://github.com/github/freno-client) is our official Ruby client for `freno`. It is open sourced and available as a Ruby Gem.
+
+```ruby
+require "freno/client"
+
+FRENO_URL = "http://my.freno.com:9777"
+faraday   = Faraday.new(FRENO_URL)
+freno     = Freno::Client.new(faraday)
+
+freno.check?(app: :my_app, store_name: :my_cluster)
+# => true
+
+freno.replication_delay(app: :my_app, store_name: :my_cluster)
+# => 0.125
+```
+
+### pt-archiver / perl
 
 [pt-archiver](https://www.percona.com/doc/percona-toolkit/2.2/pt-archiver.html) is probably the most popular tool for archiving table data. `pt-archiver` can use `freno` with a plugin. A plugin is available on [FrenoThrottler.pm](../resources/pt-archiver/FrenoThrottler.pm). To make it usable, you will need to:
 
