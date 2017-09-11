@@ -25,6 +25,11 @@ func Settings() *ConfigurationSettings {
 	return Instance().settings
 }
 
+// Reset sets the initial state of the configuration instance
+func Reset() {
+	instance = newConfiguration()
+}
+
 // Configuration struct stores the readFileNames and points to the settings
 // which are the configuration parameters used in the application.
 // see ConfigurationSettings for the available settings.
@@ -104,6 +109,8 @@ func newConfigurationSettings() *ConfigurationSettings {
 		RaftDataDir:     "",
 		DefaultRaftPort: 0,
 		RaftNodes:       []string{},
+		MemcacheServers: []string{},
+		MemcachePath:    "freno",
 		//Debug:                                        false,
 		//ListenSocket:                                 "",
 		//AnExampleListOfStrings:                       []string{"*"},

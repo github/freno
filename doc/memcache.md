@@ -37,3 +37,27 @@ Optionally set `MemcachePath` (default is `"freno"`):
 - The value will be of the form `<epochmillis>:<aggregated-value>`.
   - As example, it might be `1497418678836:0.54` where `1497418678836` is the unix epoch in milliseconds, and `0.54` is the aggregated value.
   - Embedding the epoch within the value allows the app to double-check the validity of the value, or go into more granular validation.
+
+### Runtime access to memcache configuration
+
+The [HTTP API](http.md) provides the `GET /config/memcache` service, which returns the json representation of the memcache configuration in use:
+
+```json
+{
+  "MemcacheServers": [
+    "memcache.server.one:11211",
+    "memcache.server.two:11211",
+    "memcache.server.three:11211"
+  ],
+  "MemcachePath": "freno-production",
+}
+```
+
+If freno is not configured to publish metrics to memcache, the following defaults will be returned:
+
+```json
+{
+  "MemcacheServers": [],
+  "MemcachePath": "freno",
+}
+```

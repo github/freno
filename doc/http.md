@@ -101,6 +101,8 @@ Notes:
 
 - `/help`: show all supported request paths
 
+- `/config/memcache`: show the [memcache](memcache.md) configuration used, so freno clients can use it to implement more efficient read strategies.
+
 # GET method
 
 `GET` and `HEAD` respond with same status codes. But `GET` requests compute and return additional data. Automated requests should not be interested in this data; the status code is what should guide the clients. However humans or manual requests may benefit from extra information supplied by the `GET` request.
