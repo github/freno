@@ -154,8 +154,6 @@ function build() {
     ;;
   esac
   [[ $(find $builddir/freno${prefix}/freno/ -type f -name freno) ]] &&  echo "freno binary created" || (echo "Failed to generate freno binary" ; exit 1)
-  cp $builddir/freno${prefix}/freno/freno $builddir/freno-cli/usr/bin && echo "binary copied to freno-cli" || (echo "Failed to copy freno binary to freno-cli" ; exit 1)
-  cp $builddir/freno${prefix}/freno/resources/bin/freno-client $builddir/freno-client/usr/bin && echo "freno-client copied to freno-client/" || (echo "Failed to copy freno-client to freno-client/" ; exit 1)
 }
 
 function main() {
