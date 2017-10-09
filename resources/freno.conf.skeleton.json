@@ -1,6 +1,6 @@
 {
   "ListenPort": 9777,
-  "DefaultRaftPort": "9888",
+  "DefaultRaftPort": 9888,
   "RaftDataDir": "/var/lib/freno",
   "RaftBind": "<this.ip>",
   "RaftNodes": ["<ip.1>", "<ip.2>", "<ip.3>"],
