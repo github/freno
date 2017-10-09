@@ -102,8 +102,8 @@ function oinstall() {
   cd  $mydir
   gofmt -s -w  go/
   cp ./resources/etc/init.d/freno $builddir/freno/etc/init.d/freno
-  cp ./resources/freno.conf.skeleton.json $builddir/freno/etc/freno.conf.json
   chmod +x $builddir/freno/etc/init.d/freno
+  cp ./resources/freno.conf.skeleton.json $builddir/freno/etc/freno.conf.json
 }
 
 function package() {
@@ -143,7 +143,7 @@ function build() {
   prefix="$4"
   ldflags="-X main.AppVersion=${RELEASE_VERSION} -X main.GitCommit=${GIT_COMMIT}"
   echo "Building via $(go version)"
-  gobuild="go build -i ${opt_race} -ldflags \"$ldflags\" -o $builddir/freno${prefix}/freno/freno go/cmd/freno/main.go"
+  gobuild="go build -i ${opt_race} -ldflags \"$ldflags\" -o $builddir/freno${prefix}/freno go/cmd/freno/main.go"
 
   case $os in
     'linux')
@@ -153,7 +153,7 @@ function build() {
       echo "GOOS=darwin GOARCH=amd64 $gobuild" | bash
     ;;
   esac
-  [[ $(find $builddir/freno${prefix}/freno/ -type f -name freno) ]] &&  echo "freno binary created" || (echo "Failed to generate freno binary" ; exit 1)
+  [[ $(find $builddir/freno${prefix}/ -type f -name freno) ]] &&  echo "freno binary created" || (echo "Failed to generate freno binary" ; exit 1)
 }
 
 function main() {
