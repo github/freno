@@ -27,7 +27,6 @@ set -e
 mydir=$(dirname $0)
 GIT_COMMIT=$(git rev-parse HEAD)
 RELEASE_VERSION=
-RELEASE_SUBVERSION=
 TOPDIR=/tmp/freno-release
 export RELEASE_VERSION TOPDIR
 
@@ -167,9 +166,8 @@ function main() {
   local builddir
 
   if [ -z "${RELEASE_VERSION}" ] ; then
-    RELEASE_VERSION=$(cat $mydir/RELEASE_VERSION)
+    RELEASE_VERSION=$(git describe --abbrev=0 --tags)
   fi
-  RELEASE_VERSION="${RELEASE_VERSION}${RELEASE_SUBVERSION}"
 
   precheck "$target" "$build_only"
   builddir=$( setuptree "$prefix" )
@@ -212,7 +210,6 @@ while getopts a:t:p:s:v:dbhr flag; do
     RELEASE_VERSION="${OPTARG}"
     ;;
   s)
-    RELEASE_SUBVERSION="_${OPTARG}"
     ;;
   ?)
     usage
