@@ -34,7 +34,7 @@ Let's dissect the general section of the [sample config file](../resources/freno
 ```
 {
   "ListenPort": 9777,
-  "DefaultRaftPort": "9888",
+  "DefaultRaftPort": 9888,
   "RaftDataDir": "/var/lib/freno",
   "RaftBind": "10.0.0.1",
   "RaftNodes": ["10.0.0.1", "10.0.0.2", "10.0.0.3"]
