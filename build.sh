@@ -164,7 +164,7 @@ function main() {
   local builddir
 
   if [ -z "${RELEASE_VERSION}" ] ; then
-    RELEASE_VERSION=$(git describe --abbrev=0 --tags)
+    RELEASE_VERSION=$(git describe --abbrev=0 --tags | tr -d 'v')
   fi
 
   precheck "$target" "$build_only"
