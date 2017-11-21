@@ -5,7 +5,12 @@ import (
 	"io/ioutil"
 	"net/http"
 	"strings"
+	"time"
+
+	"github.com/patrickmn/go-cache"
 )
+
+var csvCache = cache.New(time.Second, time.Second)
 
 // parseHeader parses the HAPRoxy CSV header, which lists column names.
 // Returned is a header-to-index map
@@ -64,6 +69,11 @@ func ParseCsvHosts(csv string, poolName string) (hosts []string, err error) {
 // Read will read HAProxy URI and return with the CSV text
 func Read(host string, port int) (csv string, err error) {
 	haproxyUrl := fmt.Sprintf("http://%s:%d/;csv;norefresh", host, port)
+
+	if cachedCSV, found := csvCache.Get(haproxyUrl); found {
+		return cachedCSV.(string), nil
+	}
+
 	resp, err := http.Get(haproxyUrl)
 	if resp != nil {
 		defer resp.Body.Close()
@@ -75,5 +85,8 @@ func Read(host string, port int) (csv string, err error) {
 	if err != nil {
 		return "", err
 	}
-	return string(body), nil
+
+	csv = string(body)
+	csvCache.Set(haproxyUrl, csv, cache.DefaultExpiration)
+	return csv, nil
 }
