@@ -50,7 +50,9 @@ func ParseHosts(csvLines []string, poolName string) (hosts []string, err error) 
 		tokens := strings.Split(line, ",")
 		if tokens[tokensMap["pxname"]] == poolName {
 			if host := tokens[tokensMap["svname"]]; host != "BACKEND" && host != "FRONTEND" {
-				if status := tokens[tokensMap["status"]]; status == "UP" || status == "DOWN" {
+				status := tokens[tokensMap["status"]]
+				status = strings.Split(status, " ")[0]
+				if status == "UP" || status == "DOWN" {
 					hosts = append(hosts, host)
 				}
 			}
