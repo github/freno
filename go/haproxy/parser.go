@@ -42,6 +42,7 @@ func ParseHosts(csvLines []string, poolName string) (hosts []string, err error) 
 		return hosts, fmt.Errorf("Haproxy CSV parsing error: only found a header.")
 	}
 	var tokensMap map[string]int
+	poolFound := false
 	for i, line := range csvLines {
 		if i == 0 {
 			tokensMap = parseHeader(csvLines[0])
@@ -49,6 +50,7 @@ func ParseHosts(csvLines []string, poolName string) (hosts []string, err error) 
 		}
 		tokens := strings.Split(line, ",")
 		if tokens[tokensMap["pxname"]] == poolName {
+			poolFound = true
 			if host := tokens[tokensMap["svname"]]; host != "BACKEND" && host != "FRONTEND" {
 				status := tokens[tokensMap["status"]]
 				status = strings.Split(status, " ")[0]
@@ -57,6 +59,9 @@ func ParseHosts(csvLines []string, poolName string) (hosts []string, err error) 
 				}
 			}
 		}
+	}
+	if !poolFound {
+		return hosts, fmt.Errorf("Haproxy CSV parsing error: did not find %+v pool", poolName)
 	}
 	return hosts, nil
 }
