@@ -31,7 +31,10 @@ func parseLines(csv string) []string {
 // Such list indicates the hosts which can be expected to be active, which is then the list freno will probe.
 func ParseHosts(csvLines []string, poolName string) (hosts []string, err error) {
 	if len(csvLines) < 1 {
-		return hosts, fmt.Errorf("No lines found haproxy CSV; expecting at least a header")
+		return hosts, fmt.Errorf("Haproxy CSV parsing error: no lines found.")
+	}
+	if len(csvLines) == 1 {
+		return hosts, fmt.Errorf("Haproxy CSV parsing error: only found a header.")
 	}
 	var tokensMap map[string]int
 	for i, line := range csvLines {
