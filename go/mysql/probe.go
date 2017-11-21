@@ -28,7 +28,7 @@ type Probes map[InstanceKey](*Probe)
 type ClusterProbes struct {
 	ClusterName      string
 	IgnoreHostsCount int
-	Probes           *Probes
+	InstanceProbes   *Probes
 }
 
 func NewProbes() *Probes {
