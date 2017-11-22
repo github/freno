@@ -5,7 +5,12 @@ import (
 	"io/ioutil"
 	"net/http"
 	"strings"
+	"time"
+
+	"github.com/patrickmn/go-cache"
 )
+
+var csvCache = cache.New(time.Second, time.Second)
 
 // parseHeader parses the HAPRoxy CSV header, which lists column names.
 // Returned is a header-to-index map
@@ -31,9 +36,13 @@ func parseLines(csv string) []string {
 // Such list indicates the hosts which can be expected to be active, which is then the list freno will probe.
 func ParseHosts(csvLines []string, poolName string) (hosts []string, err error) {
 	if len(csvLines) < 1 {
-		return hosts, fmt.Errorf("No lines found haproxy CSV; expecting at least a header")
+		return hosts, fmt.Errorf("Haproxy CSV parsing error: no lines found.")
+	}
+	if len(csvLines) == 1 {
+		return hosts, fmt.Errorf("Haproxy CSV parsing error: only found a header.")
 	}
 	var tokensMap map[string]int
+	poolFound := false
 	for i, line := range csvLines {
 		if i == 0 {
 			tokensMap = parseHeader(csvLines[0])
@@ -41,12 +50,18 @@ func ParseHosts(csvLines []string, poolName string) (hosts []string, err error) 
 		}
 		tokens := strings.Split(line, ",")
 		if tokens[tokensMap["pxname"]] == poolName {
+			poolFound = true
 			if host := tokens[tokensMap["svname"]]; host != "BACKEND" && host != "FRONTEND" {
-				if status := tokens[tokensMap["status"]]; status == "UP" || status == "DOWN" {
+				status := tokens[tokensMap["status"]]
+				status = strings.Split(status, " ")[0]
+				if status == "UP" || status == "DOWN" {
 					hosts = append(hosts, host)
 				}
 			}
 		}
+	}
+	if !poolFound {
+		return hosts, fmt.Errorf("Haproxy CSV parsing error: did not find %+v pool", poolName)
 	}
 	return hosts, nil
 }
@@ -61,6 +76,11 @@ func ParseCsvHosts(csv string, poolName string) (hosts []string, err error) {
 // Read will read HAProxy URI and return with the CSV text
 func Read(host string, port int) (csv string, err error) {
 	haproxyUrl := fmt.Sprintf("http://%s:%d/;csv;norefresh", host, port)
+
+	if cachedCSV, found := csvCache.Get(haproxyUrl); found {
+		return cachedCSV.(string), nil
+	}
+
 	resp, err := http.Get(haproxyUrl)
 	if resp != nil {
 		defer resp.Body.Close()
@@ -72,5 +92,8 @@ func Read(host string, port int) (csv string, err error) {
 	if err != nil {
 		return "", err
 	}
-	return string(body), nil
+
+	csv = string(body)
+	csvCache.Set(haproxyUrl, csv, cache.DefaultExpiration)
+	return csv, nil
 }

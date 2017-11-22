@@ -36,15 +36,16 @@ func ReadThrottleMetric(probe *Probe) (mySQLThrottleMetric *MySQLThrottleMetric)
 	mySQLThrottleMetric.Key = probe.Key
 
 	defer func(metric *MySQLThrottleMetric, started time.Time) {
-		metrics.GetOrRegisterTimer("probes.latency", nil).Update(time.Since(started))
-		metrics.GetOrRegisterCounter("probes.total", nil).Inc(1)
-		if metric.Err != nil {
-			metrics.GetOrRegisterCounter("probes.error", nil).Inc(1)
-		}
+		go func() {
+			metrics.GetOrRegisterTimer("probes.latency", nil).Update(time.Since(started))
+			metrics.GetOrRegisterCounter("probes.total", nil).Inc(1)
+			if metric.Err != nil {
+				metrics.GetOrRegisterCounter("probes.error", nil).Inc(1)
+			}
+		}()
 	}(mySQLThrottleMetric, started)
 
 	dbUri := probe.GetDBUri("information_schema")
-
 	db, fromCache, err := sqlutils.GetDB(dbUri)
 
 	if err != nil {

@@ -211,26 +211,26 @@ func (throttler *Throttler) refreshMySQLInventory() error {
 				clusterProbes := &mysql.ClusterProbes{
 					ClusterName:      clusterName,
 					IgnoreHostsCount: clusterSettings.IgnoreHostsCount,
-					Probes:           mysql.NewProbes(),
+					InstanceProbes:   mysql.NewProbes(),
 				}
 				for _, host := range hosts {
 					key := mysql.InstanceKey{Hostname: host, Port: clusterSettings.Port}
-					addInstanceKey(&key, clusterSettings, clusterProbes.Probes)
+					addInstanceKey(&key, clusterSettings, clusterProbes.InstanceProbes)
 				}
 				throttler.mysqlClusterProbesChan <- clusterProbes
 				return nil
 			}
 			if !clusterSettings.StaticHostsSettings.IsEmpty() {
 				clusterProbes := &mysql.ClusterProbes{
-					ClusterName: clusterName,
-					Probes:      mysql.NewProbes(),
+					ClusterName:    clusterName,
+					InstanceProbes: mysql.NewProbes(),
 				}
 				for _, host := range clusterSettings.StaticHostsSettings.Hosts {
 					key, err := mysql.ParseInstanceKey(host, clusterSettings.Port)
 					if err != nil {
 						return log.Errore(err)
 					}
-					addInstanceKey(key, clusterSettings, clusterProbes.Probes)
+					addInstanceKey(key, clusterSettings, clusterProbes.InstanceProbes)
 				}
 				throttler.mysqlClusterProbesChan <- clusterProbes
 				return nil
@@ -244,7 +244,7 @@ func (throttler *Throttler) refreshMySQLInventory() error {
 // synchronous update of inventory
 func (throttler *Throttler) updateMySQLClusterProbes(clusterProbes *mysql.ClusterProbes) error {
 	log.Debugf("onMySQLClusterProbes: %s", clusterProbes.ClusterName)
-	throttler.mysqlInventory.ClustersProbes[clusterProbes.ClusterName] = clusterProbes.Probes
+	throttler.mysqlInventory.ClustersProbes[clusterProbes.ClusterName] = clusterProbes.InstanceProbes
 	throttler.mysqlInventory.IgnoreHostsCount[clusterProbes.ClusterName] = clusterProbes.IgnoreHostsCount
 	return nil
 }
