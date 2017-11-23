@@ -73,7 +73,7 @@ function precheck() {
   fi
 
   if [[ $(go version | egrep "go1[.][012345678]") ]]; then
-    echo "go version is too low. Must use 1.8 or above"
+    echo "go version is too low. Must use 1.9 or above"
     ok=1
   fi
 
