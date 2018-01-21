@@ -12,6 +12,14 @@ import (
 
 var csvCache = cache.New(time.Second, time.Second)
 
+var HAProxyEmptyBody error = fmt.Errorf("Haproxy GET error: empty body")
+var HAProxyEmptyStatus error = fmt.Errorf("Haproxy CSV parsing error: no lines found")
+var HAProxyPartialStatus error = fmt.Errorf("Haproxy CSV parsing error: only got partial file")
+var HAProxyMissingPool error = fmt.Errorf("Haproxy CSV parsing: pool not found")
+
+var MaxHTTPGetConcurrency = 2
+var httpGetConcurrentcyChan = make(chan bool, MaxHTTPGetConcurrency)
+
 // parseHeader parses the HAPRoxy CSV header, which lists column names.
 // Returned is a header-to-index map
 func parseHeader(header string) (tokensMap map[string]int) {
@@ -36,10 +44,10 @@ func parseLines(csv string) []string {
 // Such list indicates the hosts which can be expected to be active, which is then the list freno will probe.
 func ParseHosts(csvLines []string, poolName string) (hosts []string, err error) {
 	if len(csvLines) < 1 {
-		return hosts, fmt.Errorf("Haproxy CSV parsing error: no lines found.")
+		return hosts, HAProxyEmptyStatus
 	}
 	if len(csvLines) == 1 {
-		return hosts, fmt.Errorf("Haproxy CSV parsing error: only found a header.")
+		return hosts, HAProxyPartialStatus
 	}
 	var tokensMap map[string]int
 	poolFound := false
@@ -61,7 +69,7 @@ func ParseHosts(csvLines []string, poolName string) (hosts []string, err error) 
 		}
 	}
 	if !poolFound {
-		return hosts, fmt.Errorf("Haproxy CSV parsing error: did not find %+v pool", poolName)
+		return hosts, HAProxyMissingPool
 	}
 	return hosts, nil
 }
@@ -75,6 +83,9 @@ func ParseCsvHosts(csv string, poolName string) (hosts []string, err error) {
 
 // Read will read HAProxy URI and return with the CSV text
 func Read(host string, port int) (csv string, err error) {
+	httpGetConcurrentcyChan <- true
+	defer func() { <-httpGetConcurrentcyChan }()
+
 	haproxyUrl := fmt.Sprintf("http://%s:%d/;csv;norefresh", host, port)
 
 	if cachedCSV, found := csvCache.Get(haproxyUrl); found {
@@ -94,6 +105,9 @@ func Read(host string, port int) (csv string, err error) {
 	}
 
 	csv = string(body)
+	if csv == "" {
+		return "", HAProxyEmptyBody
+	}
 	csvCache.Set(haproxyUrl, csv, cache.DefaultExpiration)
 	return csv, nil
 }
