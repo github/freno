@@ -38,6 +38,45 @@ statsctl,FRONTEND,,,1,3,2000,21718,2788357,173364223,0,0,315,,,,,OPEN,,,,,,,,,1,
 statsctl,BACKEND,0,0,0,0,200,0,2788357,173364223,0,0,,0,0,0,0,UP,0,0,0,,0,1032064,0,,1,9,0,,0,,1,0,,0,,,,0,0,0,0,0,0,,,,,0,0,0,0,0,0,0,,,0,0,0,0,
 `
 
+var csvTransitioning = `# pxname,svname,qcur,qmax,scur,smax,slim,stot,bin,bout,dreq,dresp,ereq,econ,eresp,wretr,wredis,status,weight,act,bck,chkfail,chkdown,lastchg,downtime,qlimit,pid,iid,sid,throttle,lbtot,tracked,type,rate,rate_lim,rate_max,check_status,check_code,check_duration,hrsp_1xx,hrsp_2xx,hrsp_3xx,hrsp_4xx,hrsp_5xx,hrsp_other,hanafail,req_rate,req_rate_max,req_tot,cli_abrt,srv_abrt,comp_in,comp_out,comp_byp,comp_rsp,lastsess,last_chk,last_agt,qtime,ctime,rtime,ttime,
+mysqlcluster0ro,FRONTEND,,,0,0,20000,0,0,0,0,0,0,,,,,OPEN,,,,,,,,,1,5,0,,,,0,0,0,0,,,,,,,,,,,0,0,0,,,0,0,0,0,,,,,,,,
+mysqlcluster0_ro_main,mysqlcluster0a-dc,0,0,0,0,,0,0,0,,0,,0,0,0,0,UP 1/2,10,1,0,49,6,89174,368958,,1,6,1,,0,,2,0,,0,L7OK,200,18,,,,,,,0,,,,0,0,,,,,-1,OK,,0,0,0,0,
+mysqlcluster0_ro_main,mysqlcluster0b-dc,0,0,0,0,,0,0,0,,0,,0,0,0,0,UP,10,1,0,41,5,1912,1000,,1,6,2,,0,,2,0,,0,L7OK,200,24,,,,,,,0,,,,0,0,,,,,-1,OK,,0,0,0,0,
+mysqlcluster0_ro_main,mysqlcluster0c-dc,0,0,0,0,,0,0,0,,0,,0,0,0,0,NOLB,10,1,0,0,0,1032061,0,,1,6,3,,0,,2,0,,0,L7OKC,404,12,,,,,,,0,,,,0,0,,,,,-1,Not Found,,0,0,0,0,
+mysqlcluster0_ro_main,mysqlcluster0d-dc,0,0,0,0,,0,0,0,,0,,0,0,0,0,NOLB,10,1,0,0,0,1032061,0,,1,6,4,,0,,2,0,,0,L7OKC,404,12,,,,,,,0,,,,0,0,,,,,-1,Not Found,,0,0,0,0,
+mysqlcluster0_ro_main,BACKEND,0,0,0,0,2000,0,0,0,0,0,,0,0,0,0,UP,20,2,0,,4,89174,728,,1,6,0,,0,,1,0,,0,,,,,,,,,,,,,,0,0,0,0,0,0,-1,,,0,0,0,0,
+monitoring,FRONTEND,,,0,0,2000,0,0,0,0,0,0,,,,,OPEN,,,,,,,,,1,8,0,,,,0,0,0,0,,,,,,,,,,,0,0,0,,,0,0,0,0,,,,,,,,
+monitoring,BACKEND,0,0,0,0,200,0,0,0,0,0,,0,0,0,0,UP,0,0,0,,0,1032064,0,,1,8,0,,0,,1,0,,0,,,,,,,,,,,,,,0,0,0,0,0,0,-1,,,0,0,0,0,
+statsctl,FRONTEND,,,1,3,2000,21718,2788357,173364223,0,0,315,,,,,OPEN,,,,,,,,,1,9,0,,,,0,1,0,3,,,,0,21403,0,315,0,0,,1,3,21719,,,0,0,0,0,,,,,,,,
+statsctl,BACKEND,0,0,0,0,200,0,2788357,173364223,0,0,,0,0,0,0,UP,0,0,0,,0,1032064,0,,1,9,0,,0,,1,0,,0,,,,0,0,0,0,0,0,,,,,0,0,0,0,0,0,0,,,0,0,0,0,
+`
+
+var csvTransitioningAllUp = `# pxname,svname,qcur,qmax,scur,smax,slim,stot,bin,bout,dreq,dresp,ereq,econ,eresp,wretr,wredis,status,weight,act,bck,chkfail,chkdown,lastchg,downtime,qlimit,pid,iid,sid,throttle,lbtot,tracked,type,rate,rate_lim,rate_max,check_status,check_code,check_duration,hrsp_1xx,hrsp_2xx,hrsp_3xx,hrsp_4xx,hrsp_5xx,hrsp_other,hanafail,req_rate,req_rate_max,req_tot,cli_abrt,srv_abrt,comp_in,comp_out,comp_byp,comp_rsp,lastsess,last_chk,last_agt,qtime,ctime,rtime,ttime,
+mysqlcluster0ro,FRONTEND,,,0,0,20000,0,0,0,0,0,0,,,,,OPEN,,,,,,,,,1,5,0,,,,0,0,0,0,,,,,,,,,,,0,0,0,,,0,0,0,0,,,,,,,,
+mysqlcluster0_ro_main,mysqlcluster0a-dc,0,0,0,0,,0,0,0,,0,,0,0,0,0,UP 1/2,10,1,0,49,6,89174,368958,,1,6,1,,0,,2,0,,0,L7OK,200,18,,,,,,,0,,,,0,0,,,,,-1,OK,,0,0,0,0,
+mysqlcluster0_ro_main,mysqlcluster0b-dc,0,0,0,0,,0,0,0,,0,,0,0,0,0,UP 1/2,10,1,0,41,5,1912,1000,,1,6,2,,0,,2,0,,0,L7OK,200,24,,,,,,,0,,,,0,0,,,,,-1,OK,,0,0,0,0,
+mysqlcluster0_ro_main,mysqlcluster0c-dc,0,0,0,0,,0,0,0,,0,,0,0,0,0,NOLB,10,1,0,0,0,1032061,0,,1,6,3,,0,,2,0,,0,L7OKC,404,12,,,,,,,0,,,,0,0,,,,,-1,Not Found,,0,0,0,0,
+mysqlcluster0_ro_main,mysqlcluster0d-dc,0,0,0,0,,0,0,0,,0,,0,0,0,0,NOLB,10,1,0,0,0,1032061,0,,1,6,4,,0,,2,0,,0,L7OKC,404,12,,,,,,,0,,,,0,0,,,,,-1,Not Found,,0,0,0,0,
+mysqlcluster0_ro_main,BACKEND,0,0,0,0,2000,0,0,0,0,0,,0,0,0,0,UP,20,2,0,,4,89174,728,,1,6,0,,0,,1,0,,0,,,,,,,,,,,,,,0,0,0,0,0,0,-1,,,0,0,0,0,
+monitoring,FRONTEND,,,0,0,2000,0,0,0,0,0,0,,,,,OPEN,,,,,,,,,1,8,0,,,,0,0,0,0,,,,,,,,,,,0,0,0,,,0,0,0,0,,,,,,,,
+monitoring,BACKEND,0,0,0,0,200,0,0,0,0,0,,0,0,0,0,UP,0,0,0,,0,1032064,0,,1,8,0,,0,,1,0,,0,,,,,,,,,,,,,,0,0,0,0,0,0,-1,,,0,0,0,0,
+statsctl,FRONTEND,,,1,3,2000,21718,2788357,173364223,0,0,315,,,,,OPEN,,,,,,,,,1,9,0,,,,0,1,0,3,,,,0,21403,0,315,0,0,,1,3,21719,,,0,0,0,0,,,,,,,,
+statsctl,BACKEND,0,0,0,0,200,0,2788357,173364223,0,0,,0,0,0,0,UP,0,0,0,,0,1032064,0,,1,9,0,,0,,1,0,,0,,,,0,0,0,0,0,0,,,,,0,0,0,0,0,0,0,,,0,0,0,0,
+`
+
+var csvTransitioningAll = `# pxname,svname,qcur,qmax,scur,smax,slim,stot,bin,bout,dreq,dresp,ereq,econ,eresp,wretr,wredis,status,weight,act,bck,chkfail,chkdown,lastchg,downtime,qlimit,pid,iid,sid,throttle,lbtot,tracked,type,rate,rate_lim,rate_max,check_status,check_code,check_duration,hrsp_1xx,hrsp_2xx,hrsp_3xx,hrsp_4xx,hrsp_5xx,hrsp_other,hanafail,req_rate,req_rate_max,req_tot,cli_abrt,srv_abrt,comp_in,comp_out,comp_byp,comp_rsp,lastsess,last_chk,last_agt,qtime,ctime,rtime,ttime,
+mysqlcluster0ro,FRONTEND,,,0,0,20000,0,0,0,0,0,0,,,,,OPEN,,,,,,,,,1,5,0,,,,0,0,0,0,,,,,,,,,,,0,0,0,,,0,0,0,0,,,,,,,,
+mysqlcluster0_ro_main,mysqlcluster0a-dc,0,0,0,0,,0,0,0,,0,,0,0,0,0,UP 1/2,10,1,0,49,6,89174,368958,,1,6,1,,0,,2,0,,0,L7OK,200,18,,,,,,,0,,,,0,0,,,,,-1,OK,,0,0,0,0,
+mysqlcluster0_ro_main,mysqlcluster0b-dc,0,0,0,0,,0,0,0,,0,,0,0,0,0,UP 1/2,10,1,0,41,5,1912,1000,,1,6,2,,0,,2,0,,0,L7OK,200,24,,,,,,,0,,,,0,0,,,,,-1,OK,,0,0,0,0,
+mysqlcluster0_ro_main,mysqlcluster0c-dc,0,0,0,0,,0,0,0,,0,,0,0,0,0,NOLB 2/3,10,1,0,0,0,1032061,0,,1,6,3,,0,,2,0,,0,L7OKC,404,12,,,,,,,0,,,,0,0,,,,,-1,Not Found,,0,0,0,0,
+mysqlcluster0_ro_main,mysqlcluster0d-dc,0,0,0,0,,0,0,0,,0,,0,0,0,0,NOLB 1/3,10,1,0,0,0,1032061,0,,1,6,4,,0,,2,0,,0,L7OKC,404,12,,,,,,,0,,,,0,0,,,,,-1,Not Found,,0,0,0,0,
+mysqlcluster0_ro_main,BACKEND,0,0,0,0,2000,0,0,0,0,0,,0,0,0,0,UP,20,2,0,,4,89174,728,,1,6,0,,0,,1,0,,0,,,,,,,,,,,,,,0,0,0,0,0,0,-1,,,0,0,0,0,
+monitoring,FRONTEND,,,0,0,2000,0,0,0,0,0,0,,,,,OPEN,,,,,,,,,1,8,0,,,,0,0,0,0,,,,,,,,,,,0,0,0,,,0,0,0,0,,,,,,,,
+monitoring,BACKEND,0,0,0,0,200,0,0,0,0,0,,0,0,0,0,UP,0,0,0,,0,1032064,0,,1,8,0,,0,,1,0,,0,,,,,,,,,,,,,,0,0,0,0,0,0,-1,,,0,0,0,0,
+statsctl,FRONTEND,,,1,3,2000,21718,2788357,173364223,0,0,315,,,,,OPEN,,,,,,,,,1,9,0,,,,0,1,0,3,,,,0,21403,0,315,0,0,,1,3,21719,,,0,0,0,0,,,,,,,,
+statsctl,BACKEND,0,0,0,0,200,0,2788357,173364223,0,0,,0,0,0,0,UP,0,0,0,,0,1032064,0,,1,9,0,,0,,1,0,,0,,,,0,0,0,0,0,0,,,,,0,0,0,0,0,0,0,,,0,0,0,0,
+`
+
 func init() {
 	log.SetLevel(log.ERROR)
 }
@@ -67,5 +106,21 @@ func TestParseHosts(t *testing.T) {
 		hosts, err := ParseCsvHosts(csv0, "mysqlcluster0_ro_backup")
 		test.S(t).ExpectNil(err)
 		test.S(t).ExpectTrue(reflect.DeepEqual(hosts, []string{"mysqlcluster0e-dc", "mysqlcluster0f-dc", "mysqlcluster0h-dc"}))
+	}
+}
+
+func TestParseHostsTransitioning(t *testing.T) {
+	{
+		hosts, err := ParseCsvHosts(csvTransitioning, "mysqlcluster0_ro_main")
+		test.S(t).ExpectNil(err)
+		test.S(t).ExpectTrue(reflect.DeepEqual(hosts, []string{"mysqlcluster0b-dc"}))
+	}
+	{
+		_, err := ParseCsvHosts(csvTransitioningAllUp, "mysqlcluster0_ro_main")
+		test.S(t).ExpectEquals(err, HAProxyAllUpHostsTransitioning)
+	}
+	{
+		_, err := ParseCsvHosts(csvTransitioningAll, "mysqlcluster0_ro_main")
+		test.S(t).ExpectEquals(err, HAProxyAllHostsTransitioning)
 	}
 }

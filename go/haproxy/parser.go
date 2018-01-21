@@ -16,6 +16,8 @@ var HAProxyEmptyBody error = fmt.Errorf("Haproxy GET error: empty body")
 var HAProxyEmptyStatus error = fmt.Errorf("Haproxy CSV parsing error: no lines found")
 var HAProxyPartialStatus error = fmt.Errorf("Haproxy CSV parsing error: only got partial file")
 var HAProxyMissingPool error = fmt.Errorf("Haproxy CSV parsing: pool not found")
+var HAProxyAllUpHostsTransitioning error = fmt.Errorf("Haproxy: all host marked as UP are in transition. HAProxy is likely reloading")
+var HAProxyAllHostsTransitioning error = fmt.Errorf("Haproxy: all hosts are in transition. HAProxy is likely reloading")
 
 var MaxHTTPGetConcurrency = 2
 var httpGetConcurrentcyChan = make(chan bool, MaxHTTPGetConcurrency)
@@ -51,6 +53,10 @@ func ParseHosts(csvLines []string, poolName string) (hosts []string, err error) 
 	}
 	var tokensMap map[string]int
 	poolFound := false
+	countHosts := 0
+	countUpHosts := 0
+	countTransitioningHosts := 0
+	countTransitioningUpHosts := 0
 	for i, line := range csvLines {
 		if i == 0 {
 			tokensMap = parseHeader(csvLines[0])
@@ -60,16 +66,46 @@ func ParseHosts(csvLines []string, poolName string) (hosts []string, err error) 
 		if tokens[tokensMap["pxname"]] == poolName {
 			poolFound = true
 			if host := tokens[tokensMap["svname"]]; host != "BACKEND" && host != "FRONTEND" {
-				status := tokens[tokensMap["status"]]
-				status = strings.Split(status, " ")[0]
-				if status == "UP" || status == "DOWN" {
-					hosts = append(hosts, host)
+				countHosts++
+				statusTokens := strings.Split(tokens[tokensMap["status"]], " ")
+				// status can show up as:
+				// `UP`
+				// `UP 1/2` (transitioning)
+				// `NOLB`
+				// `DOWN`
+				// `DOWN (agent)`
+				// etc. See https://github.com/haproxy/haproxy/blob/a5de024d42c4113fc6e189ea1d0ba6335219e151/src/dumpstats.c#L4117-L4129
+				isTransitioning := (len(statusTokens) > 1 && strings.Contains(statusTokens[1], "/"))
+				if isTransitioning {
+					countTransitioningHosts++
+				}
+
+				switch status := statusTokens[0]; status {
+				case "UP":
+					{
+						countUpHosts++
+						if isTransitioning {
+							countTransitioningUpHosts++
+						} else {
+							hosts = append(hosts, host)
+						}
+					}
+				case "DOWN":
+					{
+						hosts = append(hosts, host)
+					}
 				}
 			}
 		}
 	}
 	if !poolFound {
 		return hosts, HAProxyMissingPool
+	}
+	if countTransitioningHosts == countHosts && countHosts > 0 {
+		return hosts, HAProxyAllHostsTransitioning
+	}
+	if countTransitioningUpHosts == countUpHosts && countUpHosts > 0 {
+		return hosts, HAProxyAllUpHostsTransitioning
 	}
 	return hosts, nil
 }
