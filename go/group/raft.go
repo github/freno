@@ -92,13 +92,24 @@ func Monitor() {
 			}
 			leaderExpVar.(*expvar.String).Set(leaderHint)
 
-			if IsLeader() {
+			state := GetState()
+			if state == raft.Leader {
 				leaderHint = fmt.Sprintf("%s (this host)", leaderHint)
 				metrics.GetOrRegisterGauge("raft.is_leader", nil).Update(1)
 			} else {
 				metrics.GetOrRegisterGauge("raft.is_leader", nil).Update(0)
 			}
-			log.Debugf("raft leader is %s; state: %s", leaderHint, GetState().String())
+			switch state {
+			case raft.Leader, raft.Follower:
+				{
+					metrics.GetOrRegisterGauge("raft.is_healthy", nil).Update(1)
+				}
+			default:
+				{
+					metrics.GetOrRegisterGauge("raft.is_healthy", nil).Update(0)
+				}
+			}
+			log.Debugf("raft leader is %s; state: %s", leaderHint, state.String())
 		}
 	}
 }
