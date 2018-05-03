@@ -6,12 +6,13 @@ import (
 	"time"
 
 	"fmt"
+
 	"github.com/github/freno/go/base"
 	metrics "github.com/rcrowley/go-metrics"
 )
 
 const frenoAppName = "freno"
-const selfCheckInterval = 5 * time.Second
+const selfCheckInterval = 1 * time.Second
 
 // ThrottlerCheck provides methdos for an app checking on metrics
 type ThrottlerCheck struct {
