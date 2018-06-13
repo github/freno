@@ -186,6 +186,7 @@ func (throttler *Throttler) refreshMySQLInventory() error {
 			User:        clusterSettings.User,
 			Password:    clusterSettings.Password,
 			MetricQuery: clusterSettings.MetricQuery,
+			CacheMillis: clusterSettings.CacheMillis,
 		}
 		(*probes)[*key] = probe
 	}

@@ -11,8 +11,36 @@ import (
 	"time"
 
 	"github.com/outbrain/golib/sqlutils"
+	"github.com/patrickmn/go-cache"
 	metrics "github.com/rcrowley/go-metrics"
 )
+
+var mysqlMetricCache = cache.New(cache.NoExpiration, 10*time.Millisecond)
+
+func getMySQLMetricCacheKey(probe *Probe) string {
+	return fmt.Sprintf("%s:%s", probe.Key, probe.MetricQuery)
+}
+
+func cacheMySQLThrottleMetric(probe *Probe, mySQLThrottleMetric *MySQLThrottleMetric) *MySQLThrottleMetric {
+	if mySQLThrottleMetric.Err != nil {
+		return mySQLThrottleMetric
+	}
+	if probe.CacheMillis > 0 {
+		mysqlMetricCache.Set(getMySQLMetricCacheKey(probe), mySQLThrottleMetric, time.Duration(probe.CacheMillis)*time.Millisecond)
+	}
+	return mySQLThrottleMetric
+}
+
+func getCachedMySQLThrottleMetric(probe *Probe) *MySQLThrottleMetric {
+	if probe.CacheMillis == 0 {
+		return nil
+	}
+	if metric, found := mysqlMetricCache.Get(getMySQLMetricCacheKey(probe)); found {
+		mySQLThrottleMetric, _ := metric.(*MySQLThrottleMetric)
+		return mySQLThrottleMetric
+	}
+	return nil
+}
 
 type MySQLThrottleMetric struct {
 	Key   InstanceKey
@@ -45,6 +73,10 @@ func ReadThrottleMetric(probe *Probe) (mySQLThrottleMetric *MySQLThrottleMetric)
 		}()
 	}(mySQLThrottleMetric, started)
 
+	if mySQLThrottleMetric := getCachedMySQLThrottleMetric(probe); mySQLThrottleMetric != nil {
+		return mySQLThrottleMetric
+	}
+
 	dbUri := probe.GetDBUri("information_schema")
 	db, fromCache, err := sqlutils.GetDB(dbUri)
 
@@ -58,13 +90,13 @@ func ReadThrottleMetric(probe *Probe) (mySQLThrottleMetric *MySQLThrottleMetric)
 	}
 	if strings.HasPrefix(strings.ToLower(probe.MetricQuery), "select") {
 		mySQLThrottleMetric.Err = db.QueryRow(probe.MetricQuery).Scan(&mySQLThrottleMetric.Value)
-		return mySQLThrottleMetric
+		return cacheMySQLThrottleMetric(probe, mySQLThrottleMetric)
 	}
 
 	if strings.HasPrefix(strings.ToLower(probe.MetricQuery), "show global") {
 		var variableName string // just a placeholder
 		mySQLThrottleMetric.Err = db.QueryRow(probe.MetricQuery).Scan(&variableName, &mySQLThrottleMetric.Value)
-		return mySQLThrottleMetric
+		return cacheMySQLThrottleMetric(probe, mySQLThrottleMetric)
 	}
 
 	if probe.MetricQuery != "" {
@@ -84,5 +116,5 @@ func ReadThrottleMetric(probe *Probe) (mySQLThrottleMetric *MySQLThrottleMetric)
 		mySQLThrottleMetric.Value = float64(secondsBehindMaster.Int64)
 		return nil
 	})
-	return mySQLThrottleMetric
+	return cacheMySQLThrottleMetric(probe, mySQLThrottleMetric)
 }
