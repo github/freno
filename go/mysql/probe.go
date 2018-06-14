@@ -20,6 +20,7 @@ type Probe struct {
 	User        string
 	Password    string
 	MetricQuery string
+	CacheMillis int
 	InProgress  int64
 }
 

@@ -14,6 +14,7 @@ type MySQLClusterConfigurationSettings struct {
 	User              string  // override MySQLConfigurationSettings's, or leave empty to inherit those settings
 	Password          string  // override MySQLConfigurationSettings's, or leave empty to inherit those settings
 	MetricQuery       string  // override MySQLConfigurationSettings's, or leave empty to inherit those settings
+	CacheMillis       int     // override MySQLConfigurationSettings's, or leave empty to inherit those settings
 	ThrottleThreshold float64 // override MySQLConfigurationSettings's, or leave empty to inherit those settings
 	Port              int     // Specify if different than 3306 or if different than specified by MySQLConfigurationSettings
 	IgnoreHostsCount  int     // Number of hosts that can be skipped/ignored even on error or on exceeding theesholds
@@ -40,6 +41,7 @@ type MySQLConfigurationSettings struct {
 	User              string
 	Password          string
 	MetricQuery       string
+	CacheMillis       int // optional, if defined then probe result will be cached, and future probes may use cached value
 	ThrottleThreshold float64
 	Port              int // Specify if different than 3306; applies to all clusters
 	IgnoreHostsCount  int // Number of hosts that can be skipped/ignored even on error or on exceeding theesholds
@@ -74,6 +76,9 @@ func (settings *MySQLConfigurationSettings) postReadAdjustments() error {
 		}
 		if clusterSettings.MetricQuery == "" {
 			clusterSettings.MetricQuery = settings.MetricQuery
+		}
+		if clusterSettings.CacheMillis == 0 {
+			clusterSettings.CacheMillis = settings.CacheMillis
 		}
 		if clusterSettings.ThrottleThreshold == 0 {
 			clusterSettings.ThrottleThreshold = settings.ThrottleThreshold
