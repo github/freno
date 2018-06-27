@@ -26,6 +26,7 @@ type API interface {
 	RaftState(w http.ResponseWriter, _ *http.Request, _ httprouter.Params)
 	Hostname(w http.ResponseWriter, _ *http.Request, _ httprouter.Params)
 	WriteCheck(w http.ResponseWriter, r *http.Request, _ httprouter.Params)
+	WriteCheckIfExists(w http.ResponseWriter, r *http.Request, _ httprouter.Params)
 	ReadCheck(w http.ResponseWriter, r *http.Request, _ httprouter.Params)
 	AggregatedMetrics(w http.ResponseWriter, r *http.Request, _ httprouter.Params)
 	MetricsHealth(w http.ResponseWriter, r *http.Request, _ httprouter.Params)
@@ -139,7 +140,7 @@ func (api *APIImpl) respondToCheckRequest(w http.ResponseWriter, r *http.Request
 }
 
 // Check checks whether a collected metric is within its threshold
-func (api *APIImpl) check(w http.ResponseWriter, r *http.Request, ps httprouter.Params, overrideThreshold float64) {
+func (api *APIImpl) check(w http.ResponseWriter, r *http.Request, ps httprouter.Params, overrideThreshold float64, okIfNotExists bool) {
 	appName := ps.ByName("app")
 	storeType := ps.ByName("storeType")
 	storeName := ps.ByName("storeName")
@@ -150,13 +151,24 @@ func (api *APIImpl) check(w http.ResponseWriter, r *http.Request, ps httprouter.
 	}
 
 	checkResult := api.throttlerCheck.Check(appName, storeType, storeName, remoteAddr, overrideThreshold)
+	if okIfNotExists {
+		if checkResult.StatusCode == http.StatusNotFound {
+			checkResult.StatusCode = http.StatusOK // 200
+		}
+	}
 
 	api.respondToCheckRequest(w, r, checkResult)
 }
 
 // WriteCheck
 func (api *APIImpl) WriteCheck(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
-	api.check(w, r, ps, 0)
+	api.check(w, r, ps, 0, false)
+}
+
+// WriteCheckIfExists checks for a metric, but reports an OK if the metric does not exist.
+// If the metric does exist, then all usual checks are made.
+func (api *APIImpl) WriteCheckIfExists(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
+	api.check(w, r, ps, 0, true)
 }
 
 // ReadCheck
@@ -164,7 +176,7 @@ func (api *APIImpl) ReadCheck(w http.ResponseWriter, r *http.Request, ps httprou
 	if overrideThreshold, err := strconv.ParseFloat(ps.ByName("threshold"), 64); err != nil {
 		api.respondGeneric(w, r, err)
 	} else {
-		api.check(w, r, ps, overrideThreshold)
+		api.check(w, r, ps, overrideThreshold, false)
 	}
 }
 
@@ -307,6 +319,7 @@ func ConfigureRoutes(api API) *httprouter.Router {
 	register(router, "/hostname", api.Hostname)
 
 	register(router, "/check/:app/:storeType/:storeName", api.WriteCheck)
+	register(router, "/check-if-exists/:app/:storeType/:storeName", api.WriteCheckIfExists)
 	register(router, "/check-read/:app/:storeType/:storeName/:threshold", api.ReadCheck)
 
 	register(router, "/aggregated-metrics", api.AggregatedMetrics)
