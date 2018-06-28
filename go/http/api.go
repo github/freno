@@ -151,10 +151,8 @@ func (api *APIImpl) check(w http.ResponseWriter, r *http.Request, ps httprouter.
 	}
 
 	checkResult := api.throttlerCheck.Check(appName, storeType, storeName, remoteAddr, overrideThreshold)
-	if okIfNotExists {
-		if checkResult.StatusCode == http.StatusNotFound {
-			checkResult.StatusCode = http.StatusOK // 200
-		}
+	if checkResult.StatusCode == http.StatusNotFound && okIfNotExists {
+		checkResult.StatusCode = http.StatusOK // 200
 	}
 
 	api.respondToCheckRequest(w, r, checkResult)
