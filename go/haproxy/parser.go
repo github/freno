@@ -67,7 +67,8 @@ func ParseHosts(csvLines []string, poolName string) (hosts []string, err error) 
 			poolFound = true
 			if host := tokens[tokensMap["svname"]]; host != "BACKEND" && host != "FRONTEND" {
 				countHosts++
-				statusTokens := strings.Split(tokens[tokensMap["status"]], " ")
+				fullStatus := tokens[tokensMap["status"]]
+				statusTokens := strings.Split(fullStatus, " ")
 				// status can show up as:
 				// `UP`
 				// `UP 1/2` (transitioning)
@@ -94,6 +95,9 @@ func ParseHosts(csvLines []string, poolName string) (hosts []string, err error) 
 					{
 						hosts = append(hosts, host)
 					}
+				}
+				if fullStatus == "no check" {
+					hosts = append(hosts, host)
 				}
 			}
 		}
