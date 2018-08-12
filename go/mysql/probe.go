@@ -16,12 +16,15 @@ const timeoutMillis = 1000
 
 // Probe is the minimal configuration required to connect to a MySQL server
 type Probe struct {
-	Key         InstanceKey
-	User        string
-	Password    string
-	MetricQuery string
-	CacheMillis int
-	InProgress  int64
+	Key                 InstanceKey
+	User                string
+	Password            string
+	MetricQuery         string
+	CacheMillis         int
+	QueryInProgress     int64
+	HttpCheckPort       int
+	HttpCheckPath       string
+	HttpCheckInProgress int64
 }
 
 type Probes map[InstanceKey](*Probe)

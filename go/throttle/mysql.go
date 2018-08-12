@@ -1,20 +1,30 @@
 package throttle
 
 import (
+	"net/http"
 	"sort"
 
 	"github.com/github/freno/go/base"
 	"github.com/github/freno/go/mysql"
 )
 
-func aggregateMySQLProbes(probes *mysql.Probes, instanceResultsMap mysql.InstanceMetricResultMap, ignoreHostsCount int) (worstMetric base.MetricResult) {
+func aggregateMySQLProbes(probes *mysql.Probes, instanceResultsMap mysql.InstanceMetricResultMap, instanceHttpChecksMap mysql.InstanceHttpCheckResultMap, ignoreHostsCount int) (worstMetric base.MetricResult) {
 	// probes is known not to change. It can be *replaced*, but not changed.
 	// so it's safe to iterate it
-	if len(*probes) == 0 {
+	availableProbes := len(*probes)
+	for _, probe := range *probes {
+		if instanceHttpChecksMap[probe.Key] == http.StatusNotFound {
+			availableProbes--
+		}
+	}
+	if availableProbes == 0 {
 		return base.NoHostsMetricResult
 	}
 	probeValues := []float64{}
 	for _, probe := range *probes {
+		if instanceHttpChecksMap[probe.Key] == http.StatusNotFound {
+			continue
+		}
 		instanceMetricResult, ok := instanceResultsMap[probe.Key]
 		if !ok {
 			return base.NoMetricResultYet
