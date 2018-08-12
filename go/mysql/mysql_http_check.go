@@ -8,7 +8,14 @@ package mysql
 import (
 	"fmt"
 	"net/http"
+	"time"
+
+	metrics "github.com/rcrowley/go-metrics"
 )
+
+var httpClient = http.Client{
+	Timeout: 1 * time.Second,
+}
 
 type MySQLHttpCheck struct {
 	Key         InstanceKey
@@ -23,13 +30,17 @@ func NewMySQLHttpCheck(instanceKey *InstanceKey, checkResult int) *MySQLHttpChec
 }
 
 func CheckHttp(probe *Probe) (httpCheckResult *MySQLHttpCheck) {
+
 	if probe.HttpCheckPort < 0 {
+		go func() { metrics.GetOrRegisterCounter("httpcheck.skip", nil).Inc(1) }()
 		return NewMySQLHttpCheck(&probe.Key, http.StatusOK)
 	}
 	url := fmt.Sprintf("%s:%d/%s", probe.Key.Hostname, probe.HttpCheckPort, probe.HttpCheckPath)
-	resp, err := http.Get(url)
+	resp, err := httpClient.Get(url)
 	if err != nil {
+		go func() { metrics.GetOrRegisterCounter("httpcheck.error", nil).Inc(1) }()
 		return NewMySQLHttpCheck(&probe.Key, http.StatusInternalServerError)
 	}
+	go func() { metrics.GetOrRegisterCounter(fmt.Sprintf("httpcheck.%d", resp.StatusCode), nil).Inc(1) }()
 	return NewMySQLHttpCheck(&probe.Key, resp.StatusCode)
 }
