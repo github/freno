@@ -11,15 +11,6 @@ import (
 func aggregateMySQLProbes(probes *mysql.Probes, instanceResultsMap mysql.InstanceMetricResultMap, instanceHttpChecksMap mysql.InstanceHttpCheckResultMap, ignoreHostsCount int) (worstMetric base.MetricResult) {
 	// probes is known not to change. It can be *replaced*, but not changed.
 	// so it's safe to iterate it
-	availableProbes := len(*probes)
-	for _, probe := range *probes {
-		if instanceHttpChecksMap[probe.Key] == http.StatusNotFound {
-			availableProbes--
-		}
-	}
-	if availableProbes == 0 {
-		return base.NoHostsMetricResult
-	}
 	probeValues := []float64{}
 	for _, probe := range *probes {
 		if instanceHttpChecksMap[probe.Key] == http.StatusNotFound {
@@ -43,6 +34,10 @@ func aggregateMySQLProbes(probes *mysql.Probes, instanceResultsMap mysql.Instanc
 		// No error
 		probeValues = append(probeValues, value)
 	}
+	if len(probeValues) == 0 {
+		return base.NoHostsMetricResult
+	}
+
 	// If we got here, that means no errors (or good to skip errors)
 	sort.Float64s(probeValues)
 	for ignoreHostsCount > 0 {

@@ -143,3 +143,44 @@ func TestAggregateMySQLProbesWithErrors(t *testing.T) {
 		test.S(t).ExpectEquals(value, 1.7)
 	}
 }
+
+func TestAggregateMySQLProbesWithHttpChecks(t *testing.T) {
+	instanceResultsMap := mysql.InstanceMetricResultMap{
+		key1: base.NewSimpleMetricResult(1.2),
+		key2: base.NewSimpleMetricResult(1.7),
+		key3: base.NewSimpleMetricResult(0.3),
+		key4: base.NoSuchMetric,
+		key5: base.NewSimpleMetricResult(1.1),
+	}
+	instanceHttpCheckResultMap := mysql.InstanceHttpCheckResultMap{
+		key1: http.StatusOK,
+		key2: http.StatusOK,
+		key3: http.StatusOK,
+		key4: http.StatusNotFound,
+		key5: http.StatusOK,
+	}
+	var probes mysql.Probes = map[mysql.InstanceKey](*mysql.Probe){}
+	for key := range instanceResultsMap {
+		probes[key] = &mysql.Probe{Key: key}
+	}
+	{
+		worstMetric := aggregateMySQLProbes(&probes, instanceResultsMap, instanceHttpCheckResultMap, 0)
+		_, err := worstMetric.Get()
+		test.S(t).ExpectNil(err)
+	}
+	{
+		instanceHttpCheckResultMap[key2] = http.StatusNotFound
+		worstMetric := aggregateMySQLProbes(&probes, instanceResultsMap, instanceHttpCheckResultMap, 0)
+		value, err := worstMetric.Get()
+		test.S(t).ExpectNil(err)
+		test.S(t).ExpectEquals(value, 1.2)
+	}
+	{
+		for key := range instanceHttpCheckResultMap {
+			instanceHttpCheckResultMap[key] = http.StatusNotFound
+		}
+		worstMetric := aggregateMySQLProbes(&probes, instanceResultsMap, instanceHttpCheckResultMap, 0)
+		_, err := worstMetric.Get()
+		test.S(t).ExpectNotNil(err)
+	}
+}
