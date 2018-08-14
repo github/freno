@@ -35,7 +35,7 @@ func CheckHttp(probe *Probe) (httpCheckResult *MySQLHttpCheck) {
 		go func() { metrics.GetOrRegisterCounter("httpcheck.skip", nil).Inc(1) }()
 		return NewMySQLHttpCheck(&probe.Key, http.StatusOK)
 	}
-	url := fmt.Sprintf("%s:%d/%s", probe.Key.Hostname, probe.HttpCheckPort, probe.HttpCheckPath)
+	url := fmt.Sprintf("http://%s:%d/%s", probe.Key.Hostname, probe.HttpCheckPort, probe.HttpCheckPath)
 	resp, err := httpClient.Get(url)
 	if err != nil {
 		go func() { metrics.GetOrRegisterCounter("httpcheck.error", nil).Inc(1) }()
