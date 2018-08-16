@@ -127,7 +127,7 @@ func (throttler *Throttler) Operate() {
 		case httpCheckResult := <-throttler.mysqlHttpCheckChan:
 			{
 				// incoming MySQL metric, frequent, as result of collectMySQLMetrics()
-				throttler.mysqlInventory.InstanceKeyHttpChecks[httpCheckResult.Key] = httpCheckResult.CheckResult
+				throttler.mysqlInventory.ClusterInstanceHttpChecks[httpCheckResult.HashKey()] = httpCheckResult.CheckResult
 			}
 		case <-mysqlRefreshTick:
 			{
@@ -188,7 +188,8 @@ func (throttler *Throttler) collectMySQLHttpChecks() error {
 		return nil
 	}
 	// synchronously, get lists of probes
-	for _, probes := range throttler.mysqlInventory.ClustersProbes {
+	for clusterName, probes := range throttler.mysqlInventory.ClustersProbes {
+		clusterName := clusterName
 		probes := probes
 		go func() {
 			// probes is known not to change. It can be *replaced*, but not changed.
@@ -202,7 +203,7 @@ func (throttler *Throttler) collectMySQLHttpChecks() error {
 						return
 					}
 					defer atomic.StoreInt64(&probe.HttpCheckInProgress, 0)
-					httpCheckResult := mysql.CheckHttp(probe)
+					httpCheckResult := mysql.CheckHttp(clusterName, probe)
 					throttler.mysqlHttpCheckChan <- httpCheckResult
 				}()
 			}
@@ -302,7 +303,7 @@ func (throttler *Throttler) aggregateMySQLMetrics() error {
 	for clusterName, probes := range throttler.mysqlInventory.ClustersProbes {
 		metricName := fmt.Sprintf("mysql/%s", clusterName)
 		ignoreHostsCount := throttler.mysqlInventory.IgnoreHostsCount[clusterName]
-		aggregatedMetric := aggregateMySQLProbes(probes, throttler.mysqlInventory.InstanceKeyMetrics, throttler.mysqlInventory.InstanceKeyHttpChecks, ignoreHostsCount)
+		aggregatedMetric := aggregateMySQLProbes(probes, clusterName, throttler.mysqlInventory.InstanceKeyMetrics, throttler.mysqlInventory.ClusterInstanceHttpChecks, ignoreHostsCount)
 		go throttler.aggregatedMetrics.Set(metricName, aggregatedMetric, cache.DefaultExpiration)
 		if throttler.memcacheClient != nil {
 			go func() {

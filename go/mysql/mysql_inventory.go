@@ -10,21 +10,21 @@ import (
 )
 
 type InstanceMetricResultMap map[InstanceKey]base.MetricResult
-type InstanceHttpCheckResultMap map[InstanceKey]int
+type ClusterInstanceHttpCheckResultMap map[string]int
 
 type MySQLInventory struct {
-	ClustersProbes        map[string](*Probes)
-	IgnoreHostsCount      map[string]int
-	InstanceKeyMetrics    InstanceMetricResultMap
-	InstanceKeyHttpChecks InstanceHttpCheckResultMap
+	ClustersProbes            map[string](*Probes)
+	IgnoreHostsCount          map[string]int
+	InstanceKeyMetrics        InstanceMetricResultMap
+	ClusterInstanceHttpChecks ClusterInstanceHttpCheckResultMap
 }
 
 func NewMySQLInventory() *MySQLInventory {
 	inventory := &MySQLInventory{
-		ClustersProbes:        make(map[string](*Probes)),
-		IgnoreHostsCount:      make(map[string]int),
-		InstanceKeyMetrics:    make(map[InstanceKey]base.MetricResult),
-		InstanceKeyHttpChecks: make(map[InstanceKey]int),
+		ClustersProbes:            make(map[string](*Probes)),
+		IgnoreHostsCount:          make(map[string]int),
+		InstanceKeyMetrics:        make(map[InstanceKey]base.MetricResult),
+		ClusterInstanceHttpChecks: make(map[string]int),
 	}
 	return inventory
 }

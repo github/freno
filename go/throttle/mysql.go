@@ -8,12 +8,12 @@ import (
 	"github.com/github/freno/go/mysql"
 )
 
-func aggregateMySQLProbes(probes *mysql.Probes, instanceResultsMap mysql.InstanceMetricResultMap, instanceHttpChecksMap mysql.InstanceHttpCheckResultMap, ignoreHostsCount int) (worstMetric base.MetricResult) {
+func aggregateMySQLProbes(probes *mysql.Probes, clusterName string, instanceResultsMap mysql.InstanceMetricResultMap, clusterInstanceHttpChecksMap mysql.ClusterInstanceHttpCheckResultMap, ignoreHostsCount int) (worstMetric base.MetricResult) {
 	// probes is known not to change. It can be *replaced*, but not changed.
 	// so it's safe to iterate it
 	probeValues := []float64{}
 	for _, probe := range *probes {
-		if instanceHttpChecksMap[probe.Key] == http.StatusNotFound {
+		if clusterInstanceHttpChecksMap[mysql.MySQLHttpCheckHashKey(clusterName, &probe.Key)] == http.StatusNotFound {
 			continue
 		}
 		instanceMetricResult, ok := instanceResultsMap[probe.Key]
