@@ -24,6 +24,7 @@ const leaderCheckInterval = 1 * time.Second
 const mysqlCollectInterval = 100 * time.Millisecond
 const mysqlRefreshInterval = 10 * time.Second
 const mysqlAggreateInterval = 50 * time.Millisecond
+const mysqlHttpCheckInterval = 5 * time.Second
 
 const aggregatedMetricsExpiration = 5 * time.Second
 const aggregatedMetricsCleanup = 1 * time.Second
@@ -42,6 +43,7 @@ type Throttler struct {
 	isLeaderFunc func() bool
 
 	mysqlThrottleMetricChan chan *mysql.MySQLThrottleMetric
+	mysqlHttpCheckChan      chan *mysql.MySQLHttpCheck
 	mysqlInventoryChan      chan *mysql.MySQLInventory
 	mysqlClusterProbesChan  chan *mysql.ClusterProbes
 
@@ -65,6 +67,7 @@ func NewThrottler(isLeaderFunc func() bool) *Throttler {
 		isLeaderFunc: isLeaderFunc,
 
 		mysqlThrottleMetricChan: make(chan *mysql.MySQLThrottleMetric),
+		mysqlHttpCheckChan:      make(chan *mysql.MySQLHttpCheck),
 
 		mysqlInventoryChan:     make(chan *mysql.MySQLInventory, 1),
 		mysqlClusterProbesChan: make(chan *mysql.ClusterProbes),
@@ -94,6 +97,7 @@ func (throttler *Throttler) Operate() {
 	mysqlCollectTick := time.Tick(mysqlCollectInterval)
 	mysqlRefreshTick := time.Tick(mysqlRefreshInterval)
 	mysqlAggregateTick := time.Tick(mysqlAggreateInterval)
+	mysqlHttpCheckTick := time.Tick(mysqlHttpCheckInterval)
 	throttledAppsTick := time.Tick(throttledAppsSnapshotInterval)
 
 	// initial read of inventory:
@@ -111,10 +115,19 @@ func (throttler *Throttler) Operate() {
 				// frequent
 				throttler.collectMySQLMetrics()
 			}
+		case <-mysqlHttpCheckTick:
+			{
+				throttler.collectMySQLHttpChecks()
+			}
 		case metric := <-throttler.mysqlThrottleMetricChan:
 			{
 				// incoming MySQL metric, frequent, as result of collectMySQLMetrics()
 				throttler.mysqlInventory.InstanceKeyMetrics[metric.Key] = metric
+			}
+		case httpCheckResult := <-throttler.mysqlHttpCheckChan:
+			{
+				// incoming MySQL metric, frequent, as result of collectMySQLMetrics()
+				throttler.mysqlInventory.ClusterInstanceHttpChecks[httpCheckResult.HashKey()] = httpCheckResult.CheckResult
 			}
 		case <-mysqlRefreshTick:
 			{
@@ -157,12 +170,41 @@ func (throttler *Throttler) collectMySQLMetrics() error {
 				go func() {
 					// Avoid querying the same server twice at the same time. If previous read is still there,
 					// we avoid re-reading it.
-					if !atomic.CompareAndSwapInt64(&probe.InProgress, 0, 1) {
+					if !atomic.CompareAndSwapInt64(&probe.QueryInProgress, 0, 1) {
 						return
 					}
-					defer atomic.StoreInt64(&probe.InProgress, 0)
+					defer atomic.StoreInt64(&probe.QueryInProgress, 0)
 					throttleMetrics := mysql.ReadThrottleMetric(probe)
 					throttler.mysqlThrottleMetricChan <- throttleMetrics
+				}()
+			}
+		}()
+	}
+	return nil
+}
+
+func (throttler *Throttler) collectMySQLHttpChecks() error {
+	if !throttler.isLeader {
+		return nil
+	}
+	// synchronously, get lists of probes
+	for clusterName, probes := range throttler.mysqlInventory.ClustersProbes {
+		clusterName := clusterName
+		probes := probes
+		go func() {
+			// probes is known not to change. It can be *replaced*, but not changed.
+			// so it's safe to iterate it
+			for _, probe := range *probes {
+				probe := probe
+				go func() {
+					// Avoid querying the same server twice at the same time. If previous read is still there,
+					// we avoid re-reading it.
+					if !atomic.CompareAndSwapInt64(&probe.HttpCheckInProgress, 0, 1) {
+						return
+					}
+					defer atomic.StoreInt64(&probe.HttpCheckInProgress, 0)
+					httpCheckResult := mysql.CheckHttp(clusterName, probe)
+					throttler.mysqlHttpCheckChan <- httpCheckResult
 				}()
 			}
 		}()
@@ -182,11 +224,13 @@ func (throttler *Throttler) refreshMySQLInventory() error {
 		log.Debugf("read instance key: %+v", key)
 
 		probe := &mysql.Probe{
-			Key:         *key,
-			User:        clusterSettings.User,
-			Password:    clusterSettings.Password,
-			MetricQuery: clusterSettings.MetricQuery,
-			CacheMillis: clusterSettings.CacheMillis,
+			Key:           *key,
+			User:          clusterSettings.User,
+			Password:      clusterSettings.Password,
+			MetricQuery:   clusterSettings.MetricQuery,
+			CacheMillis:   clusterSettings.CacheMillis,
+			HttpCheckPath: clusterSettings.HttpCheckPath,
+			HttpCheckPort: clusterSettings.HttpCheckPort,
 		}
 		(*probes)[*key] = probe
 	}
@@ -259,7 +303,7 @@ func (throttler *Throttler) aggregateMySQLMetrics() error {
 	for clusterName, probes := range throttler.mysqlInventory.ClustersProbes {
 		metricName := fmt.Sprintf("mysql/%s", clusterName)
 		ignoreHostsCount := throttler.mysqlInventory.IgnoreHostsCount[clusterName]
-		aggregatedMetric := aggregateMySQLProbes(probes, throttler.mysqlInventory.InstanceKeyMetrics, ignoreHostsCount)
+		aggregatedMetric := aggregateMySQLProbes(probes, clusterName, throttler.mysqlInventory.InstanceKeyMetrics, throttler.mysqlInventory.ClusterInstanceHttpChecks, ignoreHostsCount)
 		go throttler.aggregatedMetrics.Set(metricName, aggregatedMetric, cache.DefaultExpiration)
 		if throttler.memcacheClient != nil {
 			go func() {
