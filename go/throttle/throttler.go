@@ -12,6 +12,7 @@ import (
 	"github.com/github/freno/go/config"
 	"github.com/github/freno/go/haproxy"
 	"github.com/github/freno/go/mysql"
+	"github.com/github/freno/go/vitess"
 
 	"github.com/outbrain/golib/log"
 	"github.com/patrickmn/go-cache"
@@ -266,6 +267,29 @@ func (throttler *Throttler) refreshMySQLInventory() error {
 				throttler.mysqlClusterProbesChan <- clusterProbes
 				return nil
 			}
+
+			if !clusterSettings.VitessSettings.IsEmpty() {
+				log.Debugf("getting vitess data from %s", clusterSettings.VitessSettings.API)
+				keyspace := clusterSettings.VitessSettings.Keyspace
+				shard := clusterSettings.VitessSettings.Shard
+				tablets, err := vitess.ParseTablets(clusterSettings.VitessSettings.API, keyspace, shard)
+				if err != nil {
+					return log.Errorf("Unable to get vitess hosts from %s, %s/%s: %+v", clusterSettings.VitessSettings.API, keyspace, shard, err)
+				}
+				log.Debugf("Read %+v hosts from vitess %s, %s/%s", len(tablets), clusterSettings.VitessSettings.API, keyspace, shard)
+				clusterProbes := &mysql.ClusterProbes{
+					ClusterName:      clusterName,
+					IgnoreHostsCount: clusterSettings.IgnoreHostsCount,
+					InstanceProbes:   mysql.NewProbes(),
+				}
+				for _, tablet := range tablets {
+					key := mysql.InstanceKey{Hostname: tablet.MysqlHostname, Port: int(tablet.MysqlPort)}
+					addInstanceKey(&key, clusterSettings, clusterProbes.InstanceProbes)
+				}
+				throttler.mysqlClusterProbesChan <- clusterProbes
+				return nil
+			}
+
 			if !clusterSettings.StaticHostsSettings.IsEmpty() {
 				clusterProbes := &mysql.ClusterProbes{
 					ClusterName:    clusterName,
