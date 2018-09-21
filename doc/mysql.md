@@ -79,6 +79,12 @@ Looking at clusters configuration:
       "PoolName": "my_prod4_pool"
     }
   },
+  "sharded": {
+    "VitessSettings": {
+      "API": "https://vtctld.example.com/api/",
+      "Keyspace": "my_sharded_ks"
+    }
+  },
   "local": {
     "User": "msandbox",
     "Password": "msandbox",

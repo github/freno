@@ -22,6 +22,7 @@ type MySQLClusterConfigurationSettings struct {
 	HttpCheckPath     string  //  Specify if different than specified by MySQLConfigurationSettings
 
 	HAProxySettings     HAProxyConfigurationSettings // If list of servers is to be acquired via HAProxy, provide this field
+	VitessSettings      VitessConfigurationSettings  // If list of servers is to be acquired via Vitess, provide this field
 	StaticHostsSettings StaticHostsConfigurationSettings
 }
 
