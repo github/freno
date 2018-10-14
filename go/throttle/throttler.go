@@ -55,6 +55,7 @@ type Throttler struct {
 	throttledApps          *cache.Cache
 	recentApps             *cache.Cache
 	metricsHealth          *cache.Cache
+	metaChecks             *cache.Cache
 
 	memcacheClient *memcache.Client
 	memcachePath   string
@@ -79,12 +80,17 @@ func NewThrottler(isLeaderFunc func() bool) *Throttler {
 		aggregatedMetrics:      cache.New(aggregatedMetricsExpiration, aggregatedMetricsCleanup),
 		recentApps:             cache.New(recentAppsExpiration, time.Minute),
 		metricsHealth:          cache.New(cache.NoExpiration, 0),
+		metaChecks:             cache.New(cache.NoExpiration, 0),
 	}
 	throttler.ThrottleApp("abusing-app", time.Now().Add(time.Hour*24*365*10), DefaultThrottleRatio)
 	if memcacheServers := config.Settings().MemcacheServers; len(memcacheServers) > 0 {
 		throttler.memcacheClient = memcache.New(memcacheServers...)
 	}
 	throttler.memcachePath = config.Settings().MemcachePath
+
+	for metaCheck, checksListings := range config.Settings().Stores.Meta {
+		throttler.metaChecks.Set(metaCheck, checksListings, cache.DefaultExpiration)
+	}
 
 	return throttler
 }

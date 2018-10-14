@@ -2,12 +2,13 @@ package throttle
 
 import (
 	"net/http"
-	"strings"
 	"time"
 
 	"fmt"
 
 	"github.com/github/freno/go/base"
+	"github.com/github/freno/go/config"
+
 	metrics "github.com/rcrowley/go-metrics"
 )
 
@@ -58,8 +59,72 @@ func (check *ThrottlerCheck) checkAppMetricResult(appName string, metricResultFu
 	return NewCheckResult(statusCode, value, threshold, err)
 }
 
+// aggregateCheckResults reviews multiple check results and returns one result, aiming to return the worst result
+func (check *ThrottlerCheck) aggregateCheckResults(checkResults []*CheckResult) (checkResult *CheckResult) {
+	for _, checkResult = range checkResults {
+		status := checkResult.StatusCode
+		// First, look for really bad results
+		if status != http.StatusOK && status != http.StatusNotFound {
+			return checkResult
+		}
+	}
+	for _, checkResult = range checkResults {
+		status := checkResult.StatusCode
+		// Now also allow 404, which upper layers may choose to ignore
+		if status != http.StatusOK {
+			return checkResult
+		}
+	}
+	for _, checkResult = range checkResults {
+		// Now return any good result
+		return checkResult
+	}
+	return NoSuchMetricCheckResult
+}
+
+func (check *ThrottlerCheck) reportMetrics(appName, storeType, storeName, remoteAddr string, statusCode int) {
+	metrics.GetOrRegisterCounter("check.any.total", nil).Inc(1)
+	metrics.GetOrRegisterCounter(fmt.Sprintf("check.%s.total", appName), nil).Inc(1)
+
+	metrics.GetOrRegisterCounter(fmt.Sprintf("check.any.%s.%s.total", storeType, storeName), nil).Inc(1)
+	metrics.GetOrRegisterCounter(fmt.Sprintf("check.%s.%s.%s.total", appName, storeType, storeName), nil).Inc(1)
+
+	if statusCode != http.StatusOK {
+		metrics.GetOrRegisterCounter("check.any.error", nil).Inc(1)
+		metrics.GetOrRegisterCounter(fmt.Sprintf("check.%s.error", appName), nil).Inc(1)
+
+		metrics.GetOrRegisterCounter(fmt.Sprintf("check.any.%s.%s.error", storeType, storeName), nil).Inc(1)
+		metrics.GetOrRegisterCounter(fmt.Sprintf("check.%s.%s.%s.error", appName, storeType, storeName), nil).Inc(1)
+	}
+
+	check.throttler.markRecentApp(appName, remoteAddr)
+}
+
 // CheckAppStoreMetric
 func (check *ThrottlerCheck) Check(appName string, storeType string, storeName string, remoteAddr string, overrideThreshold float64) (checkResult *CheckResult) {
+	metricName := base.GetMetricName(storeType, storeName)
+	if value, ok := check.throttler.metaChecks.Get(metricName); ok {
+		// This is a meta-check
+		checksListing, _ := value.(config.MetaChecksListing)
+		var checkResults [](*CheckResult)
+		for _, subMetricName := range checksListing {
+			if subMetricName == metricName {
+				// infinite loop
+				return NoSuchMetricCheckResult
+			}
+			subStoreType, subStoreName, err := base.ParseMetricName(subMetricName)
+			if err != nil {
+				return NoSuchMetricCheckResult
+			}
+			// recurse
+			// overrideThreshold is forwarded to recursion, and should be carefully considered.
+			checkResults = append(checkResults, check.Check(appName, subStoreType, subStoreName, remoteAddr, overrideThreshold))
+		}
+		checkResult = check.aggregateCheckResults(checkResults)
+		go check.reportMetrics(appName, storeType, storeName, remoteAddr, checkResult.StatusCode)
+		return checkResult
+	}
+
 	var metricResultFunc base.MetricResultFunc
 	switch storeType {
 	case "mysql":
@@ -74,36 +139,16 @@ func (check *ThrottlerCheck) Check(appName string, storeType string, storeName s
 	}
 
 	checkResult = check.checkAppMetricResult(appName, metricResultFunc, overrideThreshold)
-
-	go func(statusCode int) {
-		metrics.GetOrRegisterCounter("check.any.total", nil).Inc(1)
-		metrics.GetOrRegisterCounter(fmt.Sprintf("check.%s.total", appName), nil).Inc(1)
-
-		metrics.GetOrRegisterCounter(fmt.Sprintf("check.any.%s.%s.total", storeType, storeName), nil).Inc(1)
-		metrics.GetOrRegisterCounter(fmt.Sprintf("check.%s.%s.%s.total", appName, storeType, storeName), nil).Inc(1)
-
-		if statusCode != http.StatusOK {
-			metrics.GetOrRegisterCounter("check.any.error", nil).Inc(1)
-			metrics.GetOrRegisterCounter(fmt.Sprintf("check.%s.error", appName), nil).Inc(1)
-
-			metrics.GetOrRegisterCounter(fmt.Sprintf("check.any.%s.%s.error", storeType, storeName), nil).Inc(1)
-			metrics.GetOrRegisterCounter(fmt.Sprintf("check.%s.%s.%s.error", appName, storeType, storeName), nil).Inc(1)
-		}
-
-		check.throttler.markRecentApp(appName, remoteAddr)
-	}(checkResult.StatusCode)
-
+	go check.reportMetrics(appName, storeType, storeName, remoteAddr, checkResult.StatusCode)
 	return checkResult
 }
 
 // localCheck
 func (check *ThrottlerCheck) localCheck(appName string, metricName string) (checkResult *CheckResult) {
-	metricTokens := strings.Split(metricName, "/")
-	if len(metricTokens) != 2 {
+	storeType, storeName, err := base.ParseMetricName(metricName)
+	if err != nil {
 		return NoSuchMetricCheckResult
 	}
-	storeType := metricTokens[0]
-	storeName := metricTokens[1]
 	checkResult = check.Check(appName, storeType, storeName, "local", 0)
 
 	if checkResult.StatusCode == http.StatusOK {
