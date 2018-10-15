@@ -6,6 +6,8 @@
   "RaftNodes": ["<ip.1>", "<ip.2>", "<ip.3>"],
   "MemcacheServers": [],
   "Stores": {
+    "Meta": {
+    },
     "MySQL": {
       "ThrottleThreshold": 1.0,
       "Clusters": {

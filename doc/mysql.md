@@ -152,3 +152,50 @@ Otherwise you may provide any query that returns a single row, single numeric co
   }
 }
 ```
+
+### Meta checks
+
+You may also define _meta checks_ that aggregate multiple other checks. With a single API call on a meta-check you will implicitly invoke multiple other checks. A meta-check only responds with `HTTP 200 OK` when all aggregated checks return the same.
+
+Config example:
+
+```json
+"Stores": {
+  "Meta": {
+    "mysql/prod4": [
+      "mysql/prod4-lag",
+      "mysql/prod4-writer"
+    ]
+  },
+  "MySQL": {
+    "Clusters": {
+      "prod4-lag": {
+        ...
+      },
+      "prod4-writer": {
+        ...
+      }
+    }
+  }
+}
+```
+
+A call to `api/check/myapp/mysql/prod4` will invoke both `api/check/myapp/mysql/prod4-lag` and `api/check/myapp/mysql/prod4-writer` and return the _worst_ response.
+
+The name of the meta check is flexible. The below is perfectly valid:
+
+```json
+"Meta": {
+  "foo/bar": [
+    "mysql/prod4-lag",
+    "mysql/prod4-writer"
+  ],
+  "backend/database": [
+    "mysql/prod1-lag",
+    "mysql/prod2-lag",
+    "mysql/prod3-lag"
+  ]
+},
+```
+
+You will need to ensure the listed checks do indeed exist in the config file. You may have multiple levels of meta-checks but behavior is unexpected if you create an infinite loop.
