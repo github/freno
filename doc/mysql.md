@@ -133,4 +133,22 @@ Noteworthy:
 
 `freno` explicitly recognizes `show global ...` statements and reads the result's numeric value.
 
-Otherwise you may provide any query that returns a single row, single numeric column.
+Otherwise you may provide any query that returns a single row, single numeric column. As another example, consider this query to identify the history length on a master:
+
+```json
+"Clusters": {
+  "cluster8-writer": {
+    "MetricQuery": "SELECT count FROM information_schema.innodb_metrics WHERE name = 'trx_rseg_history_len'",
+    "CacheMillis": 1000,
+    "ThrottleThreshold": 100000,
+    "IgnoreHostsCount": 0,
+    "User": "msandbox",
+    "Password": "msandbox",
+    "HAProxySettings": {
+      "Host": "my.haproxy.mydomain.com",
+      "Port": 2001,
+      "PoolName": "my_prod8_writer"
+    }
+  }
+}
+```
