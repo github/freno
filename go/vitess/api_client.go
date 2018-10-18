@@ -24,7 +24,7 @@ func constructAPIURL(api string, keyspace string, shard string) (url string) {
 	if !strings.HasSuffix(api, "/api") {
 		api = fmt.Sprintf("%s/api", api)
 	}
-	url = fmt.Sprintf("%s/ks_tablets/%s/%s", api, keyspace, shard)
+	url = fmt.Sprintf("%s/keyspace/%s/tablets/%s", api, keyspace, shard)
 
 	return url
 }
