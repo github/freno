@@ -41,15 +41,16 @@ func (settings *MySQLClusterConfigurationSettings) postReadAdjustments() error {
 }
 
 type MySQLConfigurationSettings struct {
-	User              string
-	Password          string
-	MetricQuery       string
-	CacheMillis       int // optional, if defined then probe result will be cached, and future probes may use cached value
-	ThrottleThreshold float64
-	Port              int    // Specify if different than 3306; applies to all clusters
-	IgnoreHostsCount  int    // Number of hosts that can be skipped/ignored even on error or on exceeding theesholds
-	HttpCheckPort     int    // port for HTTP check. -1 to disable.
-	HttpCheckPath     string // If non-empty, requires HttpCheckPort
+	User               string
+	Password           string
+	MetricQuery        string
+	CacheMillis        int // optional, if defined then probe result will be cached, and future probes may use cached value
+	ThrottleThreshold  float64
+	Port               int    // Specify if different than 3306; applies to all clusters
+	IgnoreDialTcpErros bool   // Skip hosts where a metric cannot be retrieved due to TCP dial errors
+	IgnoreHostsCount   int    // Number of hosts that can be skipped/ignored even on error or on exceeding theesholds
+	HttpCheckPort      int    // port for HTTP check. -1 to disable.
+	HttpCheckPath      string // If non-empty, requires HttpCheckPort
 
 	Clusters map[string](*MySQLClusterConfigurationSettings) // cluster name -> cluster config
 }

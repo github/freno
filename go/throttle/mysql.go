@@ -8,7 +8,14 @@ import (
 	"github.com/github/freno/go/mysql"
 )
 
-func aggregateMySQLProbes(probes *mysql.Probes, clusterName string, instanceResultsMap mysql.InstanceMetricResultMap, clusterInstanceHttpChecksMap mysql.ClusterInstanceHttpCheckResultMap, ignoreHostsCount int) (worstMetric base.MetricResult) {
+func aggregateMySQLProbes(
+	probes *mysql.Probes,
+	clusterName string,
+	instanceResultsMap mysql.InstanceMetricResultMap,
+	clusterInstanceHttpChecksMap mysql.ClusterInstanceHttpCheckResultMap,
+	ignoreHostsCount int,
+	ignoreDialTcpErrors bool,
+) (worstMetric base.MetricResult) {
 	// probes is known not to change. It can be *replaced*, but not changed.
 	// so it's safe to iterate it
 	probeValues := []float64{}
@@ -23,6 +30,9 @@ func aggregateMySQLProbes(probes *mysql.Probes, clusterName string, instanceResu
 
 		value, err := instanceMetricResult.Get()
 		if err != nil {
+			if ignoreDialTcpErrors && base.IsDialTcpError(err) {
+				continue
+			}
 			if ignoreHostsCount > 0 {
 				// ok to skip this error
 				ignoreHostsCount = ignoreHostsCount - 1
@@ -38,7 +48,7 @@ func aggregateMySQLProbes(probes *mysql.Probes, clusterName string, instanceResu
 		return base.NoHostsMetricResult
 	}
 
-	// If we got here, that means no errors (or good to skip errors)
+	// If we got here, that means no errors (or good-to-skip errors)
 	sort.Float64s(probeValues)
 	for ignoreHostsCount > 0 {
 		if len(probeValues) > 1 {

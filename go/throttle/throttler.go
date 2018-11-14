@@ -327,7 +327,7 @@ func (throttler *Throttler) aggregateMySQLMetrics() error {
 	for clusterName, probes := range throttler.mysqlInventory.ClustersProbes {
 		metricName := fmt.Sprintf("mysql/%s", clusterName)
 		ignoreHostsCount := throttler.mysqlInventory.IgnoreHostsCount[clusterName]
-		aggregatedMetric := aggregateMySQLProbes(probes, clusterName, throttler.mysqlInventory.InstanceKeyMetrics, throttler.mysqlInventory.ClusterInstanceHttpChecks, ignoreHostsCount)
+		aggregatedMetric := aggregateMySQLProbes(probes, clusterName, throttler.mysqlInventory.InstanceKeyMetrics, throttler.mysqlInventory.ClusterInstanceHttpChecks, ignoreHostsCount, config.Settings().Stores.MySQL.IgnoreDialTcpErros)
 		go throttler.aggregatedMetrics.Set(metricName, aggregatedMetric, cache.DefaultExpiration)
 		if throttler.memcacheClient != nil {
 			go func() {

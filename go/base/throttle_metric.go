@@ -7,6 +7,7 @@ package base
 
 import (
 	"errors"
+	"strings"
 )
 
 type MetricResult interface {
@@ -19,6 +20,13 @@ var ThresholdExceededError = errors.New("Threshold exceeded")
 var noHostsError = errors.New("No hosts found")
 var noResultYetError = errors.New("Metric not collected yet")
 var NoSuchMetricError = errors.New("No such metric")
+
+func IsDialTcpError(e error) bool {
+	if e == nil {
+		return false
+	}
+	return strings.HasPrefix(e.Error(), "dial tcp")
+}
 
 type noHostsMetricResult struct{}
 
