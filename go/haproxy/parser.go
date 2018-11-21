@@ -42,9 +42,12 @@ func parseLines(csv string) []string {
 }
 
 // ParseHosts reads HAProxy CSV lines and returns lists of hosts participating in the given pool (backend)
-// Returned are all non-disabled hosts in given backend. Thus, a NOLB is skipped; any UP or DOWN hosts are returned.
+// Returned are all non-disabled hosts in given backend. Thus:
+// - a NOLB is skipped
+// - UP is included
+// - DOWN is included based on argument conditional.
 // Such list indicates the hosts which can be expected to be active, which is then the list freno will probe.
-func ParseHosts(csvLines []string, poolName string) (hosts []string, err error) {
+func ParseHosts(csvLines []string, poolName string, skipDown bool) (hosts []string, err error) {
 	if len(csvLines) < 1 {
 		return hosts, HAProxyEmptyStatus
 	}
@@ -93,7 +96,9 @@ func ParseHosts(csvLines []string, poolName string) (hosts []string, err error) 
 					}
 				case "DOWN":
 					{
-						hosts = append(hosts, host)
+						if !skipDown {
+							hosts = append(hosts, host)
+						}
 					}
 				}
 				if fullStatus == "no check" {
@@ -116,9 +121,9 @@ func ParseHosts(csvLines []string, poolName string) (hosts []string, err error) 
 
 // ParseCsvHosts reads HAProxy CSV text and returns lists of hosts participating in the given pool (backend).
 // See comment for ParseHosts
-func ParseCsvHosts(csv string, poolName string) (hosts []string, err error) {
+func ParseCsvHosts(csv string, poolName string, skipDown bool) (hosts []string, err error) {
 	csvLines := parseLines(csv)
-	return ParseHosts(csvLines, poolName)
+	return ParseHosts(csvLines, poolName, skipDown)
 }
 
 // Read will read HAProxy URI and return with the CSV text

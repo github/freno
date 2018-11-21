@@ -105,7 +105,7 @@ This introduces two clusters: `prod4` and `local`. `freno` will only serve reque
 Noteworthy:
 
 - `prod4` chooses to (but doesn't have to) override the `ThrottleThreshold` to `0.8` seconds
-- `prod4` list of servers is dictated by `HAProxy`. `freno` will routinely and dynamically poll given HAProxy server for list of hosts. These will include any hosts not in `NOLB`.
+- `prod4` list of servers is dictated by `HAProxy`. `freno` will routinely and dynamically poll given HAProxy server for list of hosts. These will include hosts that are `UP`, exclude hosts that are `NOLB`, and conditionally include `DOWN` hosts based on `IgnoreDownTaggedHosts` config.
 - `local` cluster chooses to override `User`, `Password` and `IgnoreHostsCount`.
 - `local` cluster defines a static list of hosts.
 
