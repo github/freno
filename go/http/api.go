@@ -180,14 +180,22 @@ func (api *APIImpl) ReadCheck(w http.ResponseWriter, r *http.Request, ps httprou
 
 // AggregatedMetrics returns a snapshot of all current aggregated metrics
 func (api *APIImpl) AggregatedMetrics(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
+	brief := (r.URL.Query().Get("brief") == "true")
+
 	w.Header().Set("Content-Type", "application/json")
 	aggregatedMetrics := api.throttlerCheck.AggregatedMetrics()
 	responseMap := map[string]string{}
 	for metricName, metric := range aggregatedMetrics {
 		value, err := metric.Get()
-		description := fmt.Sprintf("%+v", value)
-		if err != nil {
-			description = fmt.Sprintf("%+v, %+s", description, err.Error())
+		description := ""
+		if err == nil {
+			if brief {
+				description = fmt.Sprintf("%.3f", value)
+			} else {
+				description = fmt.Sprintf("%f", value)
+			}
+		} else {
+			description = fmt.Sprintf("error: %s", err.Error())
 		}
 		responseMap[metricName] = description
 	}
