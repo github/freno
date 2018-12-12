@@ -222,6 +222,12 @@ func (throttler *Throttler) refreshMySQLInventory() error {
 	log.Debugf("refreshing MySQL inventory")
 
 	addInstanceKey := func(key *mysql.InstanceKey, clusterSettings *config.MySQLClusterConfigurationSettings, probes *mysql.Probes) {
+		for _, ignore := range clusterSettings.IgnoreHosts {
+			if strings.Contains(key.DisplayString(), ignore) {
+				log.Debugf("instance key ignored: %+v", key)
+				return
+			}
+		}
 		log.Debugf("read instance key: %+v", key)
 
 		probe := &mysql.Probe{

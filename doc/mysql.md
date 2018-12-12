@@ -40,6 +40,10 @@ You will find the top-level configuration:
   "IgnoreHostsCount": 0,
   "HttpCheckPort": -1,
   "HttpCheckPath": "path-to-check",
+  "IgnoreHosts": [
+    "us-east-1",
+    "us-east-2"
+  ],
   "Clusters": {
   }
 }
@@ -66,6 +70,8 @@ These params apply in general to all MySQL clusters, unless specified differentl
 - `HttpCheckPath`: path to test. e.g. when `"HttpCheckPort": 1234` and `"HttpCheckPath": "health"`, `freno` will test `http://<mysql-box>:1234/health`.
 
   You may override `HttpCheckPath` on specific clusters.
+- `IgnoreHosts`: array of substrings. A host is completely ignored by `freno` if it contains a substring listed in `IgnoreHosts`.
+  Like other values, this value can be overridden per-cluster. A non-empty `IgnoreHosts` in a specific cluster will replace the `MySQL` scope definition, for that cluster. An empty `IgnoreHosts` in a cluster scope will not un-ignore the patterns specified in `MySQL` scope. If you want to un-ignore the `MySQL` scope use some thing like `"IgnoreHosts": ["--no-such-pattern--"],`, known to never match any of your hosts.
 
 Looking at clusters configuration:
 
@@ -80,6 +86,9 @@ Looking at clusters configuration:
     }
   },
   "sharded": {
+    "IgnoreHosts": [
+      "us-east-2"
+    ],
     "VitessSettings": {
       "API": "https://vtctld.example.com/api/",
       "Keyspace": "my_sharded_ks"
