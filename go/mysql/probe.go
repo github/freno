@@ -30,9 +30,10 @@ type Probe struct {
 type Probes map[InstanceKey](*Probe)
 
 type ClusterProbes struct {
-	ClusterName      string
-	IgnoreHostsCount int
-	InstanceProbes   *Probes
+	ClusterName          string
+	IgnoreHostsCount     int
+	IgnoreHostsThreshold float64
+	InstanceProbes       *Probes
 }
 
 func NewProbes() *Probes {
