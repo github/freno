@@ -107,37 +107,37 @@ func TestAggregateMySQLProbesNoErrorsIgnoreHostsThreshold(t *testing.T) {
 		probes[key] = &mysql.Probe{Key: key}
 	}
 	{
-		worstMetric := aggregateMySQLProbes(&probes, clusterName, instanceResultsMap, clusterInstanceHttpCheckResultMap, 0, 1.0)
+		worstMetric := aggregateMySQLProbes(&probes, clusterName, instanceResultsMap, clusterInstanceHttpCheckResultMap, 0, false, 1.0)
 		value, err := worstMetric.Get()
 		test.S(t).ExpectNil(err)
 		test.S(t).ExpectEquals(value, 1.7)
 	}
 	{
-		worstMetric := aggregateMySQLProbes(&probes, clusterName, instanceResultsMap, clusterInstanceHttpCheckResultMap, 1, 1.0)
+		worstMetric := aggregateMySQLProbes(&probes, clusterName, instanceResultsMap, clusterInstanceHttpCheckResultMap, 1, false, 1.0)
 		value, err := worstMetric.Get()
 		test.S(t).ExpectNil(err)
 		test.S(t).ExpectEquals(value, 1.2)
 	}
 	{
-		worstMetric := aggregateMySQLProbes(&probes, clusterName, instanceResultsMap, clusterInstanceHttpCheckResultMap, 2, 1.0)
+		worstMetric := aggregateMySQLProbes(&probes, clusterName, instanceResultsMap, clusterInstanceHttpCheckResultMap, 2, false, 1.0)
 		value, err := worstMetric.Get()
 		test.S(t).ExpectNil(err)
 		test.S(t).ExpectEquals(value, 1.1)
 	}
 	{
-		worstMetric := aggregateMySQLProbes(&probes, clusterName, instanceResultsMap, clusterInstanceHttpCheckResultMap, 3, 1.0)
+		worstMetric := aggregateMySQLProbes(&probes, clusterName, instanceResultsMap, clusterInstanceHttpCheckResultMap, 3, false, 1.0)
 		value, err := worstMetric.Get()
 		test.S(t).ExpectNil(err)
 		test.S(t).ExpectEquals(value, 0.6)
 	}
 	{
-		worstMetric := aggregateMySQLProbes(&probes, clusterName, instanceResultsMap, clusterInstanceHttpCheckResultMap, 4, 1.0)
+		worstMetric := aggregateMySQLProbes(&probes, clusterName, instanceResultsMap, clusterInstanceHttpCheckResultMap, 4, false, 1.0)
 		value, err := worstMetric.Get()
 		test.S(t).ExpectNil(err)
 		test.S(t).ExpectEquals(value, 0.6)
 	}
 	{
-		worstMetric := aggregateMySQLProbes(&probes, clusterName, instanceResultsMap, clusterInstanceHttpCheckResultMap, 5, 1.0)
+		worstMetric := aggregateMySQLProbes(&probes, clusterName, instanceResultsMap, clusterInstanceHttpCheckResultMap, 5, false, 1.0)
 		value, err := worstMetric.Get()
 		test.S(t).ExpectNil(err)
 		test.S(t).ExpectEquals(value, 0.6)
