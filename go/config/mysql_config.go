@@ -11,16 +11,17 @@ import (
 const DefaultMySQLPort = 3306
 
 type MySQLClusterConfigurationSettings struct {
-	User              string   // override MySQLConfigurationSettings's, or leave empty to inherit those settings
-	Password          string   // override MySQLConfigurationSettings's, or leave empty to inherit those settings
-	MetricQuery       string   // override MySQLConfigurationSettings's, or leave empty to inherit those settings
-	CacheMillis       int      // override MySQLConfigurationSettings's, or leave empty to inherit those settings
-	ThrottleThreshold float64  // override MySQLConfigurationSettings's, or leave empty to inherit those settings
-	Port              int      // Specify if different than 3306 or if different than specified by MySQLConfigurationSettings
-	IgnoreHostsCount  int      // Number of hosts that can be skipped/ignored even on error or on exceeding theesholds
-	HttpCheckPort     int      // Specify if different than specified by MySQLConfigurationSettings. -1 to disable HTTP check
-	HttpCheckPath     string   // Specify if different than specified by MySQLConfigurationSettings
-	IgnoreHosts       []string // override MySQLConfigurationSettings's, or leave empty to inherit those settings
+	User                 string   // override MySQLConfigurationSettings's, or leave empty to inherit those settings
+	Password             string   // override MySQLConfigurationSettings's, or leave empty to inherit those settings
+	MetricQuery          string   // override MySQLConfigurationSettings's, or leave empty to inherit those settings
+	CacheMillis          int      // override MySQLConfigurationSettings's, or leave empty to inherit those settings
+	ThrottleThreshold    float64  // override MySQLConfigurationSettings's, or leave empty to inherit those settings
+	Port                 int      // Specify if different than 3306 or if different than specified by MySQLConfigurationSettings
+	IgnoreHostsCount     int      // Number of hosts that can be skipped/ignored even on error or on exceeding theesholds
+	IgnoreHostsThreshold float64  // Threshold beyond which IgnoreHostsCount applies (default: 0)
+	HttpCheckPort        int      // Specify if different than specified by MySQLConfigurationSettings. -1 to disable HTTP check
+	HttpCheckPath        string   // Specify if different than specified by MySQLConfigurationSettings
+	IgnoreHosts          []string // override MySQLConfigurationSettings's, or leave empty to inherit those settings
 
 	HAProxySettings     HAProxyConfigurationSettings // If list of servers is to be acquired via HAProxy, provide this field
 	VitessSettings      VitessConfigurationSettings  // If list of servers is to be acquired via Vitess, provide this field
@@ -49,6 +50,7 @@ type MySQLConfigurationSettings struct {
 	ThrottleThreshold     float64
 	Port                  int      // Specify if different than 3306; applies to all clusters
 	IgnoreHostsCount      int      // Number of hosts that can be skipped/ignored even on error or on exceeding theesholds
+	IgnoreHostsThreshold  float64  // Threshold beyond which IgnoreHostsCount applies (default: 0)
 	HttpCheckPort         int      // port for HTTP check. -1 to disable.
 	HttpCheckPath         string   // If non-empty, requires HttpCheckPort
 	IgnoreDownTaggedHosts bool     // Ignore hosts reported `DOWN` in HAProxy or other service
@@ -96,6 +98,9 @@ func (settings *MySQLConfigurationSettings) postReadAdjustments() error {
 		}
 		if clusterSettings.IgnoreHostsCount == 0 {
 			clusterSettings.IgnoreHostsCount = settings.IgnoreHostsCount
+		}
+		if clusterSettings.IgnoreHostsThreshold == 0 {
+			clusterSettings.IgnoreHostsThreshold = settings.IgnoreHostsThreshold
 		}
 		if clusterSettings.HttpCheckPort == 0 {
 			clusterSettings.HttpCheckPort = settings.HttpCheckPort
