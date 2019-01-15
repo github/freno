@@ -14,6 +14,7 @@ func aggregateMySQLProbes(
 	instanceResultsMap mysql.InstanceMetricResultMap,
 	clusterInstanceHttpChecksMap mysql.ClusterInstanceHttpCheckResultMap,
 	ignoreHostsCount int,
+	ignoreDialTcpErrors bool,
 	ignoreHostsThreshold float64,
 ) (worstMetric base.MetricResult) {
 	// probes is known not to change. It can be *replaced*, but not changed.
@@ -30,6 +31,9 @@ func aggregateMySQLProbes(
 
 		value, err := instanceMetricResult.Get()
 		if err != nil {
+			if ignoreDialTcpErrors && base.IsDialTcpError(err) {
+				continue
+			}
 			if ignoreHostsCount > 0 {
 				// ok to skip this error
 				ignoreHostsCount = ignoreHostsCount - 1
@@ -45,7 +49,7 @@ func aggregateMySQLProbes(
 		return base.NoHostsMetricResult
 	}
 
-	// If we got here, that means no errors (or good to skip errors)
+	// If we got here, that means no errors (or good-to-skip errors)
 	sort.Float64s(probeValues)
 	// probeValues sorted ascending (from best, ie smallest, to worst, ie largest)
 	for ignoreHostsCount > 0 {
