@@ -228,6 +228,12 @@ func (throttler *Throttler) refreshMySQLInventory() error {
 	log.Debugf("refreshing MySQL inventory")
 
 	addInstanceKey := func(key *mysql.InstanceKey, clusterSettings *config.MySQLClusterConfigurationSettings, probes *mysql.Probes) {
+		for _, ignore := range clusterSettings.IgnoreHosts {
+			if strings.Contains(key.DisplayString(), ignore) {
+				log.Debugf("instance key ignored: %+v", key)
+				return
+			}
+		}
 		log.Debugf("read instance key: %+v", key)
 
 		probe := &mysql.Probe{
@@ -262,9 +268,10 @@ func (throttler *Throttler) refreshMySQLInventory() error {
 				}
 				log.Debugf("Read %+v hosts from haproxy %s:%d/#%s", len(hosts), clusterSettings.HAProxySettings.Host, clusterSettings.HAProxySettings.Port, poolName)
 				clusterProbes := &mysql.ClusterProbes{
-					ClusterName:      clusterName,
-					IgnoreHostsCount: clusterSettings.IgnoreHostsCount,
-					InstanceProbes:   mysql.NewProbes(),
+					ClusterName:          clusterName,
+					IgnoreHostsCount:     clusterSettings.IgnoreHostsCount,
+					IgnoreHostsThreshold: clusterSettings.IgnoreHostsThreshold,
+					InstanceProbes:       mysql.NewProbes(),
 				}
 				for _, host := range hosts {
 					key := mysql.InstanceKey{Hostname: host, Port: clusterSettings.Port}
@@ -322,6 +329,7 @@ func (throttler *Throttler) updateMySQLClusterProbes(clusterProbes *mysql.Cluste
 	log.Debugf("onMySQLClusterProbes: %s", clusterProbes.ClusterName)
 	throttler.mysqlInventory.ClustersProbes[clusterProbes.ClusterName] = clusterProbes.InstanceProbes
 	throttler.mysqlInventory.IgnoreHostsCount[clusterProbes.ClusterName] = clusterProbes.IgnoreHostsCount
+	throttler.mysqlInventory.IgnoreHostsThreshold[clusterProbes.ClusterName] = clusterProbes.IgnoreHostsThreshold
 	return nil
 }
 
@@ -333,7 +341,8 @@ func (throttler *Throttler) aggregateMySQLMetrics() error {
 	for clusterName, probes := range throttler.mysqlInventory.ClustersProbes {
 		metricName := fmt.Sprintf("mysql/%s", clusterName)
 		ignoreHostsCount := throttler.mysqlInventory.IgnoreHostsCount[clusterName]
-		aggregatedMetric := aggregateMySQLProbes(probes, clusterName, throttler.mysqlInventory.InstanceKeyMetrics, throttler.mysqlInventory.ClusterInstanceHttpChecks, ignoreHostsCount)
+		ignoreHostsThreshold := throttler.mysqlInventory.IgnoreHostsThreshold[clusterName]
+		aggregatedMetric := aggregateMySQLProbes(probes, clusterName, throttler.mysqlInventory.InstanceKeyMetrics, throttler.mysqlInventory.ClusterInstanceHttpChecks, ignoreHostsCount, config.Settings().Stores.MySQL.IgnoreDialTcpErrors, ignoreHostsThreshold)
 		go throttler.aggregatedMetrics.Set(metricName, aggregatedMetric, cache.DefaultExpiration)
 		if throttler.memcacheClient != nil {
 			go func() {

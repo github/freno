@@ -38,8 +38,13 @@ You will find the top-level configuration:
   "CacheMillis": 0,
   "ThrottleThreshold": 1.0,
   "IgnoreHostsCount": 0,
+  "IgnoreHostsThreshold": 0.0,
   "HttpCheckPort": -1,
   "HttpCheckPath": "path-to-check",
+  "IgnoreHosts": [
+    "us-east-1",
+    "us-east-2"
+  ],
   "Clusters": {
   }
 }
@@ -59,6 +64,8 @@ These params apply in general to all MySQL clusters, unless specified differentl
   - Note: valid range is `[0..)` (`0` or more), where lower values are stricter and higher values are more permissive.
   - Note: use _seconds_ as replication lag time unit. In the above we throttle above `1.0` seconds.
 - `IgnoreHostsCount`: number of hosts that can be ignored while aggregating cluster's values. For example, if `IgnoreHostsCount` is `2`, then up to `2` hosts that have errors are silently ignored. Or, if there's no errors, the two highest values will be ignored (so if these two values exceed the cluster's threshold, `freno` may still be happy to allow writes to the cluster).
+- `IgnoreHostsThreshold`: applies a conditional to the `IgnoreHostsCount` logic: for hosts with errors, no conditional applies. For hosts reporting a value, the value needs to be _higher_ than given threshold to be ignored.
+  A use case: ignore up to `n` lagging replicas, on condition that they're lagging _at least_ `10.0sec`.
 - `HttpCheckPort`: when `> 0`, and together with `HttpCheckPath`, `freno` will run a HTTP check on the MySQL boxes. For a given cluster there can only be one HTTP check on a MySQL box, even if one has multiple MySQL services running on that box.
   The HTTP check may return any HTTP status. The `404 Not Found` status is special: `freno` will completely disregard hosts where HTTP checks return `404`.
 
@@ -66,6 +73,8 @@ These params apply in general to all MySQL clusters, unless specified differentl
 - `HttpCheckPath`: path to test. e.g. when `"HttpCheckPort": 1234` and `"HttpCheckPath": "health"`, `freno` will test `http://<mysql-box>:1234/health`.
 
   You may override `HttpCheckPath` on specific clusters.
+- `IgnoreHosts`: array of substrings. A host is completely ignored by `freno` if it contains a substring listed in `IgnoreHosts`.
+  Like other values, this value can be overridden per-cluster. A non-empty `IgnoreHosts` in a specific cluster will replace the `MySQL` scope definition, for that cluster. An empty `IgnoreHosts` in a cluster scope will not un-ignore the patterns specified in `MySQL` scope. If you want to un-ignore the `MySQL` scope use some thing like `"IgnoreHosts": ["--no-such-pattern--"],`, known to never match any of your hosts.
 
 Looking at clusters configuration:
 
@@ -80,6 +89,9 @@ Looking at clusters configuration:
     }
   },
   "sharded": {
+    "IgnoreHosts": [
+      "us-east-2"
+    ],
     "VitessSettings": {
       "API": "https://vtctld.example.com/api/",
       "Keyspace": "my_sharded_ks"

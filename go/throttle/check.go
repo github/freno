@@ -13,7 +13,7 @@ import (
 )
 
 const frenoAppName = "freno"
-const selfCheckInterval = 1 * time.Second
+const selfCheckInterval = 100 * time.Millisecond
 
 // ThrottlerCheck provides methdos for an app checking on metrics
 type ThrottlerCheck struct {
