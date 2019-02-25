@@ -5,6 +5,7 @@ package config
 //
 
 type StoresSettings struct {
+	Meta  MetaChecks                 // All "meta" checks go here
 	MySQL MySQLConfigurationSettings // Any and all MySQL setups go here
 
 	// Futuristic stores can come here.

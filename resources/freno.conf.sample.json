@@ -6,18 +6,34 @@
   "RaftNodes": ["10.0.0.1", "10.0.0.2", "10.0.0.3"],
   "MemcacheServers": [],
   "Stores": {
+    "Meta": {
+      "mysql/prod4": [
+        "mysql/prod4-lag",
+        "mysql/prod4-writer"
+      ]
+    },
     "MySQL": {
       "User": "${mysql_user_env_variable}",
       "Password": "${mysql_password_env_variable}",
       "MetricQuery": "select unix_timestamp(now(6)) - unix_timestamp(ts) as lag_check from meta.heartbeat order by ts desc limit 1",
       "ThrottleThreshold": 1.0,
       "Clusters": {
-        "prod4": {
+        "prod4-lag": {
           "ThrottleThreshold": 0.8,
           "HAProxySettings": {
             "Host": "my.haproxy.mydomain.com",
             "Port": 1001,
             "PoolName": "my_prod4_pool"
+          }
+        },
+        "prod4-writer": {
+          "MetricQuery": "SELECT count FROM information_schema.innodb_metrics WHERE name = 'trx_rseg_history_len'",
+          "CacheMillis": 1000,
+          "ThrottleThreshold": 100000,
+          "StaticHostsSettings" : {
+              "Hosts": [
+                "my.master8.vip.com:3306"
+              ]
           }
         },
         "local": {
