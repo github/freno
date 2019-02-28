@@ -131,7 +131,7 @@ func (check *ThrottlerCheck) reportAggregated(metricName string, metricResult ba
 		return
 	}
 	if value, err := metricResult.Get(); err == nil {
-		metrics.GetOrRegisterGaugeFloat64(fmt.Sprintf("check.%s.%s.aggregated", storeType, storeName), nil).Update(value)
+		metrics.GetOrRegisterGaugeFloat64(fmt.Sprintf("aggregated.%s.%s", storeType, storeName), nil).Update(value)
 	}
 }
 
