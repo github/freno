@@ -96,14 +96,23 @@ func (check *ThrottlerCheck) Check(appName string, storeType string, storeName s
 	return checkResult
 }
 
-// localCheck
-func (check *ThrottlerCheck) localCheck(appName string, metricName string) (checkResult *CheckResult) {
+func (check *ThrottlerCheck) splitMetricTokens(metricName string) (storeType string, storeName string, err error) {
 	metricTokens := strings.Split(metricName, "/")
 	if len(metricTokens) != 2 {
+		return storeType, storeName, base.NoSuchMetricError
+	}
+	storeType = metricTokens[0]
+	storeName = metricTokens[1]
+
+	return storeType, storeName, nil
+}
+
+// localCheck
+func (check *ThrottlerCheck) localCheck(appName string, metricName string) (checkResult *CheckResult) {
+	storeType, storeName, err := check.splitMetricTokens(metricName)
+	if err != nil {
 		return NoSuchMetricCheckResult
 	}
-	storeType := metricTokens[0]
-	storeName := metricTokens[1]
 	checkResult = check.Check(appName, storeType, storeName, "local", 0)
 
 	if checkResult.StatusCode == http.StatusOK {
@@ -114,6 +123,16 @@ func (check *ThrottlerCheck) localCheck(appName string, metricName string) (chec
 	}
 
 	return checkResult
+}
+
+func (check *ThrottlerCheck) reportAggregated(metricName string, metricResult base.MetricResult) {
+	storeType, storeName, err := check.splitMetricTokens(metricName)
+	if err != nil {
+		return
+	}
+	if value, err := metricResult.Get(); err == nil {
+		metrics.GetOrRegisterGaugeFloat64(fmt.Sprintf("aggregated.%s.%s", storeType, storeName), nil).Update(value)
+	}
 }
 
 // AggregatedMetrics is a convenience acces method into throttler's `aggregatedMetricsSnapshot`
@@ -130,9 +149,11 @@ func (check *ThrottlerCheck) SelfChecks() {
 	selfCheckTick := time.Tick(selfCheckInterval)
 	go func() {
 		for range selfCheckTick {
-			for metricName := range check.AggregatedMetrics() {
+			for metricName, metricResult := range check.AggregatedMetrics() {
 				metricName := metricName
+				metricResult := metricResult
 				go check.localCheck(frenoAppName, metricName)
+				go check.reportAggregated(metricName, metricResult)
 			}
 		}
 	}()
