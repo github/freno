@@ -28,10 +28,11 @@ func ToBackendHostStatus(status string) BackendHostStatus {
 }
 
 type BackendHost struct {
-	Hostname string
-	Status   BackendHostStatus
+	Hostname        string
+	Status          BackendHostStatus
+	IsTransitioning bool
 }
 
-func NewBackendHost(hostname string, status BackendHostStatus) *BackendHost {
-	return &BackendHost{Hostname: hostname, Status: status}
+func NewBackendHost(hostname string, status BackendHostStatus, isTransitioning bool) *BackendHost {
+	return &BackendHost{Hostname: hostname, Status: status, IsTransitioning: isTransitioning}
 }

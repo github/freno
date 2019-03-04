@@ -93,39 +93,47 @@ func TestParseHeader(t *testing.T) {
 
 func TestParseHosts(t *testing.T) {
 	{
-		hosts, backendHosts, err := ParseCsvHosts(csv0, "mysqlcluster0_rw_main")
+		backendHosts, err := ParseCsvHosts(csv0, "mysqlcluster0_rw_main")
 		test.S(t).ExpectNil(err)
+		test.S(t).ExpectEquals(len(backendHosts), 4)
+
+		hosts := FilterThrotllerHosts(backendHosts)
 		test.S(t).ExpectTrue(reflect.DeepEqual(hosts, []string{"mysqlcluster0c-dc"}))
-		test.S(t).ExpectEquals(len(backendHosts), 4)
 	}
 	{
-		hosts, backendHosts, err := ParseCsvHosts(csv0, "mysqlcluster0_ro_main")
+		backendHosts, err := ParseCsvHosts(csv0, "mysqlcluster0_ro_main")
 		test.S(t).ExpectNil(err)
+		test.S(t).ExpectEquals(len(backendHosts), 4)
+
+		hosts := FilterThrotllerHosts(backendHosts)
 		test.S(t).ExpectTrue(reflect.DeepEqual(hosts, []string{"mysqlcluster0a-dc", "mysqlcluster0b-dc"}))
-		test.S(t).ExpectEquals(len(backendHosts), 4)
 	}
 	{
-		hosts, backendHosts, err := ParseCsvHosts(csv0, "mysqlcluster0_ro_backup")
+		backendHosts, err := ParseCsvHosts(csv0, "mysqlcluster0_ro_backup")
 		test.S(t).ExpectNil(err)
-		test.S(t).ExpectTrue(reflect.DeepEqual(hosts, []string{"mysqlcluster0e-dc", "mysqlcluster0f-dc", "mysqlcluster0h-dc"}))
 		test.S(t).ExpectEquals(len(backendHosts), 4)
+
+		hosts := FilterThrotllerHosts(backendHosts)
+		test.S(t).ExpectTrue(reflect.DeepEqual(hosts, []string{"mysqlcluster0e-dc", "mysqlcluster0f-dc", "mysqlcluster0h-dc"}))
 	}
 }
 
 func TestParseHostsTransitioning(t *testing.T) {
 	{
-		hosts, backendHosts, err := ParseCsvHosts(csvTransitioning, "mysqlcluster0_ro_main")
+		backendHosts, err := ParseCsvHosts(csvTransitioning, "mysqlcluster0_ro_main")
 		test.S(t).ExpectNil(err)
-		test.S(t).ExpectTrue(reflect.DeepEqual(hosts, []string{"mysqlcluster0b-dc"}))
 		test.S(t).ExpectEquals(len(backendHosts), 4)
+
+		hosts := FilterThrotllerHosts(backendHosts)
+		test.S(t).ExpectTrue(reflect.DeepEqual(hosts, []string{"mysqlcluster0b-dc"}))
 	}
 	{
-		_, backendHosts, err := ParseCsvHosts(csvTransitioningAllUp, "mysqlcluster0_ro_main")
+		backendHosts, err := ParseCsvHosts(csvTransitioningAllUp, "mysqlcluster0_ro_main")
 		test.S(t).ExpectEquals(err, HAProxyAllUpHostsTransitioning)
 		test.S(t).ExpectEquals(len(backendHosts), 4)
 	}
 	{
-		_, backendHosts, err := ParseCsvHosts(csvTransitioningAll, "mysqlcluster0_ro_main")
+		backendHosts, err := ParseCsvHosts(csvTransitioningAll, "mysqlcluster0_ro_main")
 		test.S(t).ExpectEquals(err, HAProxyAllHostsTransitioning)
 		test.S(t).ExpectEquals(len(backendHosts), 4)
 	}
