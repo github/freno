@@ -256,7 +256,7 @@ func (throttler *Throttler) refreshMySQLInventory() error {
 					return log.Errorf("Unable to get HAproxy data from %s:%d: %+v", clusterSettings.HAProxySettings.Host, clusterSettings.HAProxySettings.Port, err)
 				}
 				poolName := clusterSettings.HAProxySettings.PoolName
-				hosts, err := haproxy.ParseCsvHosts(csv, poolName)
+				hosts, _, err := haproxy.ParseCsvHosts(csv, poolName)
 				if err != nil {
 					return log.Errorf("Unable to get HAproxy hosts from %s:%d/#%s: %+v", clusterSettings.HAProxySettings.Host, clusterSettings.HAProxySettings.Port, poolName, err)
 				}

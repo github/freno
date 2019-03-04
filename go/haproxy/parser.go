@@ -41,15 +41,33 @@ func parseLines(csv string) []string {
 	return strings.Split(csv, "\n")
 }
 
+func ParseStatus(fullStatus string) (status BackendHostStatus, isTransitioning bool) {
+	// status can show up as:
+	// `UP`
+	// `UP 1/2` (transitioning)
+	// `NOLB`
+	// `DOWN`
+	// `DOWN (agent)`
+	// `no check`
+	// etc. See https://github.com/haproxy/haproxy/blob/a5de024d42c4113fc6e189ea1d0ba6335219e151/src/dumpstats.c#L4117-L4129
+	if ToBackendHostStatus(fullStatus) == StatusNoCheck {
+		return StatusNoCheck, isTransitioning
+	}
+
+	statusTokens := strings.Split(fullStatus, " ")
+	isTransitioning = (len(statusTokens) > 1 && strings.Contains(statusTokens[1], "/"))
+	return ToBackendHostStatus(statusTokens[0]), isTransitioning
+}
+
 // ParseHosts reads HAProxy CSV lines and returns lists of hosts participating in the given pool (backend)
 // Returned are all non-disabled hosts in given backend. Thus, a NOLB is skipped; any UP or DOWN hosts are returned.
 // Such list indicates the hosts which can be expected to be active, which is then the list freno will probe.
-func ParseHosts(csvLines []string, poolName string) (hosts []string, err error) {
+func ParseHosts(csvLines []string, poolName string) (hosts []string, backendHosts [](*BackendHost), err error) {
 	if len(csvLines) < 1 {
-		return hosts, HAProxyEmptyStatus
+		return hosts, backendHosts, HAProxyEmptyStatus
 	}
 	if len(csvLines) == 1 {
-		return hosts, HAProxyPartialStatus
+		return hosts, backendHosts, HAProxyPartialStatus
 	}
 	var tokensMap map[string]int
 	poolFound := false
@@ -67,22 +85,16 @@ func ParseHosts(csvLines []string, poolName string) (hosts []string, err error) 
 			poolFound = true
 			if host := tokens[tokensMap["svname"]]; host != "BACKEND" && host != "FRONTEND" {
 				countHosts++
-				fullStatus := tokens[tokensMap["status"]]
-				statusTokens := strings.Split(fullStatus, " ")
-				// status can show up as:
-				// `UP`
-				// `UP 1/2` (transitioning)
-				// `NOLB`
-				// `DOWN`
-				// `DOWN (agent)`
-				// etc. See https://github.com/haproxy/haproxy/blob/a5de024d42c4113fc6e189ea1d0ba6335219e151/src/dumpstats.c#L4117-L4129
-				isTransitioning := (len(statusTokens) > 1 && strings.Contains(statusTokens[1], "/"))
+
+				status, isTransitioning := ParseStatus(tokens[tokensMap["status"]])
+
+				backendHosts = append(backendHosts, NewBackendHost(host, status))
 				if isTransitioning {
 					countTransitioningHosts++
 				}
 
-				switch status := statusTokens[0]; status {
-				case "UP":
+				switch status {
+				case StatusUp:
 					{
 						countUpHosts++
 						if isTransitioning {
@@ -91,32 +103,33 @@ func ParseHosts(csvLines []string, poolName string) (hosts []string, err error) 
 							hosts = append(hosts, host)
 						}
 					}
-				case "DOWN":
+				case StatusDown:
 					{
 						hosts = append(hosts, host)
 					}
-				}
-				if fullStatus == "no check" {
-					hosts = append(hosts, host)
+				case StatusNoCheck:
+					{
+						hosts = append(hosts, host)
+					}
 				}
 			}
 		}
 	}
 	if !poolFound {
-		return hosts, HAProxyMissingPool
+		return hosts, backendHosts, HAProxyMissingPool
 	}
 	if countTransitioningHosts == countHosts && countHosts > 0 {
-		return hosts, HAProxyAllHostsTransitioning
+		return hosts, backendHosts, HAProxyAllHostsTransitioning
 	}
 	if countTransitioningUpHosts == countUpHosts && countUpHosts > 0 {
-		return hosts, HAProxyAllUpHostsTransitioning
+		return hosts, backendHosts, HAProxyAllUpHostsTransitioning
 	}
-	return hosts, nil
+	return hosts, backendHosts, nil
 }
 
 // ParseCsvHosts reads HAProxy CSV text and returns lists of hosts participating in the given pool (backend).
 // See comment for ParseHosts
-func ParseCsvHosts(csv string, poolName string) (hosts []string, err error) {
+func ParseCsvHosts(csv string, poolName string) (hosts []string, backendHosts [](*BackendHost), err error) {
 	csvLines := parseLines(csv)
 	return ParseHosts(csvLines, poolName)
 }
