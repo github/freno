@@ -24,7 +24,7 @@ func aggregateMySQLProbes(
 		if clusterInstanceHttpChecksMap[mysql.MySQLHttpCheckHashKey(clusterName, &probe.Key)] == http.StatusNotFound {
 			continue
 		}
-		instanceMetricResult, ok := instanceResultsMap[probe.Key]
+		instanceMetricResult, ok := instanceResultsMap[mysql.GetClusterInstanceKey(clusterName, &probe.Key)]
 		if !ok {
 			return base.NoMetricResultYet
 		}
