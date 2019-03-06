@@ -6,10 +6,24 @@
 package mysql
 
 import (
+	"fmt"
 	"github.com/github/freno/go/base"
 )
 
-type InstanceMetricResultMap map[InstanceKey]base.MetricResult
+type ClusterInstanceKey struct {
+	ClusterName string
+	Key         InstanceKey
+}
+
+func GetClusterInstanceKey(clusterName string, key *InstanceKey) ClusterInstanceKey {
+	return ClusterInstanceKey{ClusterName: clusterName, Key: *key}
+}
+
+func (c ClusterInstanceKey) HashCode() string {
+	return fmt.Sprintf("%s:%s", c.ClusterName, c.Key.StringCode())
+}
+
+type InstanceMetricResultMap map[ClusterInstanceKey]base.MetricResult
 type ClusterInstanceHttpCheckResultMap map[string]int
 
 type MySQLInventory struct {
@@ -25,7 +39,7 @@ func NewMySQLInventory() *MySQLInventory {
 		ClustersProbes:            make(map[string](*Probes)),
 		IgnoreHostsCount:          make(map[string]int),
 		IgnoreHostsThreshold:      make(map[string]float64),
-		InstanceKeyMetrics:        make(map[InstanceKey]base.MetricResult),
+		InstanceKeyMetrics:        make(map[ClusterInstanceKey]base.MetricResult),
 		ClusterInstanceHttpChecks: make(map[string]int),
 	}
 	return inventory

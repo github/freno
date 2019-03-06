@@ -43,13 +43,22 @@ func getCachedMySQLThrottleMetric(probe *Probe) *MySQLThrottleMetric {
 }
 
 type MySQLThrottleMetric struct {
-	Key   InstanceKey
-	Value float64
-	Err   error
+	ClusterName string
+	Key         InstanceKey
+	Value       float64
+	Err         error
 }
 
 func NewMySQLThrottleMetric() *MySQLThrottleMetric {
 	return &MySQLThrottleMetric{Value: 0}
+}
+
+func (metric *MySQLThrottleMetric) GetClusterInstanceKey() ClusterInstanceKey {
+	return GetClusterInstanceKey(metric.ClusterName, &metric.Key)
+}
+
+func (metric *MySQLThrottleMetric) HashCode() string {
+	return metric.GetClusterInstanceKey().HashCode()
 }
 
 func (metric *MySQLThrottleMetric) Get() (float64, error) {
@@ -58,7 +67,7 @@ func (metric *MySQLThrottleMetric) Get() (float64, error) {
 
 // ReadThrottleMetric returns replication lag for a given connection config; either by explicit query
 // or via SHOW SLAVE STATUS
-func ReadThrottleMetric(probe *Probe) (mySQLThrottleMetric *MySQLThrottleMetric) {
+func ReadThrottleMetric(probe *Probe, clusterName string) (mySQLThrottleMetric *MySQLThrottleMetric) {
 	if mySQLThrottleMetric := getCachedMySQLThrottleMetric(probe); mySQLThrottleMetric != nil {
 		return mySQLThrottleMetric
 		// On cached results we avoid taking latency metrics
@@ -66,6 +75,7 @@ func ReadThrottleMetric(probe *Probe) (mySQLThrottleMetric *MySQLThrottleMetric)
 
 	started := time.Now()
 	mySQLThrottleMetric = NewMySQLThrottleMetric()
+	mySQLThrottleMetric.ClusterName = clusterName
 	mySQLThrottleMetric.Key = probe.Key
 
 	defer func(metric *MySQLThrottleMetric, started time.Time) {
