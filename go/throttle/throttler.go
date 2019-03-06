@@ -123,7 +123,7 @@ func (throttler *Throttler) Operate() {
 		case metric := <-throttler.mysqlThrottleMetricChan:
 			{
 				// incoming MySQL metric, frequent, as result of collectMySQLMetrics()
-				throttler.mysqlInventory.InstanceKeyMetrics[metric.Key] = metric
+				throttler.mysqlInventory.InstanceKeyMetrics[metric.GetClusterInstanceKey()] = metric
 			}
 		case httpCheckResult := <-throttler.mysqlHttpCheckChan:
 			{
@@ -161,7 +161,8 @@ func (throttler *Throttler) collectMySQLMetrics() error {
 		return nil
 	}
 	// synchronously, get lists of probes
-	for _, probes := range throttler.mysqlInventory.ClustersProbes {
+	for clusterName, probes := range throttler.mysqlInventory.ClustersProbes {
+		clusterName := clusterName
 		probes := probes
 		go func() {
 			// probes is known not to change. It can be *replaced*, but not changed.
@@ -175,7 +176,7 @@ func (throttler *Throttler) collectMySQLMetrics() error {
 						return
 					}
 					defer atomic.StoreInt64(&probe.QueryInProgress, 0)
-					throttleMetrics := mysql.ReadThrottleMetric(probe)
+					throttleMetrics := mysql.ReadThrottleMetric(probe, clusterName)
 					throttler.mysqlThrottleMetricChan <- throttleMetrics
 				}()
 			}

@@ -30,12 +30,17 @@ func init() {
 
 func TestAggregateMySQLProbesNoErrors(t *testing.T) {
 	clusterName := "c0"
+	key1cluster := mysql.GetClusterInstanceKey(clusterName, &key1)
+	key2cluster := mysql.GetClusterInstanceKey(clusterName, &key2)
+	key3cluster := mysql.GetClusterInstanceKey(clusterName, &key3)
+	key4cluster := mysql.GetClusterInstanceKey(clusterName, &key4)
+	key5cluster := mysql.GetClusterInstanceKey(clusterName, &key5)
 	instanceResultsMap := mysql.InstanceMetricResultMap{
-		key1: base.NewSimpleMetricResult(1.2),
-		key2: base.NewSimpleMetricResult(1.7),
-		key3: base.NewSimpleMetricResult(0.3),
-		key4: base.NewSimpleMetricResult(0.6),
-		key5: base.NewSimpleMetricResult(1.1),
+		key1cluster: base.NewSimpleMetricResult(1.2),
+		key2cluster: base.NewSimpleMetricResult(1.7),
+		key3cluster: base.NewSimpleMetricResult(0.3),
+		key4cluster: base.NewSimpleMetricResult(0.6),
+		key5cluster: base.NewSimpleMetricResult(1.1),
 	}
 	clusterInstanceHttpCheckResultMap := mysql.ClusterInstanceHttpCheckResultMap{
 		mysql.MySQLHttpCheckHashKey(clusterName, &key1): http.StatusOK,
@@ -45,8 +50,8 @@ func TestAggregateMySQLProbesNoErrors(t *testing.T) {
 		mysql.MySQLHttpCheckHashKey(clusterName, &key5): http.StatusOK,
 	}
 	var probes mysql.Probes = map[mysql.InstanceKey](*mysql.Probe){}
-	for key := range instanceResultsMap {
-		probes[key] = &mysql.Probe{Key: key}
+	for clusterKey := range instanceResultsMap {
+		probes[clusterKey.Key] = &mysql.Probe{Key: clusterKey.Key}
 	}
 	{
 		worstMetric := aggregateMySQLProbes(&probes, clusterName, instanceResultsMap, clusterInstanceHttpCheckResultMap, 0, false, 0)
@@ -88,12 +93,17 @@ func TestAggregateMySQLProbesNoErrors(t *testing.T) {
 
 func TestAggregateMySQLProbesNoErrorsIgnoreHostsThreshold(t *testing.T) {
 	clusterName := "c0"
+	key1cluster := mysql.GetClusterInstanceKey(clusterName, &key1)
+	key2cluster := mysql.GetClusterInstanceKey(clusterName, &key2)
+	key3cluster := mysql.GetClusterInstanceKey(clusterName, &key3)
+	key4cluster := mysql.GetClusterInstanceKey(clusterName, &key4)
+	key5cluster := mysql.GetClusterInstanceKey(clusterName, &key5)
 	instanceResultsMap := mysql.InstanceMetricResultMap{
-		key1: base.NewSimpleMetricResult(1.2),
-		key2: base.NewSimpleMetricResult(1.7),
-		key3: base.NewSimpleMetricResult(0.3),
-		key4: base.NewSimpleMetricResult(0.6),
-		key5: base.NewSimpleMetricResult(1.1),
+		key1cluster: base.NewSimpleMetricResult(1.2),
+		key2cluster: base.NewSimpleMetricResult(1.7),
+		key3cluster: base.NewSimpleMetricResult(0.3),
+		key4cluster: base.NewSimpleMetricResult(0.6),
+		key5cluster: base.NewSimpleMetricResult(1.1),
 	}
 	clusterInstanceHttpCheckResultMap := mysql.ClusterInstanceHttpCheckResultMap{
 		mysql.MySQLHttpCheckHashKey(clusterName, &key1): http.StatusOK,
@@ -103,8 +113,8 @@ func TestAggregateMySQLProbesNoErrorsIgnoreHostsThreshold(t *testing.T) {
 		mysql.MySQLHttpCheckHashKey(clusterName, &key5): http.StatusOK,
 	}
 	var probes mysql.Probes = map[mysql.InstanceKey](*mysql.Probe){}
-	for key := range instanceResultsMap {
-		probes[key] = &mysql.Probe{Key: key}
+	for clusterKey := range instanceResultsMap {
+		probes[clusterKey.Key] = &mysql.Probe{Key: clusterKey.Key}
 	}
 	{
 		worstMetric := aggregateMySQLProbes(&probes, clusterName, instanceResultsMap, clusterInstanceHttpCheckResultMap, 0, false, 1.0)
@@ -146,12 +156,17 @@ func TestAggregateMySQLProbesNoErrorsIgnoreHostsThreshold(t *testing.T) {
 
 func TestAggregateMySQLProbesWithErrors(t *testing.T) {
 	clusterName := "c0"
+	key1cluster := mysql.GetClusterInstanceKey(clusterName, &key1)
+	key2cluster := mysql.GetClusterInstanceKey(clusterName, &key2)
+	key3cluster := mysql.GetClusterInstanceKey(clusterName, &key3)
+	key4cluster := mysql.GetClusterInstanceKey(clusterName, &key4)
+	key5cluster := mysql.GetClusterInstanceKey(clusterName, &key5)
 	instanceResultsMap := mysql.InstanceMetricResultMap{
-		key1: base.NewSimpleMetricResult(1.2),
-		key2: base.NewSimpleMetricResult(1.7),
-		key3: base.NewSimpleMetricResult(0.3),
-		key4: base.NoSuchMetric,
-		key5: base.NewSimpleMetricResult(1.1),
+		key1cluster: base.NewSimpleMetricResult(1.2),
+		key2cluster: base.NewSimpleMetricResult(1.7),
+		key3cluster: base.NewSimpleMetricResult(0.3),
+		key4cluster: base.NoSuchMetric,
+		key5cluster: base.NewSimpleMetricResult(1.1),
 	}
 	clusterInstanceHttpCheckResultMap := mysql.ClusterInstanceHttpCheckResultMap{
 		mysql.MySQLHttpCheckHashKey(clusterName, &key1): http.StatusOK,
@@ -161,8 +176,8 @@ func TestAggregateMySQLProbesWithErrors(t *testing.T) {
 		mysql.MySQLHttpCheckHashKey(clusterName, &key5): http.StatusOK,
 	}
 	var probes mysql.Probes = map[mysql.InstanceKey](*mysql.Probe){}
-	for key := range instanceResultsMap {
-		probes[key] = &mysql.Probe{Key: key}
+	for clusterKey := range instanceResultsMap {
+		probes[clusterKey.Key] = &mysql.Probe{Key: clusterKey.Key}
 	}
 	{
 		worstMetric := aggregateMySQLProbes(&probes, clusterName, instanceResultsMap, clusterInstanceHttpCheckResultMap, 0, false, 0)
@@ -183,7 +198,7 @@ func TestAggregateMySQLProbesWithErrors(t *testing.T) {
 		test.S(t).ExpectEquals(value, 1.2)
 	}
 
-	instanceResultsMap[key1] = base.NoSuchMetric
+	instanceResultsMap[key1cluster] = base.NoSuchMetric
 	{
 		worstMetric := aggregateMySQLProbes(&probes, clusterName, instanceResultsMap, clusterInstanceHttpCheckResultMap, 0, false, 0)
 		_, err := worstMetric.Get()
@@ -206,12 +221,17 @@ func TestAggregateMySQLProbesWithErrors(t *testing.T) {
 
 func TestAggregateMySQLProbesWithHttpChecks(t *testing.T) {
 	clusterName := "c0"
+	key1cluster := mysql.GetClusterInstanceKey(clusterName, &key1)
+	key2cluster := mysql.GetClusterInstanceKey(clusterName, &key2)
+	key3cluster := mysql.GetClusterInstanceKey(clusterName, &key3)
+	key4cluster := mysql.GetClusterInstanceKey(clusterName, &key4)
+	key5cluster := mysql.GetClusterInstanceKey(clusterName, &key5)
 	instanceResultsMap := mysql.InstanceMetricResultMap{
-		key1: base.NewSimpleMetricResult(1.2),
-		key2: base.NewSimpleMetricResult(1.7),
-		key3: base.NewSimpleMetricResult(0.3),
-		key4: base.NoSuchMetric,
-		key5: base.NewSimpleMetricResult(1.1),
+		key1cluster: base.NewSimpleMetricResult(1.2),
+		key2cluster: base.NewSimpleMetricResult(1.7),
+		key3cluster: base.NewSimpleMetricResult(0.3),
+		key4cluster: base.NoSuchMetric,
+		key5cluster: base.NewSimpleMetricResult(1.1),
 	}
 	clusterInstanceHttpCheckResultMap := mysql.ClusterInstanceHttpCheckResultMap{
 		mysql.MySQLHttpCheckHashKey(clusterName, &key1): http.StatusOK,
@@ -221,8 +241,8 @@ func TestAggregateMySQLProbesWithHttpChecks(t *testing.T) {
 		mysql.MySQLHttpCheckHashKey(clusterName, &key5): http.StatusOK,
 	}
 	var probes mysql.Probes = map[mysql.InstanceKey](*mysql.Probe){}
-	for key := range instanceResultsMap {
-		probes[key] = &mysql.Probe{Key: key}
+	for clusterKey := range instanceResultsMap {
+		probes[clusterKey.Key] = &mysql.Probe{Key: clusterKey.Key}
 	}
 	{
 		worstMetric := aggregateMySQLProbes(&probes, clusterName, instanceResultsMap, clusterInstanceHttpCheckResultMap, 0, false, 0)
