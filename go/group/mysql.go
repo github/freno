@@ -18,16 +18,20 @@ import (
 	"database/sql"
 	"fmt"
 	"os"
+	"sync/atomic"
+	"time"
 
 	"github.com/github/freno/go/config"
 
 	"github.com/outbrain/golib/sqlutils"
+	metrics "github.com/rcrowley/go-metrics"
 )
 
 type MySQLBackend struct {
-	db        *sql.DB
-	domain    string
-	serviceId string
+	db          *sql.DB
+	domain      string
+	serviceId   string
+	leaderState int64
 }
 
 const maxConnections = 3
@@ -50,11 +54,41 @@ func NewMySQLBackend() (*MySQLBackend, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &MySQLBackend{
+	backend := &MySQLBackend{
 		db:        db,
 		domain:    fmt.Sprintf("%s:%s", config.Settings().DataCenter, config.Settings().Environment),
 		serviceId: hostname,
-	}, nil
+	}
+	go backend.continuousElections()
+	return backend, nil
+}
+
+func boolToInt64(b bool) int64 {
+	if b {
+		return 1
+	}
+	return 0
+}
+
+// Monitor is a utility function to routinely observe leadership state.
+// It doesn't actually do much; merely takes notes.
+func (backend *MySQLBackend) continuousElections() {
+	t := time.NewTicker(1 * time.Second)
+
+	for range t.C {
+		backend.AttemptLeadership()
+		leaderState, err := backend.ReadLeadership()
+		if err == nil {
+			// otherwise maintain state
+			atomic.StoreInt64(&backend.leaderState, leaderState)
+		}
+		go metrics.GetOrRegisterGauge("backend.mysql.is_leader", nil).Update(leaderState)
+		go metrics.GetOrRegisterGauge("backend.mysql.is_healthy", nil).Update(boolToInt64(err == nil))
+	}
+}
+
+func (backend *MySQLBackend) IsLeader() bool {
+	return atomic.LoadInt64(&backend.leaderState) > 0
 }
 
 func (backend *MySQLBackend) AttemptLeadership() error {
@@ -94,17 +128,17 @@ func (backend *MySQLBackend) Reelect() error {
 	return err
 }
 
-func (backend *MySQLBackend) IsLeader() (bool, error) {
+func (backend *MySQLBackend) ReadLeadership() (int64, error) {
 	query := `
-    select count(*)
+    select count(*) > 0
       from service_election
       where domain=?
       and service_id=?
   `
 	args := sqlutils.Args(backend.domain, backend.serviceId)
 
-	var count int
+	var count int64
 	err := backend.db.QueryRow(query, args).Scan(&count)
 
-	return (count > 0), err
+	return count, err
 }
