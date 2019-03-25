@@ -92,25 +92,35 @@ func (config *Configuration) Reload() error {
 // Some of the settinges have reasonable default values, and some other
 // (like database credentials) are strictly expected from user.
 type ConfigurationSettings struct {
-	ListenPort      int
-	RaftBind        string
-	RaftDataDir     string
-	DefaultRaftPort int      // if a RaftNodes entry does not specify port, use this one
-	RaftNodes       []string // Raft nodes to make initial connection with
-	MemcacheServers []string // if given, freno will report to aggregated values to given memcache
-	MemcachePath    string   // use as prefix to metric path in memcache key, e.g. if `MemcachePath` is "myprefix" the key would be "myprefix/mysql/maincluster". Default: "freno"
-	Stores          StoresSettings
+	ListenPort           int
+	DataCenter           string
+	Environment          string
+	RaftBind             string
+	RaftDataDir          string
+	DefaultRaftPort      int      // if a RaftNodes entry does not specify port, use this one
+	RaftNodes            []string // Raft nodes to make initial connection with
+	BackendMySQLHost     string
+	BackendMySQLPort     int
+	BackendMySQLSchema   string
+	BackendMySQLUser     string
+	BackendMySQLPassword string
+	MemcacheServers      []string // if given, freno will report to aggregated values to given memcache
+	MemcachePath         string   // use as prefix to metric path in memcache key, e.g. if `MemcachePath` is "myprefix" the key would be "myprefix/mysql/maincluster". Default: "freno"
+	Stores               StoresSettings
 }
 
 func newConfigurationSettings() *ConfigurationSettings {
 	return &ConfigurationSettings{
-		ListenPort:      8087,
-		RaftBind:        "127.0.0.1:10008",
-		RaftDataDir:     "",
-		DefaultRaftPort: 0,
-		RaftNodes:       []string{},
-		MemcacheServers: []string{},
-		MemcachePath:    "freno",
+		ListenPort:         8087,
+		RaftBind:           "127.0.0.1:10008",
+		RaftDataDir:        "",
+		DefaultRaftPort:    0,
+		BackendMySQLHost:   "",
+		BackendMySQLSchema: "",
+		RaftNodes:          []string{},
+		BackendMySQLPort:   3306,
+		MemcacheServers:    []string{},
+		MemcachePath:       "freno",
 		//Debug:                                        false,
 		//ListenSocket:                                 "",
 		//AnExampleListOfStrings:                       []string{"*"},
@@ -122,6 +132,11 @@ func newConfigurationSettings() *ConfigurationSettings {
 func (settings *ConfigurationSettings) postReadAdjustments() error {
 	if settings.RaftDataDir == "" {
 		return fmt.Errorf("RaftDataDir must be set")
+	}
+	if settings.BackendMySQLHost != "" {
+		if settings.BackendMySQLSchema == "" {
+			return fmt.Errorf("BackendMySQLSchema must be set when BackendMySQLHost is specified")
+		}
 	}
 	if err := settings.Stores.postReadAdjustments(); err != nil {
 		return err
