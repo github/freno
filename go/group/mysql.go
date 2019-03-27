@@ -77,13 +77,6 @@ func NewMySQLBackend(throttler *throttle.Throttler) (*MySQLBackend, error) {
 	return backend, nil
 }
 
-func boolToInt64(b bool) int64 {
-	if b {
-		return 1
-	}
-	return 0
-}
-
 // Monitor is a utility function to routinely observe leadership state.
 // It doesn't actually do much; merely takes notes.
 func (backend *MySQLBackend) continuousElections() {
