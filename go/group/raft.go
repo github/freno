@@ -27,7 +27,7 @@ var store *Store
 
 // Setup creates the entire raft shananga. Creates the store, associates with the throttler,
 // contacts peer nodes, and subscribes to leader changes to export them.
-func Setup(throttler *throttle.Throttler) (ConsensusService, error) {
+func SetupRaft(throttler *throttle.Throttler) (ConsensusService, error) {
 	store = NewStore(config.Settings().RaftDataDir, normalizeRaftNode(config.Settings().RaftBind), throttler)
 
 	peerNodes := []string{}

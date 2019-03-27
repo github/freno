@@ -107,6 +107,10 @@ func httpServe() error {
 	if err != nil {
 		return err
 	}
+	_, err = group.NewMySQLBackend(throttler)
+	if err != nil {
+		log.Errore(err)
+	}
 	go group.Monitor()
 	go throttler.Operate()
 

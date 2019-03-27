@@ -133,6 +133,18 @@ func (settings *ConfigurationSettings) postReadAdjustments() error {
 	if settings.RaftDataDir == "" {
 		return fmt.Errorf("RaftDataDir must be set")
 	}
+	if submatch := envVariableRegexp.FindStringSubmatch(settings.BackendMySQLHost); len(submatch) > 1 {
+		settings.BackendMySQLHost = os.Getenv(submatch[1])
+	}
+	if submatch := envVariableRegexp.FindStringSubmatch(settings.BackendMySQLSchema); len(submatch) > 1 {
+		settings.BackendMySQLSchema = os.Getenv(submatch[1])
+	}
+	if submatch := envVariableRegexp.FindStringSubmatch(settings.BackendMySQLUser); len(submatch) > 1 {
+		settings.BackendMySQLUser = os.Getenv(submatch[1])
+	}
+	if submatch := envVariableRegexp.FindStringSubmatch(settings.BackendMySQLPassword); len(submatch) > 1 {
+		settings.BackendMySQLPassword = os.Getenv(submatch[1])
+	}
 	if settings.BackendMySQLHost != "" {
 		if settings.BackendMySQLSchema == "" {
 			return fmt.Errorf("BackendMySQLSchema must be set when BackendMySQLHost is specified")

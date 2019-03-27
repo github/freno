@@ -1,8 +1,8 @@
 // Provide a MySQL backend as alternative to raft consensus
 
 // Expect the following backend tables:
-/*
 
+/*
 CREATE TABLE service_election (
   domain varchar(32) NOT NULL,
   service_id varchar(128) NOT NULL,
@@ -10,19 +10,30 @@ CREATE TABLE service_election (
   PRIMARY KEY (domain)
 );
 
-
+CREATE TABLE throttled_apps (
+  app_name varchar(128) NOT NULL,
+	throttled_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  expires_at TIMESTAMP NOT NULL,
+	ratio DOUBLE,
+  PRIMARY KEY (app_name)
+);
 */
+
 package group
 
 import (
 	"database/sql"
 	"fmt"
 	"os"
+	"strconv"
 	"sync/atomic"
 	"time"
 
+	"github.com/github/freno/go/base"
 	"github.com/github/freno/go/config"
+	"github.com/github/freno/go/throttle"
 
+	"github.com/outbrain/golib/log"
 	"github.com/outbrain/golib/sqlutils"
 	metrics "github.com/rcrowley/go-metrics"
 )
@@ -32,11 +43,12 @@ type MySQLBackend struct {
 	domain      string
 	serviceId   string
 	leaderState int64
+	throttler   *throttle.Throttler
 }
 
 const maxConnections = 3
 
-func NewMySQLBackend() (*MySQLBackend, error) {
+func NewMySQLBackend(throttler *throttle.Throttler) (*MySQLBackend, error) {
 	if config.Settings().BackendMySQLHost == "" {
 		return nil, nil
 	}
@@ -49,7 +61,7 @@ func NewMySQLBackend() (*MySQLBackend, error) {
 	}
 	db.SetMaxOpenConns(maxConnections)
 	db.SetMaxIdleConns(maxConnections)
-
+	log.Debugf("created db at: %s", dbUri)
 	hostname, err := os.Hostname()
 	if err != nil {
 		return nil, err
@@ -58,6 +70,7 @@ func NewMySQLBackend() (*MySQLBackend, error) {
 		db:        db,
 		domain:    fmt.Sprintf("%s:%s", config.Settings().DataCenter, config.Settings().Environment),
 		serviceId: hostname,
+		throttler: throttler,
 	}
 	go backend.continuousElections()
 	return backend, nil
@@ -76,15 +89,33 @@ func (backend *MySQLBackend) continuousElections() {
 	t := time.NewTicker(1 * time.Second)
 
 	for range t.C {
-		backend.AttemptLeadership()
-		leaderState, err := backend.ReadLeadership()
+		err := backend.AttemptLeadership()
+		log.Errore(err)
+
+		newLeaderState, err := backend.ReadLeadership()
 		if err == nil {
-			// otherwise maintain state
-			atomic.StoreInt64(&backend.leaderState, leaderState)
+			if newLeaderState != backend.leaderState {
+				backend.onLeaderStateChange(newLeaderState)
+				atomic.StoreInt64(&backend.leaderState, newLeaderState)
+			}
+		} else {
+			// maintain state: graceful response to backend errors
+			log.Errore(err)
 		}
-		go metrics.GetOrRegisterGauge("backend.mysql.is_leader", nil).Update(leaderState)
+		go metrics.GetOrRegisterGauge("backend.mysql.is_leader", nil).Update(atomic.LoadInt64(&backend.leaderState))
 		go metrics.GetOrRegisterGauge("backend.mysql.is_healthy", nil).Update(boolToInt64(err == nil))
 	}
+}
+
+func (backend *MySQLBackend) onLeaderStateChange(newLeaderState int64) error {
+	if newLeaderState > 0 {
+		log.Infof("Transitioned into leader state")
+		backend.expireThrottledApps()
+		backend.readThrottledApps()
+	} else {
+		log.Infof("Transitioned out of leader state")
+	}
+	return nil
 }
 
 func (backend *MySQLBackend) IsLeader() bool {
@@ -138,7 +169,89 @@ func (backend *MySQLBackend) ReadLeadership() (int64, error) {
 	args := sqlutils.Args(backend.domain, backend.serviceId)
 
 	var count int64
-	err := backend.db.QueryRow(query, args).Scan(&count)
+	err := backend.db.QueryRow(query, args...).Scan(&count)
 
 	return count, err
+}
+
+func (backend *MySQLBackend) expireThrottledApps() error {
+	query := `delete from throttled_apps where expires_at <= now()`
+	_, err := sqlutils.ExecNoPrepare(backend.db, query)
+	return err
+}
+
+func (backend *MySQLBackend) readThrottledApps() error {
+	query := `
+		select
+			app_name,
+			timestampdiff(second, now(), expires_at) as ttl_seconds,
+			ratio
+		from
+			throttled_apps
+		where
+			expires_at > now()
+	`
+
+	err := sqlutils.QueryRowsMap(backend.db, query, func(m sqlutils.RowMap) error {
+		appName := m.GetString("app_name")
+		ttlSeconds := m.GetInt64("ttl_seconds")
+		ratio, _ := strconv.ParseFloat(m.GetString("ratio"), 64)
+		expiresAt := time.Now().Add(time.Duration(ttlSeconds) * time.Second)
+
+		go log.Debugf("read-throttled-apps: app=%s, ttlSeconds%+v, expiresAt=%+v, ratio=%+v", appName, ttlSeconds, expiresAt, ratio)
+		go backend.throttler.ThrottleApp(appName, expiresAt, ratio)
+		return nil
+	})
+
+	return err
+}
+
+func (backend *MySQLBackend) ThrottleApp(appName string, ttlMinutes int64, expireAt time.Time, ratio float64) error {
+	log.Debugf("throttle-app: app=%s, ttlMinutes=%+v, expireAt=%+v, ratio=%+v", appName, ttlMinutes, expireAt, ratio)
+	var query string
+	var args []interface{}
+	if ttlMinutes > 0 {
+		query = `
+	    replace into throttled_apps (
+	        app_name, throttled_at, expires_at, ratio
+	      ) values (
+	        ?, now(), now() + interval ? minute, ?
+	      )
+	  `
+		args = sqlutils.Args(appName, ttlMinutes, ratio)
+	} else {
+		// TTL=0 ; if app is already throttled, keep existing TTL and only update ratio.
+		// if app does not exist use DefaultThrottleTTL
+		query = `
+	    insert into throttled_apps (
+	        app_name, throttled_at, expires_at, ratio
+	      ) values (
+	        ?, now(), now() + interval ? minute, ?
+	      )
+			on duplicate key update
+				ratio=values(ratio)
+		`
+		args = sqlutils.Args(appName, throttle.DefaultThrottleTTLMinutes, ratio)
+	}
+	_, err := sqlutils.ExecNoPrepare(backend.db, query, args...)
+	backend.throttler.ThrottleApp(appName, expireAt, ratio)
+	return err
+}
+
+func (backend *MySQLBackend) ThrottledAppsMap() (result map[string](*base.AppThrottle)) {
+	return backend.throttler.ThrottledAppsMap()
+}
+
+func (backend *MySQLBackend) UnthrottleApp(appName string) error {
+	backend.throttler.UnthrottleApp(appName)
+	query := `
+    delete from throttled_apps where app_name=?
+  `
+	args := sqlutils.Args(appName)
+	_, err := sqlutils.ExecNoPrepare(backend.db, query, args...)
+	return err
+}
+
+func (backend *MySQLBackend) RecentAppsMap() (result map[string](*base.RecentApp)) {
+	return backend.throttler.RecentAppsMap()
 }

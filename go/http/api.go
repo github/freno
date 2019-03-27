@@ -233,7 +233,7 @@ func (api *APIImpl) ThrottleApp(w http.ResponseWriter, r *http.Request, ps httpr
 		err = fmt.Errorf("ratio must be in [0..1] range; got %+v", ratio)
 		goto response
 	}
-	err = api.consensusService.ThrottleApp(appName, expireAt, ratio)
+	err = api.consensusService.ThrottleApp(appName, ttlMinutes, expireAt, ratio)
 
 response:
 	api.respondGeneric(w, r, err)

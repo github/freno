@@ -32,7 +32,7 @@ const aggregatedMetricsCleanup = 1 * time.Second
 const throttledAppsSnapshotInterval = 5 * time.Second
 const recentAppsExpiration = time.Hour * 24
 
-const defaultThrottleTTL = 60 * time.Minute
+const DefaultThrottleTTLMinutes = 60
 const DefaultThrottleRatio = 1.0
 
 func init() {
@@ -420,7 +420,7 @@ func (throttler *Throttler) ThrottleApp(appName string, expireAt time.Time, rati
 		}
 	} else {
 		if expireAt.IsZero() {
-			expireAt = now.Add(defaultThrottleTTL)
+			expireAt = now.Add(DefaultThrottleTTLMinutes * time.Minute)
 		}
 		if ratio < 0 {
 			ratio = DefaultThrottleRatio

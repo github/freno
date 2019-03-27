@@ -134,7 +134,7 @@ func (store *Store) genericCommand(c *command) error {
 
 // ThrottleApp, as implied by consensusService, is a raft oepration request which
 // will ask for consensus.
-func (store *Store) ThrottleApp(appName string, expireAt time.Time, ratio float64) error {
+func (store *Store) ThrottleApp(appName string, ttlMinutes int64, expireAt time.Time, ratio float64) error {
 	c := &command{
 		Operation: "throttle",
 		Key:       appName,
