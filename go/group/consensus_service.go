@@ -12,4 +12,10 @@ type ConsensusService interface {
 	ThrottledAppsMap() (result map[string](*base.AppThrottle))
 	UnthrottleApp(appName string) error
 	RecentAppsMap() (result map[string](*base.RecentApp))
+
+	IsLeader() bool
+	GetLeader() string
+	GetStateDescription() string
+
+	Monitor()
 }

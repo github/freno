@@ -62,10 +62,9 @@ type Throttler struct {
 	throttledAppsMutex sync.Mutex
 }
 
-func NewThrottler(isLeaderFunc func() bool) *Throttler {
+func NewThrottler() *Throttler {
 	throttler := &Throttler{
-		isLeader:     false,
-		isLeaderFunc: isLeaderFunc,
+		isLeader: false,
 
 		mysqlThrottleMetricChan: make(chan *mysql.MySQLThrottleMetric),
 		mysqlHttpCheckChan:      make(chan *mysql.MySQLHttpCheck),
@@ -87,6 +86,10 @@ func NewThrottler(isLeaderFunc func() bool) *Throttler {
 	throttler.memcachePath = config.Settings().MemcachePath
 
 	return throttler
+}
+
+func (throttler *Throttler) SetLeaderFunc(isLeaderFunc func() bool) {
+	throttler.isLeaderFunc = isLeaderFunc
 }
 
 func (throttler *Throttler) ThrottledAppsSnapshot() map[string]cache.Item {

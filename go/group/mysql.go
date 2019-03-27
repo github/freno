@@ -43,6 +43,7 @@ type MySQLBackend struct {
 	domain      string
 	serviceId   string
 	leaderState int64
+	healthState int64
 	throttler   *throttle.Throttler
 }
 
@@ -92,18 +93,20 @@ func (backend *MySQLBackend) continuousElections() {
 		err := backend.AttemptLeadership()
 		log.Errore(err)
 
-		newLeaderState, err := backend.ReadLeadership()
+		newLeaderState, _, err := backend.ReadLeadership()
 		if err == nil {
+			atomic.StoreInt64(&backend.healthState, 1)
 			if newLeaderState != backend.leaderState {
 				backend.onLeaderStateChange(newLeaderState)
 				atomic.StoreInt64(&backend.leaderState, newLeaderState)
 			}
 		} else {
-			// maintain state: graceful response to backend errors
+			atomic.StoreInt64(&backend.healthState, 0)
+			// and maintain leader state: graceful response to backend errors
 			log.Errore(err)
 		}
 		go metrics.GetOrRegisterGauge("backend.mysql.is_leader", nil).Update(atomic.LoadInt64(&backend.leaderState))
-		go metrics.GetOrRegisterGauge("backend.mysql.is_healthy", nil).Update(boolToInt64(err == nil))
+		go metrics.GetOrRegisterGauge("backend.mysql.is_healthy", nil).Update(atomic.LoadInt64(&backend.healthState))
 	}
 }
 
@@ -122,6 +125,21 @@ func (backend *MySQLBackend) IsLeader() bool {
 	return atomic.LoadInt64(&backend.leaderState) > 0
 }
 
+func (backend *MySQLBackend) GetLeader() string {
+	_, leader, _ := backend.ReadLeadership()
+	return leader
+}
+
+func (backend *MySQLBackend) GetStateDescription() string {
+	if atomic.LoadInt64(&backend.leaderState) > 0 {
+		return "Leader"
+	}
+	if atomic.LoadInt64(&backend.healthState) > 0 {
+		return "Healthy"
+	}
+	return "Unhealthy"
+}
+
 func (backend *MySQLBackend) AttemptLeadership() error {
 	query := `
     insert ignore into service_election (
@@ -129,7 +147,7 @@ func (backend *MySQLBackend) AttemptLeadership() error {
       ) values (
         ?, ?, now()
       ) on duplicate key update
-      service_id = if(last_seen_active < now() - interval 20 second, values(service_id), service_id),
+      service_id = if(last_seen_active < now() - interval 5 second, values(service_id), service_id),
       last_seen_active = if(service_id = values(service_id), values(last_seen_active), last_seen_active)
   `
 	args := sqlutils.Args(backend.domain, backend.serviceId)
@@ -159,19 +177,22 @@ func (backend *MySQLBackend) Reelect() error {
 	return err
 }
 
-func (backend *MySQLBackend) ReadLeadership() (int64, error) {
+func (backend *MySQLBackend) ReadLeadership() (leaderState int64, leader string, err error) {
 	query := `
-    select count(*) > 0
-      from service_election
-      where domain=?
-      and service_id=?
+    select
+				ifnull(max(service_id) = ?, 0) as is_leader,
+				ifnull(max(service_id), '') as service_id
+      from
+				service_election
+      where
+				domain=?
   `
-	args := sqlutils.Args(backend.domain, backend.serviceId)
+	args := sqlutils.Args(backend.serviceId, backend.domain)
 
-	var count int64
-	err := backend.db.QueryRow(query, args...).Scan(&count)
+	err = backend.db.QueryRow(query, args...).Scan(&leaderState, &leader)
 
-	return count, err
+	log.Debugf("read-leadership: leaderState=%+v, leader=%+v, err=%+v", leaderState, leader, err)
+	return leaderState, leader, err
 }
 
 func (backend *MySQLBackend) expireThrottledApps() error {
@@ -254,4 +275,7 @@ func (backend *MySQLBackend) UnthrottleApp(appName string) error {
 
 func (backend *MySQLBackend) RecentAppsMap() (result map[string](*base.RecentApp)) {
 	return backend.throttler.RecentAppsMap()
+}
+
+func (backend *MySQLBackend) Monitor() {
 }

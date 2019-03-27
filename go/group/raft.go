@@ -8,15 +8,12 @@
 package group
 
 import (
-	"expvar"
 	"fmt"
 	"strings"
-	"time"
 
 	"github.com/github/freno/go/config"
 	"github.com/github/freno/go/throttle"
 	"github.com/outbrain/golib/log"
-	metrics "github.com/rcrowley/go-metrics"
 
 	"github.com/hashicorp/raft"
 )
@@ -57,57 +54,4 @@ func normalizeRaftNode(node string) string {
 	}
 	node = fmt.Sprintf("%s:%d", node, config.Settings().DefaultRaftPort)
 	return node
-}
-
-// IsLeader tells if this node is the current raft leader
-func IsLeader() bool {
-	return GetState() == raft.Leader
-}
-
-// GetLeader returns identity of raft leader
-func GetLeader() string {
-	return getRaft().Leader()
-}
-
-// GetState returns current raft state
-func GetState() raft.RaftState {
-	return getRaft().State()
-}
-
-// Monitor is a utility function to routinely observe leadership state.
-// It doesn't actually do much; merely takes notes.
-func Monitor() {
-	t := time.NewTicker(5 * time.Second)
-
-	for {
-		select {
-		case <-t.C:
-			leaderHint := GetLeader()
-
-			leaderExpVar := expvar.Get("raft.leader")
-			if leaderExpVar == nil {
-				leaderExpVar = expvar.NewString("raft.leader")
-			}
-			leaderExpVar.(*expvar.String).Set(leaderHint)
-
-			state := GetState()
-			if state == raft.Leader {
-				leaderHint = fmt.Sprintf("%s (this host)", leaderHint)
-				metrics.GetOrRegisterGauge("raft.is_leader", nil).Update(1)
-			} else {
-				metrics.GetOrRegisterGauge("raft.is_leader", nil).Update(0)
-			}
-			switch state {
-			case raft.Leader, raft.Follower:
-				{
-					metrics.GetOrRegisterGauge("raft.is_healthy", nil).Update(1)
-				}
-			default:
-				{
-					metrics.GetOrRegisterGauge("raft.is_healthy", nil).Update(0)
-				}
-			}
-			log.Debugf("raft leader is %s; state: %s", leaderHint, state.String())
-		}
-	}
 }

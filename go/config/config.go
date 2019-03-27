@@ -115,9 +115,9 @@ func newConfigurationSettings() *ConfigurationSettings {
 		RaftBind:           "127.0.0.1:10008",
 		RaftDataDir:        "",
 		DefaultRaftPort:    0,
+		RaftNodes:          []string{},
 		BackendMySQLHost:   "",
 		BackendMySQLSchema: "",
-		RaftNodes:          []string{},
 		BackendMySQLPort:   3306,
 		MemcacheServers:    []string{},
 		MemcachePath:       "freno",
@@ -130,9 +130,6 @@ func newConfigurationSettings() *ConfigurationSettings {
 
 // Hook to implement adjustments after reading each configuration file.
 func (settings *ConfigurationSettings) postReadAdjustments() error {
-	if settings.RaftDataDir == "" {
-		return fmt.Errorf("RaftDataDir must be set")
-	}
 	if submatch := envVariableRegexp.FindStringSubmatch(settings.BackendMySQLHost); len(submatch) > 1 {
 		settings.BackendMySQLHost = os.Getenv(submatch[1])
 	}
@@ -144,6 +141,9 @@ func (settings *ConfigurationSettings) postReadAdjustments() error {
 	}
 	if submatch := envVariableRegexp.FindStringSubmatch(settings.BackendMySQLPassword); len(submatch) > 1 {
 		settings.BackendMySQLPassword = os.Getenv(submatch[1])
+	}
+	if settings.RaftDataDir == "" && settings.BackendMySQLHost == "" {
+		return fmt.Errorf("Either RaftDataDir or BackendMySQLHost must be set")
 	}
 	if settings.BackendMySQLHost != "" {
 		if settings.BackendMySQLSchema == "" {
