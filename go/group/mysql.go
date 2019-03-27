@@ -105,8 +105,6 @@ func (backend *MySQLBackend) continuousElections() {
 			// and maintain leader state: graceful response to backend errors
 			log.Errore(err)
 		}
-		go metrics.GetOrRegisterGauge("backend.mysql.is_leader", nil).Update(atomic.LoadInt64(&backend.leaderState))
-		go metrics.GetOrRegisterGauge("backend.mysql.is_healthy", nil).Update(atomic.LoadInt64(&backend.healthState))
 	}
 }
 
@@ -119,6 +117,10 @@ func (backend *MySQLBackend) onLeaderStateChange(newLeaderState int64) error {
 		log.Infof("Transitioned out of leader state")
 	}
 	return nil
+}
+
+func (backend *MySQLBackend) IsHealthy() bool {
+	return atomic.LoadInt64(&backend.healthState) > 0
 }
 
 func (backend *MySQLBackend) IsLeader() bool {
@@ -278,4 +280,9 @@ func (backend *MySQLBackend) RecentAppsMap() (result map[string](*base.RecentApp
 }
 
 func (backend *MySQLBackend) Monitor() {
+	t := time.NewTicker(monitorInterval)
+	for range t.C {
+		go metrics.GetOrRegisterGauge("backend.mysql.is_leader", nil).Update(atomic.LoadInt64(&backend.leaderState))
+		go metrics.GetOrRegisterGauge("backend.mysql.is_healthy", nil).Update(atomic.LoadInt64(&backend.healthState))
+	}
 }

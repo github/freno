@@ -177,6 +177,17 @@ func (store *Store) Join(addr string) error {
 	return nil
 }
 
+func (store *Store) IsHealthy() bool {
+	state := store.GetState()
+	switch state {
+	case raft.Leader, raft.Follower:
+		{
+			return true
+		}
+	}
+	return false
+}
+
 // IsLeader tells if this node is the current raft leader
 func (store *Store) IsLeader() bool {
 	return store.GetState() == raft.Leader
@@ -200,7 +211,7 @@ func (store *Store) GetStateDescription() string {
 // Monitor is a utility function to routinely observe leadership state.
 // It doesn't actually do much; merely takes notes.
 func (store *Store) Monitor() {
-	t := time.NewTicker(5 * time.Second)
+	t := time.NewTicker(monitorInterval)
 
 	for {
 		select {
@@ -220,16 +231,12 @@ func (store *Store) Monitor() {
 			} else {
 				metrics.GetOrRegisterGauge("raft.is_leader", nil).Update(0)
 			}
-			switch state {
-			case raft.Leader, raft.Follower:
-				{
-					metrics.GetOrRegisterGauge("raft.is_healthy", nil).Update(1)
-				}
-			default:
-				{
-					metrics.GetOrRegisterGauge("raft.is_healthy", nil).Update(0)
-				}
+			var healthState int64
+			if store.IsHealthy() {
+				healthState = 1
 			}
+			metrics.GetOrRegisterGauge("raft.is_healthy", nil).Update(healthState)
+
 			log.Debugf("raft leader is %s; state: %s", leaderHint, state.String())
 		}
 	}
