@@ -26,8 +26,20 @@ func NewThrottlerCheck(throttler *Throttler) *ThrottlerCheck {
 }
 
 // checkAppMetricResult allows an app to check on a metric
-func (check *ThrottlerCheck) checkAppMetricResult(appName string, metricResultFunc base.MetricResultFunc, overrideThreshold float64) (checkResult *CheckResult) {
-	metricResult, threshold := check.throttler.AppRequestMetricResult(appName, metricResultFunc)
+func (check *ThrottlerCheck) checkAppMetricResult(appName string, storeType string, storeName string, metricResultFunc base.MetricResultFunc, overrideThreshold float64) (checkResult *CheckResult) {
+	// Handle deprioritized app logic
+	denyApp := false
+	metricName := fmt.Sprintf("%s/%s", storeType, storeName)
+	isDeprioritizedApp := check.throttler.deprioritizedApps[appName]
+	if isDeprioritizedApp {
+		if _, exists := check.throttler.nonDeprioritizedAppThrottled.Get(metricName); exists {
+			// a non-deprioritized app, ie a "normal" app, has recently been throttled.
+			// This is now a deprioritized app. Deny access to this request.
+			denyApp = true
+		}
+	}
+	//
+	metricResult, threshold := check.throttler.AppRequestMetricResult(appName, metricResultFunc, denyApp)
 	if overrideThreshold > 0 {
 		threshold = overrideThreshold
 	}
@@ -51,6 +63,11 @@ func (check *ThrottlerCheck) checkAppMetricResult(appName string, metricResultFu
 		// casual throttling
 		statusCode = http.StatusTooManyRequests // 429
 		err = base.ThresholdExceededError
+
+		if !isDeprioritizedApp {
+			// deprioritized apps will henceforth be denied requests
+			go check.throttler.nonDeprioritizedAppThrottled.SetDefault(metricName, true)
+		}
 	} else {
 		// all good!
 		statusCode = http.StatusOK // 200
@@ -73,7 +90,7 @@ func (check *ThrottlerCheck) Check(appName string, storeType string, storeName s
 		return NoSuchMetricCheckResult
 	}
 
-	checkResult = check.checkAppMetricResult(appName, metricResultFunc, overrideThreshold)
+	checkResult = check.checkAppMetricResult(appName, storeType, storeName, metricResultFunc, overrideThreshold)
 
 	go func(statusCode int) {
 		metrics.GetOrRegisterCounter("check.any.total", nil).Inc(1)

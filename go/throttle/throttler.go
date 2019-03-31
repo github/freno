@@ -32,6 +32,9 @@ const aggregatedMetricsCleanup = 1 * time.Second
 const throttledAppsSnapshotInterval = 5 * time.Second
 const recentAppsExpiration = time.Hour * 24
 
+const nonDeprioritizedAppMapExpiration = time.Second
+const nonDeprioritizedAppMapInterval = 100 * time.Millisecond
+
 const defaultThrottleTTL = 60 * time.Minute
 const DefaultThrottleRatio = 1.0
 
@@ -60,6 +63,9 @@ type Throttler struct {
 	memcachePath   string
 
 	throttledAppsMutex sync.Mutex
+
+	deprioritizedApps            map[string]bool
+	nonDeprioritizedAppThrottled *cache.Cache
 }
 
 func NewThrottler(isLeaderFunc func() bool) *Throttler {
@@ -79,12 +85,20 @@ func NewThrottler(isLeaderFunc func() bool) *Throttler {
 		aggregatedMetrics:      cache.New(aggregatedMetricsExpiration, aggregatedMetricsCleanup),
 		recentApps:             cache.New(recentAppsExpiration, time.Minute),
 		metricsHealth:          cache.New(cache.NoExpiration, 0),
+
+		deprioritizedApps:            make(map[string]bool),
+		nonDeprioritizedAppThrottled: cache.New(nonDeprioritizedAppMapExpiration, nonDeprioritizedAppMapInterval),
 	}
 	throttler.ThrottleApp("abusing-app", time.Now().Add(time.Hour*24*365*10), DefaultThrottleRatio)
 	if memcacheServers := config.Settings().MemcacheServers; len(memcacheServers) > 0 {
 		throttler.memcacheClient = memcache.New(memcacheServers...)
 	}
 	throttler.memcachePath = config.Settings().MemcachePath
+
+	for _, app := range config.Settings().Apps.Deprioritized {
+		throttler.deprioritizedApps[app] = true
+		// this maps stays immutable throught the lifetime of the freno process
+	}
 
 	return throttler
 }
@@ -500,7 +514,10 @@ func (throttler *Throttler) metricsHealthSnapshot() map[string](*base.MetricHeal
 	return snapshot
 }
 
-func (throttler *Throttler) AppRequestMetricResult(appName string, metricResultFunc base.MetricResultFunc) (metricResult base.MetricResult, threshold float64) {
+func (throttler *Throttler) AppRequestMetricResult(appName string, metricResultFunc base.MetricResultFunc, denyApp bool) (metricResult base.MetricResult, threshold float64) {
+	if denyApp {
+		return base.AppDeniedMetric, 0
+	}
 	if throttler.IsAppThrottled(appName) {
 		return base.AppDeniedMetric, 0
 	}
