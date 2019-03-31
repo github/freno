@@ -64,8 +64,7 @@ type Throttler struct {
 
 	throttledAppsMutex sync.Mutex
 
-	deprioritizedApps            map[string]bool
-	nonDeprioritizedAppThrottled *cache.Cache
+	nonLowPriorityAppRequestsThrottled *cache.Cache
 }
 
 func NewThrottler(isLeaderFunc func() bool) *Throttler {
@@ -86,19 +85,13 @@ func NewThrottler(isLeaderFunc func() bool) *Throttler {
 		recentApps:             cache.New(recentAppsExpiration, time.Minute),
 		metricsHealth:          cache.New(cache.NoExpiration, 0),
 
-		deprioritizedApps:            make(map[string]bool),
-		nonDeprioritizedAppThrottled: cache.New(nonDeprioritizedAppMapExpiration, nonDeprioritizedAppMapInterval),
+		nonLowPriorityAppRequestsThrottled: cache.New(nonDeprioritizedAppMapExpiration, nonDeprioritizedAppMapInterval),
 	}
 	throttler.ThrottleApp("abusing-app", time.Now().Add(time.Hour*24*365*10), DefaultThrottleRatio)
 	if memcacheServers := config.Settings().MemcacheServers; len(memcacheServers) > 0 {
 		throttler.memcacheClient = memcache.New(memcacheServers...)
 	}
 	throttler.memcachePath = config.Settings().MemcachePath
-
-	for _, app := range config.Settings().Apps.Deprioritized {
-		throttler.deprioritizedApps[app] = true
-		// this maps stays immutable throught the lifetime of the freno process
-	}
 
 	return throttler
 }

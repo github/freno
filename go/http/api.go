@@ -40,6 +40,8 @@ type API interface {
 
 var endpoints = []string{} // known API URIs
 
+var okIfNotExistsFlags = &throttle.CheckFlags{OKIfNotExists: true}
+
 type GeneralResponse struct {
 	StatusCode int
 	Message    string
@@ -140,7 +142,7 @@ func (api *APIImpl) respondToCheckRequest(w http.ResponseWriter, r *http.Request
 }
 
 // Check checks whether a collected metric is within its threshold
-func (api *APIImpl) check(w http.ResponseWriter, r *http.Request, ps httprouter.Params, overrideThreshold float64, okIfNotExists bool) {
+func (api *APIImpl) check(w http.ResponseWriter, r *http.Request, ps httprouter.Params, flags *throttle.CheckFlags) {
 	appName := ps.ByName("app")
 	storeType := ps.ByName("storeType")
 	storeName := ps.ByName("storeName")
@@ -149,9 +151,10 @@ func (api *APIImpl) check(w http.ResponseWriter, r *http.Request, ps httprouter.
 		remoteAddr = r.RemoteAddr
 		remoteAddr = strings.Split(remoteAddr, ":")[0]
 	}
+	flags.LowPriority = (r.URL.Query().Get("p") == "low")
 
-	checkResult := api.throttlerCheck.Check(appName, storeType, storeName, remoteAddr, overrideThreshold)
-	if checkResult.StatusCode == http.StatusNotFound && okIfNotExists {
+	checkResult := api.throttlerCheck.Check(appName, storeType, storeName, remoteAddr, flags)
+	if checkResult.StatusCode == http.StatusNotFound && flags.OKIfNotExists {
 		checkResult.StatusCode = http.StatusOK // 200
 	}
 
@@ -160,13 +163,13 @@ func (api *APIImpl) check(w http.ResponseWriter, r *http.Request, ps httprouter.
 
 // WriteCheck
 func (api *APIImpl) WriteCheck(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
-	api.check(w, r, ps, 0, false)
+	api.check(w, r, ps, throttle.StandardCheckFlags)
 }
 
 // WriteCheckIfExists checks for a metric, but reports an OK if the metric does not exist.
 // If the metric does exist, then all usual checks are made.
 func (api *APIImpl) WriteCheckIfExists(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
-	api.check(w, r, ps, 0, true)
+	api.check(w, r, ps, okIfNotExistsFlags)
 }
 
 // ReadCheck
@@ -174,7 +177,7 @@ func (api *APIImpl) ReadCheck(w http.ResponseWriter, r *http.Request, ps httprou
 	if overrideThreshold, err := strconv.ParseFloat(ps.ByName("threshold"), 64); err != nil {
 		api.respondGeneric(w, r, err)
 	} else {
-		api.check(w, r, ps, overrideThreshold, false)
+		api.check(w, r, ps, &throttle.CheckFlags{OverrideThreshold: overrideThreshold})
 	}
 }
 

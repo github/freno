@@ -14,6 +14,14 @@ import (
 const frenoAppName = "freno"
 const selfCheckInterval = 100 * time.Millisecond
 
+type CheckFlags struct {
+	OverrideThreshold float64
+	LowPriority       bool
+	OKIfNotExists     bool
+}
+
+var StandardCheckFlags = &CheckFlags{}
+
 // ThrottlerCheck provides methdos for an app checking on metrics
 type ThrottlerCheck struct {
 	throttler *Throttler
@@ -26,13 +34,12 @@ func NewThrottlerCheck(throttler *Throttler) *ThrottlerCheck {
 }
 
 // checkAppMetricResult allows an app to check on a metric
-func (check *ThrottlerCheck) checkAppMetricResult(appName string, storeType string, storeName string, metricResultFunc base.MetricResultFunc, overrideThreshold float64) (checkResult *CheckResult) {
+func (check *ThrottlerCheck) checkAppMetricResult(appName string, storeType string, storeName string, metricResultFunc base.MetricResultFunc, flags *CheckFlags) (checkResult *CheckResult) {
 	// Handle deprioritized app logic
 	denyApp := false
 	metricName := fmt.Sprintf("%s/%s", storeType, storeName)
-	isDeprioritizedApp := check.throttler.deprioritizedApps[appName]
-	if isDeprioritizedApp {
-		if _, exists := check.throttler.nonDeprioritizedAppThrottled.Get(metricName); exists {
+	if flags.LowPriority {
+		if _, exists := check.throttler.nonLowPriorityAppRequestsThrottled.Get(metricName); exists {
 			// a non-deprioritized app, ie a "normal" app, has recently been throttled.
 			// This is now a deprioritized app. Deny access to this request.
 			denyApp = true
@@ -40,8 +47,8 @@ func (check *ThrottlerCheck) checkAppMetricResult(appName string, storeType stri
 	}
 	//
 	metricResult, threshold := check.throttler.AppRequestMetricResult(appName, metricResultFunc, denyApp)
-	if overrideThreshold > 0 {
-		threshold = overrideThreshold
+	if flags.OverrideThreshold > 0 {
+		threshold = flags.OverrideThreshold
 	}
 	value, err := metricResult.Get()
 	if appName == "" {
@@ -64,9 +71,9 @@ func (check *ThrottlerCheck) checkAppMetricResult(appName string, storeType stri
 		statusCode = http.StatusTooManyRequests // 429
 		err = base.ThresholdExceededError
 
-		if !isDeprioritizedApp {
-			// deprioritized apps will henceforth be denied requests
-			go check.throttler.nonDeprioritizedAppThrottled.SetDefault(metricName, true)
+		if !flags.LowPriority && appName != frenoAppName {
+			// low priority requests will henceforth be denied
+			go check.throttler.nonLowPriorityAppRequestsThrottled.SetDefault(metricName, true)
 		}
 	} else {
 		// all good!
@@ -76,7 +83,7 @@ func (check *ThrottlerCheck) checkAppMetricResult(appName string, storeType stri
 }
 
 // CheckAppStoreMetric
-func (check *ThrottlerCheck) Check(appName string, storeType string, storeName string, remoteAddr string, overrideThreshold float64) (checkResult *CheckResult) {
+func (check *ThrottlerCheck) Check(appName string, storeType string, storeName string, remoteAddr string, flags *CheckFlags) (checkResult *CheckResult) {
 	var metricResultFunc base.MetricResultFunc
 	switch storeType {
 	case "mysql":
@@ -90,7 +97,7 @@ func (check *ThrottlerCheck) Check(appName string, storeType string, storeName s
 		return NoSuchMetricCheckResult
 	}
 
-	checkResult = check.checkAppMetricResult(appName, storeType, storeName, metricResultFunc, overrideThreshold)
+	checkResult = check.checkAppMetricResult(appName, storeType, storeName, metricResultFunc, flags)
 
 	go func(statusCode int) {
 		metrics.GetOrRegisterCounter("check.any.total", nil).Inc(1)
@@ -130,7 +137,7 @@ func (check *ThrottlerCheck) localCheck(appName string, metricName string) (chec
 	if err != nil {
 		return NoSuchMetricCheckResult
 	}
-	checkResult = check.Check(appName, storeType, storeName, "local", 0)
+	checkResult = check.Check(appName, storeType, storeName, "local", StandardCheckFlags)
 
 	if checkResult.StatusCode == http.StatusOK {
 		check.throttler.markMetricHealthy(metricName)

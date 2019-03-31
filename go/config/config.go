@@ -100,7 +100,6 @@ type ConfigurationSettings struct {
 	MemcacheServers []string // if given, freno will report to aggregated values to given memcache
 	MemcachePath    string   // use as prefix to metric path in memcache key, e.g. if `MemcachePath` is "myprefix" the key would be "myprefix/mysql/maincluster". Default: "freno"
 	Stores          StoresSettings
-	Apps            AppSettings
 }
 
 func newConfigurationSettings() *ConfigurationSettings {
@@ -125,9 +124,6 @@ func (settings *ConfigurationSettings) postReadAdjustments() error {
 		return fmt.Errorf("RaftDataDir must be set")
 	}
 	if err := settings.Stores.postReadAdjustments(); err != nil {
-		return err
-	}
-	if err := settings.Apps.postReadAdjustments(); err != nil {
 		return err
 	}
 	return nil
