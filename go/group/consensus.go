@@ -41,21 +41,21 @@ func NewConsensusServiceProvider(throttler *throttle.Throttler) (p *ConsensusSer
 }
 
 func (p *ConsensusServiceProvider) GetConsensusService() ConsensusService {
-	if p.raftConsensusService != nil {
-		return p.raftConsensusService
-	}
 	if p.mySQLConsensusService != nil {
 		return p.mySQLConsensusService
+	}
+	if p.raftConsensusService != nil {
+		return p.raftConsensusService
 	}
 	return nil
 }
 
 func (p *ConsensusServiceProvider) Monitor() {
-	if p.raftConsensusService != nil {
-		go p.raftConsensusService.Monitor()
-	}
 	if p.mySQLConsensusService != nil {
 		go p.mySQLConsensusService.Monitor()
+	}
+	if p.raftConsensusService != nil {
+		go p.raftConsensusService.Monitor()
 	}
 
 	t := time.NewTicker(monitorInterval)
