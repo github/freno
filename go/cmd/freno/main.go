@@ -31,6 +31,8 @@ func main() {
 	raftBind := flag.String("raft-bind", "", "Raft bind address (example: '127.0.0.1:10008'). Overrides config's RaftBind")
 	raftNodes := flag.String("raft-nodes", "", "Comma separated (e.g. 'host:port[,host:port]') list of raft nodes. Overrides config's RaftNodes")
 
+	group.ForceLeadership = *flag.Bool("force-leadership", false, "Make this node consider itself a leader no matter what consensus logic says")
+
 	quiet := flag.Bool("quiet", false, "quiet")
 	verbose := flag.Bool("verbose", false, "verbose")
 	debug := flag.Bool("debug", false, "debug mode (very verbose)")

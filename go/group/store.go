@@ -190,6 +190,9 @@ func (store *Store) IsHealthy() bool {
 
 // IsLeader tells if this node is the current raft leader
 func (store *Store) IsLeader() bool {
+	if ForceLeadership {
+		return true
+	}
 	return store.GetState() == raft.Leader
 }
 

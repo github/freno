@@ -117,6 +117,9 @@ func (backend *MySQLBackend) IsHealthy() bool {
 }
 
 func (backend *MySQLBackend) IsLeader() bool {
+	if ForceLeadership {
+		return true
+	}
 	return atomic.LoadInt64(&backend.leaderState) > 0
 }
 
