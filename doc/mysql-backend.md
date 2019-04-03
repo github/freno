@@ -1,0 +1,73 @@
+# MySQL backend
+
+
+This documents how `freno` achieves high availability and consistent state with a `MySQL` backend. As an alternative, see [Raft](raft.md).
+
+
+### The setup
+
+You may use any number of `freno` nodes, which will all connect to same MySQL backend. The nodes will pick leader by synching on the MySQL backend, and will not directly communicate with each other.
+
+The following depicts a possible setup to provide with `freno` high availability:
+
+- A highly available MySQL setup: the HA of MySQL is outside `freno`'s scope. Consider [orchestrator](https://github.com/github/orchestrator).
+- `2` or more `freno` nodes configured
+- Configure all to use the same `BackendMySQLHost`.
+- HAProxy in front of `freno` nodes.
+  - HAProxy only directs traffic to the _leader_. `freno` has specialized `/leader-check`.
+  - Sample HAProxy configuration can be found in [haproxy.cfg](../resources/haproxy.cfg)
+- Clients to talk to HAProxy
+  - Implicitly, all clients only talk to the _leader_
+
+### Configuration
+
+Let's dissect the general section of the [sample config file](../resources/freno.conf.sample.json):
+
+
+```json
+{
+  "BackendMySQLHost": "mysql.example.com",
+  "BackendMySQLPort": 3306,
+  "BackendMySQLSchema": "freno_backend",
+  "BackendMySQLUser": "freno_daemon",
+  "BackendMySQLPassword": "123456",
+}
+```
+
+You may exchange the above for environment variables:
+
+```json
+{
+  "BackendMySQLHost": "${MYSQL_BACKEND_HOST}",
+  "BackendMySQLPort": 3306,
+  "BackendMySQLSchema": "${MYSQL_BACKEND_SCHEMA}",
+  "BackendMySQLUser": "${MYSQL_BACKEND_RW_USER}",
+  "BackendMySQLPassword": "${MYSQL_BACKEND_RW_PASSWORD}",
+}
+```
+
+and export such variables to the `freno` daemon.
+
+
+### MySQL schema
+
+The backend schema should have these tables:
+
+```sql
+CREATE TABLE service_election (
+  domain varchar(32) NOT NULL,
+  service_id varchar(128) NOT NULL,
+  last_seen_active timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (domain)
+);
+
+CREATE TABLE throttled_apps (
+  app_name varchar(128) NOT NULL,
+	throttled_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  expires_at TIMESTAMP NOT NULL,
+	ratio DOUBLE,
+  PRIMARY KEY (app_name)
+);
+```
+
+The `BackendMySQLUser` account must have `SELECT, INSERT, DELETE, UPDATE` privileges on those tables.
