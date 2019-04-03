@@ -9,6 +9,8 @@ import (
 	metrics "github.com/rcrowley/go-metrics"
 )
 
+var ForceLeadership = false
+
 type ConsensusServiceProvider struct {
 	mySQLConsensusService ConsensusService
 	raftConsensusService  ConsensusService
