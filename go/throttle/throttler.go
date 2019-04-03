@@ -254,6 +254,7 @@ func (throttler *Throttler) refreshMySQLInventory() error {
 		go func() error {
 			throttler.mysqlClusterThresholds.Set(clusterName, clusterSettings.ThrottleThreshold, cache.DefaultExpiration)
 			if !clusterSettings.HAProxySettings.IsEmpty() {
+				poolName := clusterSettings.HAProxySettings.PoolName
 				totalHosts := []string{}
 				for _, hostPort := range clusterSettings.HAProxySettings.GetProxyAddresses() {
 					log.Debugf("getting haproxy data from %s:%d", hostPort.Host, hostPort.Port)
@@ -261,13 +262,15 @@ func (throttler *Throttler) refreshMySQLInventory() error {
 					if err != nil {
 						return log.Errorf("Unable to get HAproxy data from %s:%d: %+v", hostPort.Host, hostPort, err)
 					}
-					poolName := clusterSettings.HAProxySettings.PoolName
-					hosts, err := haproxy.ParseCsvHosts(csv, poolName)
-					if err != nil {
-						return log.Errorf("Unable to get HAproxy hosts from %s:%d/#%s: %+v", hostPort.Host, hostPort.Port, poolName, err)
+					if hosts, err := haproxy.ParseCsvHosts(csv, poolName); err == nil {
+						totalHosts = append(totalHosts, hosts...)
+						log.Debugf("Read %+v hosts from haproxy %s:%d/#%s", len(hosts), hostPort.Host, hostPort.Port, poolName)
+					} else {
+						log.Errorf("Unable to get HAproxy hosts from %s:%d/#%s: %+v", hostPort.Host, hostPort.Port, poolName, err)
 					}
-					totalHosts = append(totalHosts, hosts...)
-					log.Debugf("Read %+v hosts from haproxy %s:%d/#%s", len(hosts), hostPort.Host, hostPort.Port, poolName)
+				}
+				if len(totalHosts) == 0 {
+					return log.Errorf("Unable to get any HAproxy hosts for pool: %+v", poolName)
 				}
 				clusterProbes := &mysql.ClusterProbes{
 					ClusterName:          clusterName,
