@@ -10,7 +10,7 @@ import (
 )
 
 var (
-	envVariableRegexp = regexp.MustCompile("[$][{](.*)[}]")
+	envVariableRegexp = regexp.MustCompile("[$][{](.*?)[}]")
 )
 
 var instance = newConfiguration()
