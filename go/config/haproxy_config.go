@@ -6,6 +6,7 @@ package config
 
 import (
 	"fmt"
+	"os"
 	"strconv"
 	"strings"
 )
@@ -72,4 +73,22 @@ func (settings *HAProxyConfigurationSettings) IsEmpty() bool {
 		return true
 	}
 	return len(settings.GetProxyAddresses()) == 0
+}
+
+func (settings *HAProxyConfigurationSettings) postReadAdjustments() error {
+	for {
+		submatch := envVariableRegexp.FindStringSubmatch(settings.Addresses)
+		if len(submatch) == 0 {
+			break
+		}
+		envVar := fmt.Sprintf("${%s}", submatch[1])
+		envValue := os.Getenv(submatch[1])
+		if envValue == "" {
+			return fmt.Errorf("HAProxySettings: unknown environment variable %s", envVar)
+		}
+		settings.Addresses = strings.Replace(settings.Addresses, envVar, envValue, -1)
+	}
+	fmt.Printf("=========== Addresses: %s\n", settings.Addresses)
+
+	return nil
 }
