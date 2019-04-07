@@ -88,7 +88,6 @@ func (settings *HAProxyConfigurationSettings) postReadAdjustments() error {
 		}
 		settings.Addresses = strings.Replace(settings.Addresses, envVar, envValue, -1)
 	}
-	fmt.Printf("=========== Addresses: %s\n", settings.Addresses)
 
 	return nil
 }
