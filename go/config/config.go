@@ -10,7 +10,7 @@ import (
 )
 
 var (
-	envVariableRegexp = regexp.MustCompile("[$][{](.*)[}]")
+	envVariableRegexp = regexp.MustCompile("[$][{](.*?)[}]")
 )
 
 var instance = newConfiguration()
@@ -95,6 +95,7 @@ type ConfigurationSettings struct {
 	ListenPort           int
 	DataCenter           string
 	Environment          string
+	Domain               string
 	RaftBind             string
 	RaftDataDir          string
 	DefaultRaftPort      int      // if a RaftNodes entry does not specify port, use this one
