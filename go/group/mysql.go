@@ -72,10 +72,11 @@ func NewMySQLBackend(throttler *throttle.Throttler) (*MySQLBackend, error) {
 	// 	domain = fmt.Sprintf("%s:%s", config.Settings().DataCenter, config.Settings().Environment)
 	// }
 	domain := fmt.Sprintf("%s:%s", config.Settings().DataCenter, config.Settings().Environment)
+	serviceId := fmt.Sprintf("%s:%d", hostname, config.Settings().ListenPort)
 	backend := &MySQLBackend{
 		db:        db,
 		domain:    domain,
-		serviceId: hostname,
+		serviceId: serviceId,
 		throttler: throttler,
 	}
 	go backend.continuousElections()
