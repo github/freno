@@ -205,7 +205,13 @@ func (backend *MySQLBackend) ReadLeadership() (leaderState int64, leader string,
 	return leaderState, leader, err
 }
 
+// GetSharedDomainServices returns active leader services that have same ShareDomain as this service:
+// - assuming ShareDomain is not empty
+// - excluding this very service
 func (backend *MySQLBackend) GetSharedDomainServices() (services []string, err error) {
+	if backend.shareDomain == "" {
+		return services, err
+	}
 	query := `
 		select
 			service_id

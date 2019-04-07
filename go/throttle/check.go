@@ -56,8 +56,14 @@ func (check *ThrottlerCheck) checkAppMetricResult(appName string, storeType stri
 		// casual throttling
 		statusCode = http.StatusTooManyRequests // 429
 		err = base.ThresholdExceededError
-	} else if check.throttler.getShareDomainSecondsSinceHealthFloat64(metricName) >= threshold {
-		// throttling based on shared domain metric
+	} else if appName != frenoAppName && check.throttler.getShareDomainSecondsSinceHealthFloat64(metricName) >= threshold {
+		// throttling based on shared domain metric.
+		// we exclude the "freno" app itself, or else this could turn into a snowball: this service ("a") seeing
+		// another service ("b") as unhealthy, itself becoming unhealthy, makind b's read into a's state as unheathly,
+		// b reporting unhealthy, ad infinitum.
+		// The "freno" app is the one to generate those health metrics. It therefore must not participate the
+		// shared-domain dependency check.,
+
 		statusCode = http.StatusTooManyRequests // 429
 		err = base.ThresholdExceededError
 	} else {
