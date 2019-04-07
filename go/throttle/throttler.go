@@ -53,16 +53,14 @@ type Throttler struct {
 	mysqlInventoryChan      chan *mysql.MySQLInventory
 	mysqlClusterProbesChan  chan *mysql.ClusterProbes
 
-	shareDomainMetricHealthMap  base.MetricHealthMap
-	shareDomainMetricHealthChan chan base.MetricHealthMap
-
 	mysqlInventory *mysql.MySQLInventory
 
-	mysqlClusterThresholds *cache.Cache
-	aggregatedMetrics      *cache.Cache
-	throttledApps          *cache.Cache
-	recentApps             *cache.Cache
-	metricsHealth          *cache.Cache
+	mysqlClusterThresholds  *cache.Cache
+	aggregatedMetrics       *cache.Cache
+	throttledApps           *cache.Cache
+	recentApps              *cache.Cache
+	metricsHealth           *cache.Cache
+	shareDomainMetricHealth *cache.Cache
 
 	memcacheClient *memcache.Client
 	memcachePath   string
@@ -83,14 +81,12 @@ func NewThrottler() *Throttler {
 		mysqlClusterProbesChan: make(chan *mysql.ClusterProbes),
 		mysqlInventory:         mysql.NewMySQLInventory(),
 
-		shareDomainMetricHealthMap:  make(base.MetricHealthMap),
-		shareDomainMetricHealthChan: make(chan base.MetricHealthMap),
-
-		throttledApps:          cache.New(cache.NoExpiration, 10*time.Second),
-		mysqlClusterThresholds: cache.New(cache.NoExpiration, 0),
-		aggregatedMetrics:      cache.New(aggregatedMetricsExpiration, aggregatedMetricsCleanup),
-		recentApps:             cache.New(recentAppsExpiration, time.Minute),
-		metricsHealth:          cache.New(cache.NoExpiration, 0),
+		throttledApps:           cache.New(cache.NoExpiration, 10*time.Second),
+		mysqlClusterThresholds:  cache.New(cache.NoExpiration, 0),
+		aggregatedMetrics:       cache.New(aggregatedMetricsExpiration, aggregatedMetricsCleanup),
+		recentApps:              cache.New(recentAppsExpiration, time.Minute),
+		metricsHealth:           cache.New(cache.NoExpiration, 0),
+		shareDomainMetricHealth: cache.New(5*sharedDomainCollectInterval, sharedDomainCollectInterval),
 
 		httpClient: base.SetupHttpClient(0),
 	}
@@ -161,10 +157,6 @@ func (throttler *Throttler) Operate() {
 		case <-sharedDomainTick:
 			{
 				go throttler.collectShareDomainMetricHealth()
-			}
-		case m := <-throttler.shareDomainMetricHealthChan:
-			{
-				throttler.shareDomainMetricHealthMap = m
 			}
 		case probes := <-throttler.mysqlClusterProbesChan:
 			{
@@ -538,7 +530,10 @@ func (throttler *Throttler) metricsHealthSnapshot() base.MetricHealthMap {
 	return snapshot
 }
 
-func (throttler *Throttler) AppRequestMetricResult(appName string, metricResultFunc base.MetricResultFunc) (metricResult base.MetricResult, threshold float64) {
+func (throttler *Throttler) AppRequestMetricResult(appName string, metricResultFunc base.MetricResultFunc, denyApp bool) (metricResult base.MetricResult, threshold float64) {
+	if denyApp {
+		return base.AppDeniedMetric, 0
+	}
 	if throttler.IsAppThrottled(appName) {
 		return base.AppDeniedMetric, 0
 	}
@@ -580,9 +575,17 @@ func (throttler *Throttler) collectShareDomainMetricHealth() error {
 			return nil
 		}()
 	}
-	go func() { throttler.shareDomainMetricHealthChan <- aggregatedMetricHealth }()
-	for k, v := range aggregatedMetricHealth {
-		log.Debugf("- share domain: %+v: %+v", k, v.SecondsSinceLastHealthy)
+	for metricName, metricHealth := range aggregatedMetricHealth {
+		throttler.shareDomainMetricHealth.SetDefault(metricName, metricHealth)
+		log.Debugf("- share domain: %+v: %+v", metricName, metricHealth.SecondsSinceLastHealthy)
 	}
 	return nil
+}
+
+func (throttler *Throttler) getShareDomainSecondsSinceHealthFloat64(metricName string) float64 {
+	if object, found := throttler.shareDomainMetricHealth.Get(metricName); found {
+		metricHealth := object.(*base.MetricHealth)
+		return float64(metricHealth.SecondsSinceLastHealthy)
+	}
+	return 0
 }

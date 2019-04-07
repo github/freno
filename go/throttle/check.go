@@ -26,8 +26,13 @@ func NewThrottlerCheck(throttler *Throttler) *ThrottlerCheck {
 }
 
 // checkAppMetricResult allows an app to check on a metric
-func (check *ThrottlerCheck) checkAppMetricResult(appName string, metricResultFunc base.MetricResultFunc, overrideThreshold float64) (checkResult *CheckResult) {
-	metricResult, threshold := check.throttler.AppRequestMetricResult(appName, metricResultFunc)
+func (check *ThrottlerCheck) checkAppMetricResult(appName string, storeType string, storeName string, metricResultFunc base.MetricResultFunc, overrideThreshold float64) (checkResult *CheckResult) {
+	denyApp := false
+	metricName := fmt.Sprintf("%s/%s", storeType, storeName)
+
+	// check how share-domain services see this metric
+
+	metricResult, threshold := check.throttler.AppRequestMetricResult(appName, metricResultFunc, denyApp)
 	if overrideThreshold > 0 {
 		threshold = overrideThreshold
 	}
@@ -47,6 +52,11 @@ func (check *ThrottlerCheck) checkAppMetricResult(appName string, metricResultFu
 	} else if err != nil {
 		// any error
 		statusCode = http.StatusInternalServerError // 500
+	} else if check.throttler.getShareDomainSecondsSinceHealthFloat64(metricName) >= threshold {
+		// throttling based on shared domain metric
+		fmt.Printf("========== share domain threshold exceeded for %s\n", metricName)
+		statusCode = http.StatusTooManyRequests // 429
+		err = base.ThresholdExceededError
 	} else if value > threshold {
 		// casual throttling
 		statusCode = http.StatusTooManyRequests // 429
@@ -73,7 +83,7 @@ func (check *ThrottlerCheck) Check(appName string, storeType string, storeName s
 		return NoSuchMetricCheckResult
 	}
 
-	checkResult = check.checkAppMetricResult(appName, metricResultFunc, overrideThreshold)
+	checkResult = check.checkAppMetricResult(appName, storeType, storeName, metricResultFunc, overrideThreshold)
 
 	go func(statusCode int) {
 		metrics.GetOrRegisterCounter("check.any.total", nil).Inc(1)
