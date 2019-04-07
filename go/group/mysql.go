@@ -214,8 +214,9 @@ func (backend *MySQLBackend) GetSharedDomainServices() (services []string, err e
 		where
 			share_domain = ?
 			and last_seen_active >= now() - interval ? second
+			and service_id != ?
 	`
-	args := sqlutils.Args(backend.shareDomain, electionExpireSeconds)
+	args := sqlutils.Args(backend.shareDomain, electionExpireSeconds, backend.serviceId)
 	err = sqlutils.QueryRowsMap(backend.db, query, func(m sqlutils.RowMap) error {
 		services = append(services, m.GetString("service_id"))
 		return nil
