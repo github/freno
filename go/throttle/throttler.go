@@ -577,7 +577,6 @@ func (throttler *Throttler) collectShareDomainMetricHealth() error {
 	}
 	for metricName, metricHealth := range aggregatedMetricHealth {
 		throttler.shareDomainMetricHealth.SetDefault(metricName, metricHealth)
-		log.Debugf("- share domain: %+v: %+v", metricName, metricHealth.SecondsSinceLastHealthy)
 	}
 	return nil
 }
