@@ -573,13 +573,13 @@ func (throttler *Throttler) collectShareDomainMetricHealth() error {
 				return log.Errore(err)
 			}
 			log.Debugf("share domain url: %+v", uri)
-			for k, v := range m {
-				log.Debugf("- share domain: %+v: %+v", k, v)
-			}
 			aggregatedMetricHealth.Aggregate(m)
 			return nil
 		}()
 	}
 	go func() { throttler.shareDomainMetricHealthChan <- aggregatedMetricHealth }()
+	for k, v := range aggregatedMetricHealth {
+		log.Debugf("- share domain: %+v: %+v", k, v)
+	}
 	return nil
 }
