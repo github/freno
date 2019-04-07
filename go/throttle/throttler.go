@@ -546,6 +546,9 @@ func (throttler *Throttler) AppRequestMetricResult(appName string, metricResultF
 }
 
 func (throttler *Throttler) collectShareDomainMetricHealth() error {
+	if !throttler.isLeader {
+		return nil
+	}
 	services, err := throttler.sharedDomainServicesFunc()
 	if err != nil {
 		return log.Errore(err)
@@ -579,7 +582,7 @@ func (throttler *Throttler) collectShareDomainMetricHealth() error {
 	}
 	go func() { throttler.shareDomainMetricHealthChan <- aggregatedMetricHealth }()
 	for k, v := range aggregatedMetricHealth {
-		log.Debugf("- share domain: %+v: %+v", k, v)
+		log.Debugf("- share domain: %+v: %+v", k, v.SecondsSinceLastHealthy)
 	}
 	return nil
 }
