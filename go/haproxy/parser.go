@@ -20,7 +20,7 @@ var HAProxyAllUpHostsTransitioning error = fmt.Errorf("Haproxy: all host marked 
 var HAProxyAllHostsTransitioning error = fmt.Errorf("Haproxy: all hosts are in transition. HAProxy is likely reloading")
 
 var MaxHTTPGetConcurrency = 2
-var httpGetConcurrentcyChan = make(chan bool, MaxHTTPGetConcurrency)
+var httpGetConcurrencyChan = make(chan bool, MaxHTTPGetConcurrency)
 
 // parseHeader parses the HAPRoxy CSV header, which lists column names.
 // Returned is a header-to-index map
@@ -123,8 +123,8 @@ func ParseCsvHosts(csv string, poolName string) (hosts []string, err error) {
 
 // Read will read HAProxy URI and return with the CSV text
 func Read(host string, port int) (csv string, err error) {
-	httpGetConcurrentcyChan <- true
-	defer func() { <-httpGetConcurrentcyChan }()
+	httpGetConcurrencyChan <- true
+	defer func() { <-httpGetConcurrencyChan }()
 
 	haproxyUrl := fmt.Sprintf("http://%s:%d/;csv;norefresh", host, port)
 

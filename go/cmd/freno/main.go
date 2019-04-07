@@ -31,6 +31,8 @@ func main() {
 	raftBind := flag.String("raft-bind", "", "Raft bind address (example: '127.0.0.1:10008'). Overrides config's RaftBind")
 	raftNodes := flag.String("raft-nodes", "", "Comma separated (e.g. 'host:port[,host:port]') list of raft nodes. Overrides config's RaftNodes")
 
+	group.ForceLeadership = *flag.Bool("force-leadership", false, "Make this node consider itself a leader no matter what consensus logic says")
+
 	quiet := flag.Bool("quiet", false, "quiet")
 	verbose := flag.Bool("verbose", false, "verbose")
 	debug := flag.Bool("debug", false, "debug mode (very verbose)")
@@ -101,18 +103,20 @@ func loadConfiguration(configFile string) {
 }
 
 func httpServe() error {
-	throttler := throttle.NewThrottler(group.IsLeader)
+	throttler := throttle.NewThrottler()
 	log.Infof("Starting consensus service")
-	consensusService, err := group.Setup(throttler)
+	consensusServiceProvider, err := group.NewConsensusServiceProvider(throttler)
 	if err != nil {
 		return err
 	}
-	go group.Monitor()
+	throttler.SetLeaderFunc(consensusServiceProvider.GetConsensusService().IsLeader)
+
+	go consensusServiceProvider.Monitor()
 	go throttler.Operate()
 
 	throttlerCheck := throttle.NewThrottlerCheck(throttler)
 	throttlerCheck.SelfChecks()
-	api := http.NewAPIImpl(throttlerCheck, consensusService)
+	api := http.NewAPIImpl(throttlerCheck, consensusServiceProvider.GetConsensusService())
 	router := http.ConfigureRoutes(api)
 	port := config.Settings().ListenPort
 	log.Infof("Starting server in port %d", port)

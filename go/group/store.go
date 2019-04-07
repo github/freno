@@ -7,6 +7,7 @@ package group
 
 import (
 	"encoding/json"
+	"expvar"
 	"fmt"
 	"net"
 	"os"
@@ -20,6 +21,7 @@ import (
 	"github.com/hashicorp/raft"
 	"github.com/hashicorp/raft-boltdb"
 	"github.com/outbrain/golib/log"
+	metrics "github.com/rcrowley/go-metrics"
 )
 
 const (
@@ -134,7 +136,7 @@ func (store *Store) genericCommand(c *command) error {
 
 // ThrottleApp, as implied by consensusService, is a raft oepration request which
 // will ask for consensus.
-func (store *Store) ThrottleApp(appName string, expireAt time.Time, ratio float64) error {
+func (store *Store) ThrottleApp(appName string, ttlMinutes int64, expireAt time.Time, ratio float64) error {
 	c := &command{
 		Operation: "throttle",
 		Key:       appName,
@@ -173,4 +175,72 @@ func (store *Store) Join(addr string) error {
 	}
 	log.Infof("node at %s joined successfully", addr)
 	return nil
+}
+
+func (store *Store) IsHealthy() bool {
+	state := store.GetState()
+	switch state {
+	case raft.Leader, raft.Follower:
+		{
+			return true
+		}
+	}
+	return false
+}
+
+// IsLeader tells if this node is the current raft leader
+func (store *Store) IsLeader() bool {
+	if ForceLeadership {
+		return true
+	}
+	return store.GetState() == raft.Leader
+}
+
+// GetLeader returns identity of raft leader
+func (store *Store) GetLeader() string {
+	return getRaft().Leader()
+}
+
+// GetState returns current raft state
+func (store *Store) GetState() raft.RaftState {
+	return getRaft().State()
+}
+
+// GetState returns current raft state
+func (store *Store) GetStateDescription() string {
+	return store.GetState().String()
+}
+
+// Monitor is a utility function to routinely observe leadership state.
+// It doesn't actually do much; merely takes notes.
+func (store *Store) Monitor() {
+	t := time.NewTicker(monitorInterval)
+
+	for {
+		select {
+		case <-t.C:
+			leaderHint := store.GetLeader()
+
+			leaderExpVar := expvar.Get("raft.leader")
+			if leaderExpVar == nil {
+				leaderExpVar = expvar.NewString("raft.leader")
+			}
+			leaderExpVar.(*expvar.String).Set(leaderHint)
+
+			state := store.GetState()
+			if state == raft.Leader {
+				leaderHint = fmt.Sprintf("%s (this host)", leaderHint)
+				metrics.GetOrRegisterGauge("raft.is_leader", nil).Update(1)
+			} else {
+				metrics.GetOrRegisterGauge("raft.is_leader", nil).Update(0)
+			}
+			var healthState int64
+			if store.IsHealthy() {
+				healthState = 1
+			}
+			metrics.GetOrRegisterGauge("raft.is_healthy", nil).Update(healthState)
+
+			log.Debugf("raft leader is %s; state: %s", leaderHint, state.String())
+		}
+	}
 }
