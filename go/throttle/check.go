@@ -52,13 +52,12 @@ func (check *ThrottlerCheck) checkAppMetricResult(appName string, storeType stri
 	} else if err != nil {
 		// any error
 		statusCode = http.StatusInternalServerError // 500
-	} else if check.throttler.getShareDomainSecondsSinceHealthFloat64(metricName) >= threshold {
-		// throttling based on shared domain metric
-		fmt.Printf("========== share domain threshold exceeded for %s\n", metricName)
-		statusCode = http.StatusFailedDependency // 424
-		err = base.ThresholdExceededError
 	} else if value > threshold {
 		// casual throttling
+		statusCode = http.StatusTooManyRequests // 429
+		err = base.ThresholdExceededError
+	} else if check.throttler.getShareDomainSecondsSinceHealthFloat64(metricName) >= threshold {
+		// throttling based on shared domain metric
 		statusCode = http.StatusTooManyRequests // 429
 		err = base.ThresholdExceededError
 	} else {
