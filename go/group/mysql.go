@@ -201,7 +201,7 @@ func (backend *MySQLBackend) ReadLeadership() (leaderState int64, leader string,
 
 	err = backend.db.QueryRow(query, args...).Scan(&leaderState, &leader)
 
-	log.Debugf("read-leadership: leaderState=%+v, leader=%+v, err=%+v", leaderState, leader, err)
+	log.Debugf("read-leadership: leaderState=%+v, leader=%+v, domain=%s, err=%+v", leaderState, leader, backend.domain, err)
 	return leaderState, leader, err
 }
 
