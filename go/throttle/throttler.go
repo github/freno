@@ -572,6 +572,7 @@ func (throttler *Throttler) collectShareDomainMetricHealth() error {
 			if err = json.Unmarshal(b, &m); err != nil {
 				return log.Errore(err)
 			}
+			log.Debugf("share domain url: %+v", uri)
 			log.Debugf("share domain map: %+v", m)
 			aggregatedMetricHealth.Aggregate(m)
 			return nil
