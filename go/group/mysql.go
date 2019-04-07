@@ -48,6 +48,7 @@ type MySQLBackend struct {
 }
 
 const maxConnections = 3
+const electionExpireSeconds = 5
 
 func NewMySQLBackend(throttler *throttle.Throttler) (*MySQLBackend, error) {
 	if config.Settings().BackendMySQLHost == "" {
@@ -151,10 +152,10 @@ func (backend *MySQLBackend) AttemptLeadership() error {
       ) values (
         ?, ?, now()
       ) on duplicate key update
-      service_id = if(last_seen_active < now() - interval 5 second, values(service_id), service_id),
+      service_id = if(last_seen_active < now() - interval ? second, values(service_id), service_id),
       last_seen_active = if(service_id = values(service_id), values(last_seen_active), last_seen_active)
   `
-	args := sqlutils.Args(backend.domain, backend.serviceId)
+	args := sqlutils.Args(backend.domain, backend.serviceId, electionExpireSeconds)
 	_, err := sqlutils.ExecNoPrepare(backend.db, query, args...)
 	return err
 }
