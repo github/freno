@@ -55,7 +55,7 @@ func (check *ThrottlerCheck) checkAppMetricResult(appName string, storeType stri
 	} else if check.throttler.getShareDomainSecondsSinceHealthFloat64(metricName) >= threshold {
 		// throttling based on shared domain metric
 		fmt.Printf("========== share domain threshold exceeded for %s\n", metricName)
-		statusCode = http.StatusTooManyRequests // 429
+		statusCode = http.StatusFailedDependency // 424
 		err = base.ThresholdExceededError
 	} else if value > threshold {
 		// casual throttling
