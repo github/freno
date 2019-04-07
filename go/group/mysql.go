@@ -5,9 +5,11 @@
 /*
 CREATE TABLE service_election (
   domain varchar(32) NOT NULL,
+  share_domain varchar(32) NOT NULL,
   service_id varchar(128) NOT NULL,
   last_seen_active timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  PRIMARY KEY (domain)
+  PRIMARY KEY (domain),
+  KEY share_domain_idx (share_domain,last_seen_active)
 );
 
 CREATE TABLE throttled_apps (
@@ -41,6 +43,7 @@ import (
 type MySQLBackend struct {
 	db          *sql.DB
 	domain      string
+	shareDomain string
 	serviceId   string
 	leaderState int64
 	healthState int64
@@ -73,12 +76,14 @@ func NewMySQLBackend(throttler *throttle.Throttler) (*MySQLBackend, error) {
 	// 	domain = fmt.Sprintf("%s:%s", config.Settings().DataCenter, config.Settings().Environment)
 	// }
 	domain := fmt.Sprintf("%s:%s", config.Settings().DataCenter, config.Settings().Environment)
+	shareDomain := config.Settings().ShareDomain
 	serviceId := fmt.Sprintf("%s:%d", hostname, config.Settings().ListenPort)
 	backend := &MySQLBackend{
-		db:        db,
-		domain:    domain,
-		serviceId: serviceId,
-		throttler: throttler,
+		db:          db,
+		domain:      domain,
+		shareDomain: shareDomain,
+		serviceId:   serviceId,
+		throttler:   throttler,
 	}
 	go backend.continuousElections()
 	return backend, nil
@@ -198,6 +203,25 @@ func (backend *MySQLBackend) ReadLeadership() (leaderState int64, leader string,
 
 	log.Debugf("read-leadership: leaderState=%+v, leader=%+v, err=%+v", leaderState, leader, err)
 	return leaderState, leader, err
+}
+
+func (backend *MySQLBackend) GetSharedDomainServices() (services []string, err error) {
+	query := `
+		select
+			service_id
+		from
+			service_election
+		where
+			share_domain = ?
+			and last_seen_active >= now() - interval ? second
+	`
+	args := sqlutils.Args(backend.shareDomain, electionExpireSeconds)
+	err = sqlutils.QueryRowsMap(backend.db, query, func(m sqlutils.RowMap) error {
+		services = append(services, m.GetString("service_id"))
+		return nil
+	}, args...)
+
+	return services, err
 }
 
 func (backend *MySQLBackend) expireThrottledApps() error {
