@@ -252,8 +252,9 @@ func (throttler *Throttler) refreshMySQLInventory() error {
 				return
 			}
 		}
-		if len(key.Hostname) < 5 {
-			log.Debugf("read invalid instance key: <%+v> for cluster %+v", key, clusterName)
+		if !key.IsValid() {
+			log.Debugf("read invalid instance key: [%+v] for cluster %+v", key, clusterName)
+			return
 		}
 		log.Debugf("read instance key: %+v", key)
 
