@@ -1,7 +1,5 @@
 package haproxy
 
-import ()
-
 type BackendHostStatus string
 
 const (

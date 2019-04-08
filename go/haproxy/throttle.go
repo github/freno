@@ -1,7 +1,5 @@
 package haproxy
 
-import ()
-
 func FilterThrotllerHosts(backendHosts [](*BackendHost)) (hosts []string) {
 	for _, backendHost := range backendHosts {
 		hostIsRelevant := false
