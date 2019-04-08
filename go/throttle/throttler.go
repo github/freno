@@ -245,12 +245,15 @@ func (throttler *Throttler) refreshMySQLInventory() error {
 	}
 	log.Debugf("refreshing MySQL inventory")
 
-	addInstanceKey := func(key *mysql.InstanceKey, clusterSettings *config.MySQLClusterConfigurationSettings, probes *mysql.Probes) {
+	addInstanceKey := func(key *mysql.InstanceKey, clusterName string, clusterSettings *config.MySQLClusterConfigurationSettings, probes *mysql.Probes) {
 		for _, ignore := range clusterSettings.IgnoreHosts {
-			if strings.Contains(key.DisplayString(), ignore) {
+			if strings.Contains(key.StringCode(), ignore) {
 				log.Debugf("instance key ignored: %+v", key)
 				return
 			}
+		}
+		if !key.IsValid() {
+			log.Debugf("read invalid instance key: %+v for cluster %+v", key, clusterName)
 		}
 		log.Debugf("read instance key: %+v", key)
 
@@ -300,7 +303,7 @@ func (throttler *Throttler) refreshMySQLInventory() error {
 				}
 				for _, host := range totalHosts {
 					key := mysql.InstanceKey{Hostname: host, Port: clusterSettings.Port}
-					addInstanceKey(&key, clusterSettings, clusterProbes.InstanceProbes)
+					addInstanceKey(&key, clusterName, clusterSettings, clusterProbes.InstanceProbes)
 				}
 				throttler.mysqlClusterProbesChan <- clusterProbes
 				return nil
@@ -322,7 +325,7 @@ func (throttler *Throttler) refreshMySQLInventory() error {
 				}
 				for _, tablet := range tablets {
 					key := mysql.InstanceKey{Hostname: tablet.MysqlHostname, Port: int(tablet.MysqlPort)}
-					addInstanceKey(&key, clusterSettings, clusterProbes.InstanceProbes)
+					addInstanceKey(&key, clusterName, clusterSettings, clusterProbes.InstanceProbes)
 				}
 				throttler.mysqlClusterProbesChan <- clusterProbes
 				return nil
@@ -338,7 +341,7 @@ func (throttler *Throttler) refreshMySQLInventory() error {
 					if err != nil {
 						return log.Errore(err)
 					}
-					addInstanceKey(key, clusterSettings, clusterProbes.InstanceProbes)
+					addInstanceKey(key, clusterName, clusterSettings, clusterProbes.InstanceProbes)
 				}
 				throttler.mysqlClusterProbesChan <- clusterProbes
 				return nil
