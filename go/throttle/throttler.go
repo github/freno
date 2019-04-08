@@ -256,17 +256,16 @@ func (throttler *Throttler) refreshMySQLInventory() error {
 			if !clusterSettings.HAProxySettings.IsEmpty() {
 				poolName := clusterSettings.HAProxySettings.PoolName
 
-        totalHosts := []string{}
+				totalHosts := []string{}
 				for _, hostPort := range clusterSettings.HAProxySettings.GetProxyAddresses() {
 					log.Debugf("getting haproxy data from %s:%d", hostPort.Host, hostPort.Port)
 					csv, err := haproxy.Read(hostPort.Host, hostPort.Port)
 					if err != nil {
 						return log.Errorf("Unable to get HAproxy data from %s:%d: %+v", hostPort.Host, hostPort, err)
 					}
-          
-          
+
 					if backendHosts, err := haproxy.ParseCsvHosts(csv, poolName); err == nil {
-    				hosts := haproxy.FilterThrotllerHosts(backendHosts)
+						hosts := haproxy.FilterThrotllerHosts(backendHosts)
 						totalHosts = append(totalHosts, hosts...)
 						log.Debugf("Read %+v hosts from haproxy %s:%d/#%s", len(hosts), hostPort.Host, hostPort.Port, poolName)
 					} else {
