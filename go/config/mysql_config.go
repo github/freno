@@ -39,6 +39,9 @@ func (settings *MySQLClusterConfigurationSettings) postReadAdjustments() error {
 	if submatch := envVariableRegexp.FindStringSubmatch(settings.Password); len(submatch) > 1 {
 		settings.Password = os.Getenv(submatch[1])
 	}
+	if err := settings.HAProxySettings.postReadAdjustments(); err != nil {
+		return err
+	}
 	return nil
 }
 

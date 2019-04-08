@@ -95,7 +95,7 @@ func (api *APIImpl) LbCheck(w http.ResponseWriter, r *http.Request, _ httprouter
 // This is a useful check for HAProxy routing
 func (api *APIImpl) LeaderCheck(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
 	statusCode := http.StatusNotFound
-	if group.IsLeader() {
+	if api.consensusService.IsLeader() {
 		statusCode = http.StatusOK
 	}
 	w.WriteHeader(statusCode)
@@ -106,7 +106,7 @@ func (api *APIImpl) LeaderCheck(w http.ResponseWriter, r *http.Request, _ httpro
 
 // RaftLeader returns the identity of the leader
 func (api *APIImpl) RaftLeader(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
-	if leader := group.GetLeader(); leader != "" {
+	if leader := api.consensusService.GetLeader(); leader != "" {
 		w.WriteHeader(http.StatusOK)
 		json.NewEncoder(w).Encode(leader)
 	} else {
@@ -116,7 +116,7 @@ func (api *APIImpl) RaftLeader(w http.ResponseWriter, r *http.Request, _ httprou
 
 // RaftState returns the state of the raft node
 func (api *APIImpl) RaftState(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
-	json.NewEncoder(w).Encode(group.GetState().String())
+	json.NewEncoder(w).Encode(api.consensusService.GetStateDescription())
 }
 
 // Hostname returns the hostname this process executes on
@@ -233,7 +233,7 @@ func (api *APIImpl) ThrottleApp(w http.ResponseWriter, r *http.Request, ps httpr
 		err = fmt.Errorf("ratio must be in [0..1] range; got %+v", ratio)
 		goto response
 	}
-	err = api.consensusService.ThrottleApp(appName, expireAt, ratio)
+	err = api.consensusService.ThrottleApp(appName, ttlMinutes, expireAt, ratio)
 
 response:
 	api.respondGeneric(w, r, err)
@@ -322,6 +322,8 @@ func ConfigureRoutes(api API) *httprouter.Router {
 	register(router, "/leader-check", api.LeaderCheck)
 	register(router, "/raft/leader", api.RaftLeader)
 	register(router, "/raft/state", api.RaftState)
+	// register(router, "/consensus/leader", api.ConsensusLeader)
+	// register(router, "/consensus/state", api.ConsensusState)
 	register(router, "/hostname", api.Hostname)
 
 	register(router, "/check/:app/:storeType/:storeName", api.WriteCheck)

@@ -32,7 +32,7 @@ const aggregatedMetricsCleanup = 1 * time.Second
 const throttledAppsSnapshotInterval = 5 * time.Second
 const recentAppsExpiration = time.Hour * 24
 
-const defaultThrottleTTL = 60 * time.Minute
+const DefaultThrottleTTLMinutes = 60
 const DefaultThrottleRatio = 1.0
 
 func init() {
@@ -62,10 +62,9 @@ type Throttler struct {
 	throttledAppsMutex sync.Mutex
 }
 
-func NewThrottler(isLeaderFunc func() bool) *Throttler {
+func NewThrottler() *Throttler {
 	throttler := &Throttler{
-		isLeader:     false,
-		isLeaderFunc: isLeaderFunc,
+		isLeader: false,
 
 		mysqlThrottleMetricChan: make(chan *mysql.MySQLThrottleMetric),
 		mysqlHttpCheckChan:      make(chan *mysql.MySQLHttpCheck),
@@ -87,6 +86,10 @@ func NewThrottler(isLeaderFunc func() bool) *Throttler {
 	throttler.memcachePath = config.Settings().MemcachePath
 
 	return throttler
+}
+
+func (throttler *Throttler) SetLeaderFunc(isLeaderFunc func() bool) {
+	throttler.isLeaderFunc = isLeaderFunc
 }
 
 func (throttler *Throttler) ThrottledAppsSnapshot() map[string]cache.Item {
@@ -251,25 +254,36 @@ func (throttler *Throttler) refreshMySQLInventory() error {
 		go func() error {
 			throttler.mysqlClusterThresholds.Set(clusterName, clusterSettings.ThrottleThreshold, cache.DefaultExpiration)
 			if !clusterSettings.HAProxySettings.IsEmpty() {
-				log.Debugf("getting haproxy data from %s:%d", clusterSettings.HAProxySettings.Host, clusterSettings.HAProxySettings.Port)
-				csv, err := haproxy.Read(clusterSettings.HAProxySettings.Host, clusterSettings.HAProxySettings.Port)
-				if err != nil {
-					return log.Errorf("Unable to get HAproxy data from %s:%d: %+v", clusterSettings.HAProxySettings.Host, clusterSettings.HAProxySettings.Port, err)
-				}
 				poolName := clusterSettings.HAProxySettings.PoolName
-				backendHosts, err := haproxy.ParseCsvHosts(csv, poolName)
-				if err != nil {
-					return log.Errorf("Unable to get HAproxy hosts from %s:%d/#%s: %+v", clusterSettings.HAProxySettings.Host, clusterSettings.HAProxySettings.Port, poolName, err)
+
+        totalHosts := []string{}
+				for _, hostPort := range clusterSettings.HAProxySettings.GetProxyAddresses() {
+					log.Debugf("getting haproxy data from %s:%d", hostPort.Host, hostPort.Port)
+					csv, err := haproxy.Read(hostPort.Host, hostPort.Port)
+					if err != nil {
+						return log.Errorf("Unable to get HAproxy data from %s:%d: %+v", hostPort.Host, hostPort, err)
+					}
+          
+          
+					if backendHosts, err := haproxy.ParseCsvHosts(csv, poolName); err == nil {
+    				hosts := haproxy.FilterThrotllerHosts(backendHosts)
+						totalHosts = append(totalHosts, hosts...)
+						log.Debugf("Read %+v hosts from haproxy %s:%d/#%s", len(hosts), hostPort.Host, hostPort.Port, poolName)
+					} else {
+						log.Errorf("Unable to get HAproxy hosts from %s:%d/#%s: %+v", hostPort.Host, hostPort.Port, poolName, err)
+					}
 				}
-				hosts := haproxy.FilterThrotllerHosts(backendHosts)
-				log.Debugf("Read %+v hosts from haproxy %s:%d/#%s", len(hosts), clusterSettings.HAProxySettings.Host, clusterSettings.HAProxySettings.Port, poolName)
+				if len(totalHosts) == 0 {
+					return log.Errorf("Unable to get any HAproxy hosts for pool: %+v", poolName)
+				}
+
 				clusterProbes := &mysql.ClusterProbes{
 					ClusterName:          clusterName,
 					IgnoreHostsCount:     clusterSettings.IgnoreHostsCount,
 					IgnoreHostsThreshold: clusterSettings.IgnoreHostsThreshold,
 					InstanceProbes:       mysql.NewProbes(),
 				}
-				for _, host := range hosts {
+				for _, host := range totalHosts {
 					key := mysql.InstanceKey{Hostname: host, Port: clusterSettings.Port}
 					addInstanceKey(&key, clusterSettings, clusterProbes.InstanceProbes)
 				}
@@ -421,7 +435,7 @@ func (throttler *Throttler) ThrottleApp(appName string, expireAt time.Time, rati
 		}
 	} else {
 		if expireAt.IsZero() {
-			expireAt = now.Add(defaultThrottleTTL)
+			expireAt = now.Add(DefaultThrottleTTLMinutes * time.Minute)
 		}
 		if ratio < 0 {
 			ratio = DefaultThrottleRatio
