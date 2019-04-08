@@ -553,27 +553,28 @@ func (throttler *Throttler) collectShareDomainMetricHealth() error {
 	}
 	aggregatedMetricHealth := make(base.MetricHealthMap)
 	for _, service := range services {
-		func() error {
+		err := func() error {
 			uri := fmt.Sprintf("http://%s/metrics-health", service)
 
 			resp, err := throttler.httpClient.Get(uri)
 			if err != nil {
-				return log.Errore(err)
+				return err
 			}
 
 			defer resp.Body.Close()
 			b, err := ioutil.ReadAll(resp.Body)
 			if err != nil {
-				return log.Errore(err)
+				return err
 			}
 			m := make(base.MetricHealthMap)
 			if err = json.Unmarshal(b, &m); err != nil {
-				return log.Errore(err)
+				return err
 			}
 			log.Debugf("share domain url: %+v", uri)
 			aggregatedMetricHealth.Aggregate(m)
 			return nil
 		}()
+		log.Errore(err)
 	}
 	for metricName, metricHealth := range aggregatedMetricHealth {
 		throttler.shareDomainMetricHealth.SetDefault(metricName, metricHealth)
