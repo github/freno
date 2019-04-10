@@ -31,8 +31,18 @@ Let's dissect the general section of the [sample config file](../resources/freno
   "BackendMySQLSchema": "freno_backend",
   "BackendMySQLUser": "freno_daemon",
   "BackendMySQLPassword": "123456",
+  "Domain": "us-east-1/production",
+  "ShareDomain": "production",
 }
 ```
+
+- `BackendMySQLHost`: MySQL master hostname
+- `BackendMySQLPort`: MySQL master port
+- `BackendMySQLSchema`: schema where `freno` will read/write state (see below)
+- `BackendMySQLUser`: user with read+write privileges on backend schema
+- `BackendMySQLPassword`: password
+- `Domain`: the same MySQL backend can serve multiple, unrelated `freno` clusters. Nodes within the same cluster should have the same `Domain` value and will compete for leadership.
+- `ShareDomain`: it is possible for clusters to collaborate. Clusters with same `ShareDomain` will consul with each other's metric health reports. A cluster may reject a `check` request if another cluster considers the `check` metrics unhealthy.
 
 You may exchange the above for environment variables:
 
@@ -43,6 +53,8 @@ You may exchange the above for environment variables:
   "BackendMySQLSchema": "${MYSQL_BACKEND_SCHEMA}",
   "BackendMySQLUser": "${MYSQL_BACKEND_RW_USER}",
   "BackendMySQLPassword": "${MYSQL_BACKEND_RW_PASSWORD}",
+  "Domain": "us-east-1/production",
+  "ShareDomain": "production",
 }
 ```
 
@@ -56,9 +68,11 @@ The backend schema should have these tables:
 ```sql
 CREATE TABLE service_election (
   domain varchar(32) NOT NULL,
+  share_domain varchar(32) NOT NULL,
   service_id varchar(128) NOT NULL,
   last_seen_active timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  PRIMARY KEY (domain)
+  PRIMARY KEY (domain),
+  KEY share_domain_idx (share_domain,last_seen_active)
 );
 
 CREATE TABLE throttled_apps (
