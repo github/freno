@@ -93,34 +93,76 @@ func TestParseHeader(t *testing.T) {
 
 func TestParseHosts(t *testing.T) {
 	{
-		hosts, err := ParseCsvHosts(csv0, "mysqlcluster0_rw_main")
+		backendHosts, err := ParseCsvHosts(csv0, "mysqlcluster0_rw_main")
 		test.S(t).ExpectNil(err)
+		test.S(t).ExpectEquals(len(backendHosts), 4)
+
+		hosts := FilterThrotllerHosts(backendHosts)
 		test.S(t).ExpectTrue(reflect.DeepEqual(hosts, []string{"mysqlcluster0c-dc"}))
 	}
 	{
-		hosts, err := ParseCsvHosts(csv0, "mysqlcluster0_ro_main")
+		backendHosts, err := ParseCsvHosts(csv0, "mysqlcluster0_ro_main")
 		test.S(t).ExpectNil(err)
+		test.S(t).ExpectEquals(len(backendHosts), 4)
+
+		hosts := FilterThrotllerHosts(backendHosts)
 		test.S(t).ExpectTrue(reflect.DeepEqual(hosts, []string{"mysqlcluster0a-dc", "mysqlcluster0b-dc"}))
 	}
 	{
-		hosts, err := ParseCsvHosts(csv0, "mysqlcluster0_ro_backup")
+		backendHosts, err := ParseCsvHosts(csv0, "mysqlcluster0_ro_backup")
 		test.S(t).ExpectNil(err)
+		test.S(t).ExpectEquals(len(backendHosts), 4)
+
+		hosts := FilterThrotllerHosts(backendHosts)
 		test.S(t).ExpectTrue(reflect.DeepEqual(hosts, []string{"mysqlcluster0e-dc", "mysqlcluster0f-dc", "mysqlcluster0h-dc"}))
 	}
 }
 
 func TestParseHostsTransitioning(t *testing.T) {
 	{
-		hosts, err := ParseCsvHosts(csvTransitioning, "mysqlcluster0_ro_main")
+		backendHosts, err := ParseCsvHosts(csvTransitioning, "mysqlcluster0_ro_main")
 		test.S(t).ExpectNil(err)
+		test.S(t).ExpectEquals(len(backendHosts), 4)
+
+		hosts := FilterThrotllerHosts(backendHosts)
 		test.S(t).ExpectTrue(reflect.DeepEqual(hosts, []string{"mysqlcluster0b-dc"}))
 	}
 	{
-		_, err := ParseCsvHosts(csvTransitioningAllUp, "mysqlcluster0_ro_main")
+		backendHosts, err := ParseCsvHosts(csvTransitioningAllUp, "mysqlcluster0_ro_main")
 		test.S(t).ExpectEquals(err, HAProxyAllUpHostsTransitioning)
+		test.S(t).ExpectEquals(len(backendHosts), 4)
 	}
 	{
-		_, err := ParseCsvHosts(csvTransitioningAll, "mysqlcluster0_ro_main")
+		backendHosts, err := ParseCsvHosts(csvTransitioningAll, "mysqlcluster0_ro_main")
 		test.S(t).ExpectEquals(err, HAProxyAllHostsTransitioning)
+		test.S(t).ExpectEquals(len(backendHosts), 4)
+	}
+}
+
+func TestParseStatus(t *testing.T) {
+	{
+		status, isTransitioning := ParseStatus("NOLB")
+		test.S(t).ExpectFalse(isTransitioning)
+		test.S(t).ExpectEquals(status, StatusNOLB)
+	}
+	{
+		status, isTransitioning := ParseStatus("NOLB 1/2")
+		test.S(t).ExpectTrue(isTransitioning)
+		test.S(t).ExpectEquals(status, StatusNOLB)
+	}
+	{
+		status, isTransitioning := ParseStatus("UP 1/2")
+		test.S(t).ExpectTrue(isTransitioning)
+		test.S(t).ExpectEquals(status, StatusUp)
+	}
+	{
+		status, isTransitioning := ParseStatus("DOWN")
+		test.S(t).ExpectFalse(isTransitioning)
+		test.S(t).ExpectEquals(status, StatusDown)
+	}
+	{
+		status, isTransitioning := ParseStatus("no check")
+		test.S(t).ExpectFalse(isTransitioning)
+		test.S(t).ExpectEquals(status, StatusNoCheck)
 	}
 }
