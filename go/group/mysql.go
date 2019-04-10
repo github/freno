@@ -306,7 +306,7 @@ func (backend *MySQLBackend) ThrottledAppsMap() (result map[string](*base.AppThr
 func (backend *MySQLBackend) UnthrottleApp(appName string) error {
 	backend.throttler.UnthrottleApp(appName)
 	query := `
-    update throttled_apps set expires_at=now() - interval 1 second where app_name=?
+    update throttled_apps set expires_at=now() where app_name=?
   `
 	args := sqlutils.Args(appName)
 	_, err := sqlutils.ExecNoPrepare(backend.db, query, args...)
