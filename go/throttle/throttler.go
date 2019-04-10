@@ -463,10 +463,10 @@ func (throttler *Throttler) ThrottleApp(appName string, expireAt time.Time, rati
 		}
 		appThrottle = base.NewAppThrottle(expireAt, ratio)
 	}
-	if appThrottle.ExpireAt.Before(now) {
-		throttler.UnthrottleApp(appName)
-	} else {
+	if now.Before(appThrottle.ExpireAt) {
 		throttler.throttledApps.Set(appName, appThrottle, cache.DefaultExpiration)
+	} else {
+		throttler.UnthrottleApp(appName)
 	}
 }
 
