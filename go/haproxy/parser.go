@@ -7,6 +7,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/github/freno/go/base"
+
 	"github.com/patrickmn/go-cache"
 )
 
@@ -21,6 +23,12 @@ var HAProxyAllHostsTransitioning error = fmt.Errorf("Haproxy: all hosts are in t
 
 var MaxHTTPGetConcurrency = 2
 var httpGetConcurrencyChan = make(chan bool, MaxHTTPGetConcurrency)
+
+var httpClient *http.Client
+
+func init() {
+	httpClient = base.SetupHttpClient(0)
+}
 
 // parseHeader parses the HAPRoxy CSV header, which lists column names.
 // Returned is a header-to-index map
@@ -131,7 +139,7 @@ func Read(host string, port int) (csv string, err error) {
 		return cachedCSV.(string), nil
 	}
 
-	resp, err := http.Get(haproxyUrl)
+	resp, err := httpClient.Get(haproxyUrl)
 	if resp != nil {
 		defer resp.Body.Close()
 	}

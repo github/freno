@@ -18,3 +18,18 @@ func NewMetricHealth(lastHealthyAt time.Time) *MetricHealth {
 	}
 	return result
 }
+
+type MetricHealthMap map[string](*MetricHealth)
+
+func (m MetricHealthMap) Aggregate(other MetricHealthMap) MetricHealthMap {
+	for metricName, otherHealth := range other {
+		if currentHealth, ok := m[metricName]; ok {
+			if currentHealth.SecondsSinceLastHealthy < otherHealth.SecondsSinceLastHealthy {
+				m[metricName] = otherHealth
+			}
+		} else {
+			m[metricName] = otherHealth
+		}
+	}
+	return m
+}

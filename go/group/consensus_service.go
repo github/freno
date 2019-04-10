@@ -20,5 +20,7 @@ type ConsensusService interface {
 	GetLeader() string
 	GetStateDescription() string
 
+	GetSharedDomainServices() ([]string, error)
+
 	Monitor()
 }

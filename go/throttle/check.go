@@ -26,8 +26,13 @@ func NewThrottlerCheck(throttler *Throttler) *ThrottlerCheck {
 }
 
 // checkAppMetricResult allows an app to check on a metric
-func (check *ThrottlerCheck) checkAppMetricResult(appName string, metricResultFunc base.MetricResultFunc, overrideThreshold float64) (checkResult *CheckResult) {
-	metricResult, threshold := check.throttler.AppRequestMetricResult(appName, metricResultFunc)
+func (check *ThrottlerCheck) checkAppMetricResult(appName string, storeType string, storeName string, metricResultFunc base.MetricResultFunc, overrideThreshold float64) (checkResult *CheckResult) {
+	denyApp := false
+	metricName := fmt.Sprintf("%s/%s", storeType, storeName)
+
+	// check how share-domain services see this metric
+
+	metricResult, threshold := check.throttler.AppRequestMetricResult(appName, metricResultFunc, denyApp)
 	if overrideThreshold > 0 {
 		threshold = overrideThreshold
 	}
@@ -49,6 +54,16 @@ func (check *ThrottlerCheck) checkAppMetricResult(appName string, metricResultFu
 		statusCode = http.StatusInternalServerError // 500
 	} else if value > threshold {
 		// casual throttling
+		statusCode = http.StatusTooManyRequests // 429
+		err = base.ThresholdExceededError
+	} else if appName != frenoAppName && check.throttler.getShareDomainSecondsSinceHealthFloat64(metricName) >= threshold {
+		// throttling based on shared domain metric.
+		// we exclude the "freno" app itself, or else this could turn into a snowball: this service ("a") seeing
+		// another service ("b") as unhealthy, itself becoming unhealthy, makind b's read into a's state as unheathly,
+		// b reporting unhealthy, ad infinitum.
+		// The "freno" app is the one to generate those health metrics. It therefore must not participate the
+		// shared-domain dependency check.,
+
 		statusCode = http.StatusTooManyRequests // 429
 		err = base.ThresholdExceededError
 	} else {
@@ -73,7 +88,7 @@ func (check *ThrottlerCheck) Check(appName string, storeType string, storeName s
 		return NoSuchMetricCheckResult
 	}
 
-	checkResult = check.checkAppMetricResult(appName, metricResultFunc, overrideThreshold)
+	checkResult = check.checkAppMetricResult(appName, storeType, storeName, metricResultFunc, overrideThreshold)
 
 	go func(statusCode int) {
 		metrics.GetOrRegisterCounter("check.any.total", nil).Inc(1)
