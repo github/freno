@@ -53,6 +53,9 @@ type MySQLBackend struct {
 const maxConnections = 3
 const electionExpireSeconds = 5
 
+const electionInterval = time.Second
+const stateInterval = 10 * time.Second
+
 func NewMySQLBackend(throttler *throttle.Throttler) (*MySQLBackend, error) {
 	if config.Settings().BackendMySQLHost == "" {
 		return nil, nil
@@ -85,30 +88,40 @@ func NewMySQLBackend(throttler *throttle.Throttler) (*MySQLBackend, error) {
 		serviceId:   serviceId,
 		throttler:   throttler,
 	}
-	go backend.continuousElections()
+	go backend.continuousOperations()
 	return backend, nil
 }
 
 // Monitor is a utility function to routinely observe leadership state.
 // It doesn't actually do much; merely takes notes.
-func (backend *MySQLBackend) continuousElections() {
-	t := time.NewTicker(1 * time.Second)
+func (backend *MySQLBackend) continuousOperations() {
+	electionsTicker := time.NewTicker(electionInterval)
+	stateTicker := time.NewTicker(stateInterval)
 
-	for range t.C {
-		err := backend.AttemptLeadership()
-		log.Errore(err)
+	for {
+		select {
+		case <-electionsTicker.C:
+			{
+				err := backend.AttemptLeadership()
+				log.Errore(err)
 
-		newLeaderState, _, err := backend.ReadLeadership()
-		if err == nil {
-			atomic.StoreInt64(&backend.healthState, 1)
-			if newLeaderState != backend.leaderState {
-				backend.onLeaderStateChange(newLeaderState)
-				atomic.StoreInt64(&backend.leaderState, newLeaderState)
+				newLeaderState, _, err := backend.ReadLeadership()
+				if err == nil {
+					atomic.StoreInt64(&backend.healthState, 1)
+					if newLeaderState != backend.leaderState {
+						backend.onLeaderStateChange(newLeaderState)
+						atomic.StoreInt64(&backend.leaderState, newLeaderState)
+					}
+				} else {
+					atomic.StoreInt64(&backend.healthState, 0)
+					// and maintain leader state: graceful response to backend errors
+					log.Errore(err)
+				}
 			}
-		} else {
-			atomic.StoreInt64(&backend.healthState, 0)
-			// and maintain leader state: graceful response to backend errors
-			log.Errore(err)
+		case <-stateTicker.C:
+			{
+				backend.refreshThrottledApps()
+			}
 		}
 	}
 }
@@ -116,8 +129,7 @@ func (backend *MySQLBackend) continuousElections() {
 func (backend *MySQLBackend) onLeaderStateChange(newLeaderState int64) error {
 	if newLeaderState > 0 {
 		log.Infof("Transitioned into leader state")
-		backend.expireThrottledApps()
-		backend.readThrottledApps()
+		backend.refreshThrottledApps()
 	} else {
 		log.Infof("Transitioned out of leader state")
 	}
@@ -229,6 +241,15 @@ func (backend *MySQLBackend) GetSharedDomainServices() (services []string, err e
 	}, args...)
 
 	return services, err
+}
+
+func (backend *MySQLBackend) refreshThrottledApps() error {
+	e1 := backend.expireThrottledApps()
+	e2 := backend.readThrottledApps()
+	if e2 != nil {
+		return e2
+	}
+	return e1
 }
 
 func (backend *MySQLBackend) expireThrottledApps() error {
