@@ -120,7 +120,7 @@ func (backend *MySQLBackend) continuousOperations() {
 			}
 		case <-stateTicker.C:
 			{
-				backend.refreshThrottledApps()
+				backend.readThrottledApps()
 			}
 		}
 	}
@@ -129,7 +129,7 @@ func (backend *MySQLBackend) continuousOperations() {
 func (backend *MySQLBackend) onLeaderStateChange(newLeaderState int64) error {
 	if newLeaderState > 0 {
 		log.Infof("Transitioned into leader state")
-		backend.refreshThrottledApps()
+		backend.readThrottledApps()
 	} else {
 		log.Infof("Transitioned out of leader state")
 	}
@@ -243,21 +243,6 @@ func (backend *MySQLBackend) GetSharedDomainServices() (services []string, err e
 	return services, err
 }
 
-func (backend *MySQLBackend) refreshThrottledApps() error {
-	e1 := backend.expireThrottledApps()
-	e2 := backend.readThrottledApps()
-	if e2 != nil {
-		return e2
-	}
-	return e1
-}
-
-func (backend *MySQLBackend) expireThrottledApps() error {
-	query := `delete from throttled_apps where expires_at <= now()`
-	_, err := sqlutils.ExecNoPrepare(backend.db, query)
-	return err
-}
-
 func (backend *MySQLBackend) readThrottledApps() error {
 	query := `
 		select
@@ -266,8 +251,6 @@ func (backend *MySQLBackend) readThrottledApps() error {
 			ratio
 		from
 			throttled_apps
-		where
-			expires_at > now()
 	`
 
 	err := sqlutils.QueryRowsMap(backend.db, query, func(m sqlutils.RowMap) error {
@@ -323,7 +306,7 @@ func (backend *MySQLBackend) ThrottledAppsMap() (result map[string](*base.AppThr
 func (backend *MySQLBackend) UnthrottleApp(appName string) error {
 	backend.throttler.UnthrottleApp(appName)
 	query := `
-    delete from throttled_apps where app_name=?
+    update throttled_apps set expires_at=now() - interval 1 second where app_name=?
   `
 	args := sqlutils.Args(appName)
 	_, err := sqlutils.ExecNoPrepare(backend.db, query, args...)
