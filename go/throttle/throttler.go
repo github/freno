@@ -71,7 +71,7 @@ type Throttler struct {
 	throttledAppsMutex sync.Mutex
 
 	nonLowPriorityAppRequestsThrottled *cache.Cache
-	httpClient *http.Client
+	httpClient                         *http.Client
 }
 
 func NewThrottler() *Throttler {
@@ -92,8 +92,8 @@ func NewThrottler() *Throttler {
 		metricsHealth:           cache.New(cache.NoExpiration, 0),
 		shareDomainMetricHealth: cache.New(5*sharedDomainCollectInterval, sharedDomainCollectInterval),
 
-    nonLowPriorityAppRequestsThrottled: cache.New(nonDeprioritizedAppMapExpiration, nonDeprioritizedAppMapInterval),
-    
+		nonLowPriorityAppRequestsThrottled: cache.New(nonDeprioritizedAppMapExpiration, nonDeprioritizedAppMapInterval),
+
 		httpClient: base.SetupHttpClient(0),
 	}
 	throttler.ThrottleApp("abusing-app", time.Now().Add(time.Hour*24*365*10), DefaultThrottleRatio)
