@@ -5,9 +5,11 @@
 /*
 CREATE TABLE service_election (
   domain varchar(32) NOT NULL,
+  share_domain varchar(32) NOT NULL,
   service_id varchar(128) NOT NULL,
   last_seen_active timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  PRIMARY KEY (domain)
+  PRIMARY KEY (domain),
+  KEY share_domain_idx (share_domain,last_seen_active)
 );
 
 CREATE TABLE throttled_apps (
@@ -41,6 +43,7 @@ import (
 type MySQLBackend struct {
 	db          *sql.DB
 	domain      string
+	shareDomain string
 	serviceId   string
 	leaderState int64
 	healthState int64
@@ -49,6 +52,9 @@ type MySQLBackend struct {
 
 const maxConnections = 3
 const electionExpireSeconds = 5
+
+const electionInterval = time.Second
+const stateInterval = 10 * time.Second
 
 func NewMySQLBackend(throttler *throttle.Throttler) (*MySQLBackend, error) {
 	if config.Settings().BackendMySQLHost == "" {
@@ -73,37 +79,49 @@ func NewMySQLBackend(throttler *throttle.Throttler) (*MySQLBackend, error) {
 	// 	domain = fmt.Sprintf("%s:%s", config.Settings().DataCenter, config.Settings().Environment)
 	// }
 	domain := fmt.Sprintf("%s:%s", config.Settings().DataCenter, config.Settings().Environment)
+	shareDomain := config.Settings().ShareDomain
 	serviceId := fmt.Sprintf("%s:%d", hostname, config.Settings().ListenPort)
 	backend := &MySQLBackend{
-		db:        db,
-		domain:    domain,
-		serviceId: serviceId,
-		throttler: throttler,
+		db:          db,
+		domain:      domain,
+		shareDomain: shareDomain,
+		serviceId:   serviceId,
+		throttler:   throttler,
 	}
-	go backend.continuousElections()
+	go backend.continuousOperations()
 	return backend, nil
 }
 
 // Monitor is a utility function to routinely observe leadership state.
 // It doesn't actually do much; merely takes notes.
-func (backend *MySQLBackend) continuousElections() {
-	t := time.NewTicker(1 * time.Second)
+func (backend *MySQLBackend) continuousOperations() {
+	electionsTicker := time.NewTicker(electionInterval)
+	stateTicker := time.NewTicker(stateInterval)
 
-	for range t.C {
-		err := backend.AttemptLeadership()
-		log.Errore(err)
+	for {
+		select {
+		case <-electionsTicker.C:
+			{
+				err := backend.AttemptLeadership()
+				log.Errore(err)
 
-		newLeaderState, _, err := backend.ReadLeadership()
-		if err == nil {
-			atomic.StoreInt64(&backend.healthState, 1)
-			if newLeaderState != backend.leaderState {
-				backend.onLeaderStateChange(newLeaderState)
-				atomic.StoreInt64(&backend.leaderState, newLeaderState)
+				newLeaderState, _, err := backend.ReadLeadership()
+				if err == nil {
+					atomic.StoreInt64(&backend.healthState, 1)
+					if newLeaderState != backend.leaderState {
+						backend.onLeaderStateChange(newLeaderState)
+						atomic.StoreInt64(&backend.leaderState, newLeaderState)
+					}
+				} else {
+					atomic.StoreInt64(&backend.healthState, 0)
+					// and maintain leader state: graceful response to backend errors
+					log.Errore(err)
+				}
 			}
-		} else {
-			atomic.StoreInt64(&backend.healthState, 0)
-			// and maintain leader state: graceful response to backend errors
-			log.Errore(err)
+		case <-stateTicker.C:
+			{
+				backend.readThrottledApps()
+			}
 		}
 	}
 }
@@ -111,7 +129,6 @@ func (backend *MySQLBackend) continuousElections() {
 func (backend *MySQLBackend) onLeaderStateChange(newLeaderState int64) error {
 	if newLeaderState > 0 {
 		log.Infof("Transitioned into leader state")
-		backend.expireThrottledApps()
 		backend.readThrottledApps()
 	} else {
 		log.Infof("Transitioned out of leader state")
@@ -196,14 +213,34 @@ func (backend *MySQLBackend) ReadLeadership() (leaderState int64, leader string,
 
 	err = backend.db.QueryRow(query, args...).Scan(&leaderState, &leader)
 
-	log.Debugf("read-leadership: leaderState=%+v, leader=%+v, err=%+v", leaderState, leader, err)
+	log.Debugf("read-leadership: leaderState=%+v, leader=%+v, domain=%s, err=%+v", leaderState, leader, backend.domain, err)
 	return leaderState, leader, err
 }
 
-func (backend *MySQLBackend) expireThrottledApps() error {
-	query := `delete from throttled_apps where expires_at <= now()`
-	_, err := sqlutils.ExecNoPrepare(backend.db, query)
-	return err
+// GetSharedDomainServices returns active leader services that have same ShareDomain as this service:
+// - assuming ShareDomain is not empty
+// - excluding this very service
+func (backend *MySQLBackend) GetSharedDomainServices() (services []string, err error) {
+	if backend.shareDomain == "" {
+		return services, err
+	}
+	query := `
+		select
+			service_id
+		from
+			service_election
+		where
+			share_domain = ?
+			and last_seen_active >= now() - interval ? second
+			and service_id != ?
+	`
+	args := sqlutils.Args(backend.shareDomain, electionExpireSeconds, backend.serviceId)
+	err = sqlutils.QueryRowsMap(backend.db, query, func(m sqlutils.RowMap) error {
+		services = append(services, m.GetString("service_id"))
+		return nil
+	}, args...)
+
+	return services, err
 }
 
 func (backend *MySQLBackend) readThrottledApps() error {
@@ -214,8 +251,6 @@ func (backend *MySQLBackend) readThrottledApps() error {
 			ratio
 		from
 			throttled_apps
-		where
-			expires_at > now()
 	`
 
 	err := sqlutils.QueryRowsMap(backend.db, query, func(m sqlutils.RowMap) error {
@@ -271,7 +306,7 @@ func (backend *MySQLBackend) ThrottledAppsMap() (result map[string](*base.AppThr
 func (backend *MySQLBackend) UnthrottleApp(appName string) error {
 	backend.throttler.UnthrottleApp(appName)
 	query := `
-    delete from throttled_apps where app_name=?
+    update throttled_apps set expires_at=now() where app_name=?
   `
 	args := sqlutils.Args(appName)
 	_, err := sqlutils.ExecNoPrepare(backend.db, query, args...)

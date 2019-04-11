@@ -110,6 +110,7 @@ func httpServe() error {
 		return err
 	}
 	throttler.SetLeaderFunc(consensusServiceProvider.GetConsensusService().IsLeader)
+	throttler.SetSharedDomainServicesFuncFunc(consensusServiceProvider.GetConsensusService().GetSharedDomainServices)
 
 	go consensusServiceProvider.Monitor()
 	go throttler.Operate()

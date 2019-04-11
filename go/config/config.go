@@ -96,6 +96,7 @@ type ConfigurationSettings struct {
 	DataCenter           string
 	Environment          string
 	Domain               string
+	ShareDomain          string
 	RaftBind             string
 	RaftDataDir          string
 	DefaultRaftPort      int      // if a RaftNodes entry does not specify port, use this one

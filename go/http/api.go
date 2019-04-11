@@ -22,8 +22,8 @@ import (
 type API interface {
 	LbCheck(w http.ResponseWriter, _ *http.Request, _ httprouter.Params)
 	LeaderCheck(w http.ResponseWriter, _ *http.Request, _ httprouter.Params)
-	RaftLeader(w http.ResponseWriter, _ *http.Request, _ httprouter.Params)
-	RaftState(w http.ResponseWriter, _ *http.Request, _ httprouter.Params)
+	ConsensusLeader(w http.ResponseWriter, _ *http.Request, _ httprouter.Params)
+	ConsensusState(w http.ResponseWriter, _ *http.Request, _ httprouter.Params)
 	Hostname(w http.ResponseWriter, _ *http.Request, _ httprouter.Params)
 	WriteCheck(w http.ResponseWriter, r *http.Request, _ httprouter.Params)
 	WriteCheckIfExists(w http.ResponseWriter, r *http.Request, _ httprouter.Params)
@@ -106,8 +106,8 @@ func (api *APIImpl) LeaderCheck(w http.ResponseWriter, r *http.Request, _ httpro
 	}
 }
 
-// RaftLeader returns the identity of the leader
-func (api *APIImpl) RaftLeader(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+// ConsensusLeader returns the identity of the leader
+func (api *APIImpl) ConsensusLeader(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
 	if leader := api.consensusService.GetLeader(); leader != "" {
 		w.WriteHeader(http.StatusOK)
 		json.NewEncoder(w).Encode(leader)
@@ -116,8 +116,8 @@ func (api *APIImpl) RaftLeader(w http.ResponseWriter, r *http.Request, _ httprou
 	}
 }
 
-// RaftState returns the state of the raft node
-func (api *APIImpl) RaftState(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+// ConsensusLeader returns the consensus state of this node
+func (api *APIImpl) ConsensusState(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
 	json.NewEncoder(w).Encode(api.consensusService.GetStateDescription())
 }
 
@@ -323,10 +323,10 @@ func ConfigureRoutes(api API) *httprouter.Router {
 	register(router, "/status", api.LbCheck)
 
 	register(router, "/leader-check", api.LeaderCheck)
-	register(router, "/raft/leader", api.RaftLeader)
-	register(router, "/raft/state", api.RaftState)
-	// register(router, "/consensus/leader", api.ConsensusLeader)
-	// register(router, "/consensus/state", api.ConsensusState)
+	register(router, "/raft/leader", api.ConsensusLeader)
+	register(router, "/raft/state", api.ConsensusState)
+	register(router, "/consensus/leader", api.ConsensusLeader)
+	register(router, "/consensus/state", api.ConsensusState)
 	register(router, "/hostname", api.Hostname)
 
 	register(router, "/check/:app/:storeType/:storeName", api.WriteCheck)

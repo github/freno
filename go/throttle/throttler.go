@@ -1,8 +1,11 @@
 package throttle
 
 import (
+	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	"math/rand"
+	"net/http"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -26,6 +29,7 @@ const mysqlCollectInterval = 100 * time.Millisecond
 const mysqlRefreshInterval = 10 * time.Second
 const mysqlAggreateInterval = 50 * time.Millisecond
 const mysqlHttpCheckInterval = 5 * time.Second
+const sharedDomainCollectInterval = 1 * time.Second
 
 const aggregatedMetricsExpiration = 5 * time.Second
 const aggregatedMetricsCleanup = 1 * time.Second
@@ -43,8 +47,9 @@ func init() {
 }
 
 type Throttler struct {
-	isLeader     bool
-	isLeaderFunc func() bool
+	isLeader                 bool
+	isLeaderFunc             func() bool
+	sharedDomainServicesFunc func() ([]string, error)
 
 	mysqlThrottleMetricChan chan *mysql.MySQLThrottleMetric
 	mysqlHttpCheckChan      chan *mysql.MySQLHttpCheck
@@ -53,11 +58,12 @@ type Throttler struct {
 
 	mysqlInventory *mysql.MySQLInventory
 
-	mysqlClusterThresholds *cache.Cache
-	aggregatedMetrics      *cache.Cache
-	throttledApps          *cache.Cache
-	recentApps             *cache.Cache
-	metricsHealth          *cache.Cache
+	mysqlClusterThresholds  *cache.Cache
+	aggregatedMetrics       *cache.Cache
+	throttledApps           *cache.Cache
+	recentApps              *cache.Cache
+	metricsHealth           *cache.Cache
+	shareDomainMetricHealth *cache.Cache
 
 	memcacheClient *memcache.Client
 	memcachePath   string
@@ -65,6 +71,7 @@ type Throttler struct {
 	throttledAppsMutex sync.Mutex
 
 	nonLowPriorityAppRequestsThrottled *cache.Cache
+	httpClient *http.Client
 }
 
 func NewThrottler() *Throttler {
@@ -78,13 +85,16 @@ func NewThrottler() *Throttler {
 		mysqlClusterProbesChan: make(chan *mysql.ClusterProbes),
 		mysqlInventory:         mysql.NewMySQLInventory(),
 
-		throttledApps:          cache.New(cache.NoExpiration, 10*time.Second),
-		mysqlClusterThresholds: cache.New(cache.NoExpiration, 0),
-		aggregatedMetrics:      cache.New(aggregatedMetricsExpiration, aggregatedMetricsCleanup),
-		recentApps:             cache.New(recentAppsExpiration, time.Minute),
-		metricsHealth:          cache.New(cache.NoExpiration, 0),
+		throttledApps:           cache.New(cache.NoExpiration, 10*time.Second),
+		mysqlClusterThresholds:  cache.New(cache.NoExpiration, 0),
+		aggregatedMetrics:       cache.New(aggregatedMetricsExpiration, aggregatedMetricsCleanup),
+		recentApps:              cache.New(recentAppsExpiration, time.Minute),
+		metricsHealth:           cache.New(cache.NoExpiration, 0),
+		shareDomainMetricHealth: cache.New(5*sharedDomainCollectInterval, sharedDomainCollectInterval),
 
-		nonLowPriorityAppRequestsThrottled: cache.New(nonDeprioritizedAppMapExpiration, nonDeprioritizedAppMapInterval),
+    nonLowPriorityAppRequestsThrottled: cache.New(nonDeprioritizedAppMapExpiration, nonDeprioritizedAppMapInterval),
+    
+		httpClient: base.SetupHttpClient(0),
 	}
 	throttler.ThrottleApp("abusing-app", time.Now().Add(time.Hour*24*365*10), DefaultThrottleRatio)
 	if memcacheServers := config.Settings().MemcacheServers; len(memcacheServers) > 0 {
@@ -99,6 +109,10 @@ func (throttler *Throttler) SetLeaderFunc(isLeaderFunc func() bool) {
 	throttler.isLeaderFunc = isLeaderFunc
 }
 
+func (throttler *Throttler) SetSharedDomainServicesFuncFunc(sharedDomainServicesFunc func() ([]string, error)) {
+	throttler.sharedDomainServicesFunc = sharedDomainServicesFunc
+}
+
 func (throttler *Throttler) ThrottledAppsSnapshot() map[string]cache.Item {
 	return throttler.throttledApps.Items()
 }
@@ -110,6 +124,7 @@ func (throttler *Throttler) Operate() {
 	mysqlAggregateTick := time.Tick(mysqlAggreateInterval)
 	mysqlHttpCheckTick := time.Tick(mysqlHttpCheckInterval)
 	throttledAppsTick := time.Tick(throttledAppsSnapshotInterval)
+	sharedDomainTick := time.Tick(sharedDomainCollectInterval)
 
 	// initial read of inventory:
 	go throttler.refreshMySQLInventory()
@@ -144,6 +159,10 @@ func (throttler *Throttler) Operate() {
 			{
 				// sparse
 				go throttler.refreshMySQLInventory()
+			}
+		case <-sharedDomainTick:
+			{
+				go throttler.collectShareDomainMetricHealth()
 			}
 		case probes := <-throttler.mysqlClusterProbesChan:
 			{
@@ -232,12 +251,16 @@ func (throttler *Throttler) refreshMySQLInventory() error {
 	}
 	log.Debugf("refreshing MySQL inventory")
 
-	addInstanceKey := func(key *mysql.InstanceKey, clusterSettings *config.MySQLClusterConfigurationSettings, probes *mysql.Probes) {
+	addInstanceKey := func(key *mysql.InstanceKey, clusterName string, clusterSettings *config.MySQLClusterConfigurationSettings, probes *mysql.Probes) {
 		for _, ignore := range clusterSettings.IgnoreHosts {
-			if strings.Contains(key.DisplayString(), ignore) {
+			if strings.Contains(key.StringCode(), ignore) {
 				log.Debugf("instance key ignored: %+v", key)
 				return
 			}
+		}
+		if !key.IsValid() {
+			log.Debugf("read invalid instance key: [%+v] for cluster %+v", key, clusterName)
+			return
 		}
 		log.Debugf("read instance key: %+v", key)
 
@@ -269,7 +292,8 @@ func (throttler *Throttler) refreshMySQLInventory() error {
 					if err != nil {
 						return log.Errorf("Unable to get HAproxy data from %s:%d: %+v", hostPort.Host, hostPort, err)
 					}
-					if hosts, err := haproxy.ParseCsvHosts(csv, poolName); err == nil {
+					if backendHosts, err := haproxy.ParseCsvHosts(csv, poolName); err == nil {
+						hosts := haproxy.FilterThrotllerHosts(backendHosts)
 						totalHosts = append(totalHosts, hosts...)
 						log.Debugf("Read %+v hosts from haproxy %s:%d/#%s", len(hosts), hostPort.Host, hostPort.Port, poolName)
 					} else {
@@ -279,6 +303,7 @@ func (throttler *Throttler) refreshMySQLInventory() error {
 				if len(totalHosts) == 0 {
 					return log.Errorf("Unable to get any HAproxy hosts for pool: %+v", poolName)
 				}
+
 				clusterProbes := &mysql.ClusterProbes{
 					ClusterName:          clusterName,
 					IgnoreHostsCount:     clusterSettings.IgnoreHostsCount,
@@ -287,7 +312,7 @@ func (throttler *Throttler) refreshMySQLInventory() error {
 				}
 				for _, host := range totalHosts {
 					key := mysql.InstanceKey{Hostname: host, Port: clusterSettings.Port}
-					addInstanceKey(&key, clusterSettings, clusterProbes.InstanceProbes)
+					addInstanceKey(&key, clusterName, clusterSettings, clusterProbes.InstanceProbes)
 				}
 				throttler.mysqlClusterProbesChan <- clusterProbes
 				return nil
@@ -309,7 +334,7 @@ func (throttler *Throttler) refreshMySQLInventory() error {
 				}
 				for _, tablet := range tablets {
 					key := mysql.InstanceKey{Hostname: tablet.MysqlHostname, Port: int(tablet.MysqlPort)}
-					addInstanceKey(&key, clusterSettings, clusterProbes.InstanceProbes)
+					addInstanceKey(&key, clusterName, clusterSettings, clusterProbes.InstanceProbes)
 				}
 				throttler.mysqlClusterProbesChan <- clusterProbes
 				return nil
@@ -325,7 +350,7 @@ func (throttler *Throttler) refreshMySQLInventory() error {
 					if err != nil {
 						return log.Errore(err)
 					}
-					addInstanceKey(key, clusterSettings, clusterProbes.InstanceProbes)
+					addInstanceKey(key, clusterName, clusterSettings, clusterProbes.InstanceProbes)
 				}
 				throttler.mysqlClusterProbesChan <- clusterProbes
 				return nil
@@ -444,10 +469,10 @@ func (throttler *Throttler) ThrottleApp(appName string, expireAt time.Time, rati
 		}
 		appThrottle = base.NewAppThrottle(expireAt, ratio)
 	}
-	if appThrottle.ExpireAt.Before(now) {
-		throttler.UnthrottleApp(appName)
-	} else {
+	if now.Before(appThrottle.ExpireAt) {
 		throttler.throttledApps.Set(appName, appThrottle, cache.DefaultExpiration)
+	} else {
+		throttler.UnthrottleApp(appName)
 	}
 }
 
@@ -508,8 +533,8 @@ func (throttler *Throttler) timeSinceMetricHealthy(metricName string) (timeSince
 	return 0, false
 }
 
-func (throttler *Throttler) metricsHealthSnapshot() map[string](*base.MetricHealth) {
-	snapshot := make(map[string](*base.MetricHealth))
+func (throttler *Throttler) metricsHealthSnapshot() base.MetricHealthMap {
+	snapshot := make(base.MetricHealthMap)
 	for key, value := range throttler.metricsHealth.Items() {
 		lastHealthyAt, _ := value.Object.(time.Time)
 		snapshot[key] = base.NewMetricHealth(lastHealthyAt)
@@ -525,4 +550,54 @@ func (throttler *Throttler) AppRequestMetricResult(appName string, metricResultF
 		return base.AppDeniedMetric, 0
 	}
 	return metricResultFunc()
+}
+
+func (throttler *Throttler) collectShareDomainMetricHealth() error {
+	if !throttler.isLeader {
+		return nil
+	}
+	services, err := throttler.sharedDomainServicesFunc()
+	if err != nil {
+		return log.Errore(err)
+	}
+	if len(services) == 0 {
+		return nil
+	}
+	aggregatedMetricHealth := make(base.MetricHealthMap)
+	for _, service := range services {
+		err := func() error {
+			uri := fmt.Sprintf("http://%s/metrics-health", service)
+
+			resp, err := throttler.httpClient.Get(uri)
+			if err != nil {
+				return err
+			}
+
+			defer resp.Body.Close()
+			b, err := ioutil.ReadAll(resp.Body)
+			if err != nil {
+				return err
+			}
+			m := make(base.MetricHealthMap)
+			if err = json.Unmarshal(b, &m); err != nil {
+				return err
+			}
+			log.Debugf("share domain url: %+v", uri)
+			aggregatedMetricHealth.Aggregate(m)
+			return nil
+		}()
+		log.Errore(err)
+	}
+	for metricName, metricHealth := range aggregatedMetricHealth {
+		throttler.shareDomainMetricHealth.SetDefault(metricName, metricHealth)
+	}
+	return nil
+}
+
+func (throttler *Throttler) getShareDomainSecondsSinceHealthFloat64(metricName string) float64 {
+	if object, found := throttler.shareDomainMetricHealth.Get(metricName); found {
+		metricHealth := object.(*base.MetricHealth)
+		return float64(metricHealth.SecondsSinceLastHealthy)
+	}
+	return 0
 }
