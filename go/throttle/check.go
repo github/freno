@@ -15,6 +15,14 @@ const frenoAppName = "freno"
 const frenoShareDmainAppName = "freno-share-domain"
 const selfCheckInterval = 100 * time.Millisecond
 
+type CheckFlags struct {
+	OverrideThreshold float64
+	LowPriority       bool
+	OKIfNotExists     bool
+}
+
+var StandardCheckFlags = &CheckFlags{}
+
 // ThrottlerCheck provides methdos for an app checking on metrics
 type ThrottlerCheck struct {
 	throttler *Throttler
@@ -27,15 +35,21 @@ func NewThrottlerCheck(throttler *Throttler) *ThrottlerCheck {
 }
 
 // checkAppMetricResult allows an app to check on a metric
-func (check *ThrottlerCheck) checkAppMetricResult(appName string, storeType string, storeName string, metricResultFunc base.MetricResultFunc, overrideThreshold float64) (checkResult *CheckResult) {
+func (check *ThrottlerCheck) checkAppMetricResult(appName string, storeType string, storeName string, metricResultFunc base.MetricResultFunc, flags *CheckFlags) (checkResult *CheckResult) {
+	// Handle deprioritized app logic
 	denyApp := false
 	metricName := fmt.Sprintf("%s/%s", storeType, storeName)
-
-	// check how share-domain services see this metric
-
+	if flags.LowPriority {
+		if _, exists := check.throttler.nonLowPriorityAppRequestsThrottled.Get(metricName); exists {
+			// a non-deprioritized app, ie a "normal" app, has recently been throttled.
+			// This is now a deprioritized app. Deny access to this request.
+			denyApp = true
+		}
+	}
+	//
 	metricResult, threshold := check.throttler.AppRequestMetricResult(appName, metricResultFunc, denyApp)
-	if overrideThreshold > 0 {
-		threshold = overrideThreshold
+	if flags.OverrideThreshold > 0 {
+		threshold = flags.OverrideThreshold
 	}
 	value, err := metricResult.Get()
 	if appName == "" {
@@ -57,6 +71,11 @@ func (check *ThrottlerCheck) checkAppMetricResult(appName string, storeType stri
 		// casual throttling
 		statusCode = http.StatusTooManyRequests // 429
 		err = base.ThresholdExceededError
+
+		if !flags.LowPriority && appName != frenoAppName {
+			// low priority requests will henceforth be denied
+			go check.throttler.nonLowPriorityAppRequestsThrottled.SetDefault(metricName, true)
+		}
 	} else if appName == frenoShareDmainAppName && appName != frenoAppName && check.throttler.getShareDomainSecondsSinceHealthFloat64(metricName) >= threshold {
 		// Dark shipping the share domain functionality. Only the internal frenoShareDmainAppName uses share domain dependencies.
 
@@ -77,7 +96,7 @@ func (check *ThrottlerCheck) checkAppMetricResult(appName string, storeType stri
 }
 
 // CheckAppStoreMetric
-func (check *ThrottlerCheck) Check(appName string, storeType string, storeName string, remoteAddr string, overrideThreshold float64) (checkResult *CheckResult) {
+func (check *ThrottlerCheck) Check(appName string, storeType string, storeName string, remoteAddr string, flags *CheckFlags) (checkResult *CheckResult) {
 	var metricResultFunc base.MetricResultFunc
 	switch storeType {
 	case "mysql":
@@ -91,7 +110,7 @@ func (check *ThrottlerCheck) Check(appName string, storeType string, storeName s
 		return NoSuchMetricCheckResult
 	}
 
-	checkResult = check.checkAppMetricResult(appName, storeType, storeName, metricResultFunc, overrideThreshold)
+	checkResult = check.checkAppMetricResult(appName, storeType, storeName, metricResultFunc, flags)
 
 	go func(statusCode int) {
 		metrics.GetOrRegisterCounter("check.any.total", nil).Inc(1)
@@ -131,8 +150,8 @@ func (check *ThrottlerCheck) localCheck(metricName string) (checkResult *CheckRe
 	if err != nil {
 		return NoSuchMetricCheckResult
 	}
-	checkResult = check.Check(frenoAppName, storeType, storeName, "local", 0)
-	go check.Check(frenoShareDmainAppName, storeType, storeName, "local", 0)
+	checkResult = check.Check(frenoAppName, storeType, storeName, "local", StandardCheckFlags)
+	go check.Check(frenoShareDmainAppName, storeType, storeName, "local", StandardCheckFlags)
 
 	if checkResult.StatusCode == http.StatusOK {
 		check.throttler.markMetricHealthy(metricName)
