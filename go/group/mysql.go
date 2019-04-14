@@ -74,11 +74,10 @@ func NewMySQLBackend(throttler *throttle.Throttler) (*MySQLBackend, error) {
 	if err != nil {
 		return nil, err
 	}
-	// domain := config.Settings().Domain
-	// if domain == "" {
-	// 	domain = fmt.Sprintf("%s:%s", config.Settings().DataCenter, config.Settings().Environment)
-	// }
-	domain := fmt.Sprintf("%s:%s", config.Settings().DataCenter, config.Settings().Environment)
+	domain := config.Settings().Domain
+	if domain == "" {
+		domain = fmt.Sprintf("%s:%s", config.Settings().DataCenter, config.Settings().Environment)
+	}
 	shareDomain := config.Settings().ShareDomain
 	serviceId := fmt.Sprintf("%s:%d", hostname, config.Settings().ListenPort)
 	backend := &MySQLBackend{
