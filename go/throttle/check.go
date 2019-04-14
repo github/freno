@@ -12,6 +12,7 @@ import (
 )
 
 const frenoAppName = "freno"
+const frenoShareDmainAppName = "freno-share-domain"
 const selfCheckInterval = 100 * time.Millisecond
 
 // ThrottlerCheck provides methdos for an app checking on metrics
@@ -56,7 +57,9 @@ func (check *ThrottlerCheck) checkAppMetricResult(appName string, storeType stri
 		// casual throttling
 		statusCode = http.StatusTooManyRequests // 429
 		err = base.ThresholdExceededError
-	} else if appName != frenoAppName && check.throttler.getShareDomainSecondsSinceHealthFloat64(metricName) >= threshold {
+	} else if appName == frenoShareDmainAppName && appName != frenoAppName && check.throttler.getShareDomainSecondsSinceHealthFloat64(metricName) >= threshold {
+		// Dark shipping the share domain functionality. Only the internal frenoShareDmainAppName uses share domain dependencies.
+
 		// throttling based on shared domain metric.
 		// we exclude the "freno" app itself, or else this could turn into a snowball: this service ("a") seeing
 		// another service ("b") as unhealthy, itself becoming unhealthy, makind b's read into a's state as unheathly,
@@ -123,12 +126,13 @@ func (check *ThrottlerCheck) splitMetricTokens(metricName string) (storeType str
 }
 
 // localCheck
-func (check *ThrottlerCheck) localCheck(appName string, metricName string) (checkResult *CheckResult) {
+func (check *ThrottlerCheck) localCheck(metricName string) (checkResult *CheckResult) {
 	storeType, storeName, err := check.splitMetricTokens(metricName)
 	if err != nil {
 		return NoSuchMetricCheckResult
 	}
-	checkResult = check.Check(appName, storeType, storeName, "local", 0)
+	checkResult = check.Check(frenoAppName, storeType, storeName, "local", 0)
+	go check.Check(frenoShareDmainAppName, storeType, storeName, "local", 0)
 
 	if checkResult.StatusCode == http.StatusOK {
 		check.throttler.markMetricHealthy(metricName)
@@ -167,7 +171,7 @@ func (check *ThrottlerCheck) SelfChecks() {
 			for metricName, metricResult := range check.AggregatedMetrics() {
 				metricName := metricName
 				metricResult := metricResult
-				go check.localCheck(frenoAppName, metricName)
+				go check.localCheck(metricName)
 				go check.reportAggregated(metricName, metricResult)
 			}
 		}
