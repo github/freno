@@ -36,6 +36,9 @@ const aggregatedMetricsCleanup = 1 * time.Second
 const throttledAppsSnapshotInterval = 5 * time.Second
 const recentAppsExpiration = time.Hour * 24
 
+const nonDeprioritizedAppMapExpiration = time.Second
+const nonDeprioritizedAppMapInterval = 100 * time.Millisecond
+
 const DefaultThrottleTTLMinutes = 60
 const DefaultThrottleRatio = 1.0
 
@@ -67,7 +70,8 @@ type Throttler struct {
 
 	throttledAppsMutex sync.Mutex
 
-	httpClient *http.Client
+	nonLowPriorityAppRequestsThrottled *cache.Cache
+	httpClient                         *http.Client
 }
 
 func NewThrottler() *Throttler {
@@ -87,6 +91,8 @@ func NewThrottler() *Throttler {
 		recentApps:              cache.New(recentAppsExpiration, time.Minute),
 		metricsHealth:           cache.New(cache.NoExpiration, 0),
 		shareDomainMetricHealth: cache.New(5*sharedDomainCollectInterval, sharedDomainCollectInterval),
+
+		nonLowPriorityAppRequestsThrottled: cache.New(nonDeprioritizedAppMapExpiration, nonDeprioritizedAppMapInterval),
 
 		httpClient: base.SetupHttpClient(0),
 	}
