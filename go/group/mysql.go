@@ -74,11 +74,10 @@ func NewMySQLBackend(throttler *throttle.Throttler) (*MySQLBackend, error) {
 	if err != nil {
 		return nil, err
 	}
-	// domain := config.Settings().Domain
-	// if domain == "" {
-	// 	domain = fmt.Sprintf("%s:%s", config.Settings().DataCenter, config.Settings().Environment)
-	// }
-	domain := fmt.Sprintf("%s:%s", config.Settings().DataCenter, config.Settings().Environment)
+	domain := config.Settings().Domain
+	if domain == "" {
+		domain = fmt.Sprintf("%s:%s", config.Settings().DataCenter, config.Settings().Environment)
+	}
 	shareDomain := config.Settings().ShareDomain
 	serviceId := fmt.Sprintf("%s:%d", hostname, config.Settings().ListenPort)
 	backend := &MySQLBackend{
@@ -165,14 +164,15 @@ func (backend *MySQLBackend) GetStateDescription() string {
 func (backend *MySQLBackend) AttemptLeadership() error {
 	query := `
     insert ignore into service_election (
-        domain, service_id, last_seen_active
+        domain, share_domain, service_id, last_seen_active
       ) values (
-        ?, ?, now()
+        ?, ?, ?, now()
       ) on duplicate key update
-      service_id = if(last_seen_active < now() - interval ? second, values(service_id), service_id),
+			service_id       = if(last_seen_active < now() - interval ? second, values(service_id), service_id),
+      share_domain     = if(service_id = values(service_id), values(share_domain), share_domain),
       last_seen_active = if(service_id = values(service_id), values(last_seen_active), last_seen_active)
   `
-	args := sqlutils.Args(backend.domain, backend.serviceId, electionExpireSeconds)
+	args := sqlutils.Args(backend.domain, backend.shareDomain, backend.serviceId, electionExpireSeconds)
 	_, err := sqlutils.ExecNoPrepare(backend.db, query, args...)
 	return err
 }
