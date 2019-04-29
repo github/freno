@@ -594,10 +594,10 @@ func (throttler *Throttler) collectShareDomainMetricHealth() error {
 	return nil
 }
 
-func (throttler *Throttler) getShareDomainSecondsSinceHealthFloat64(metricName string) float64 {
+func (throttler *Throttler) getShareDomainSecondsSinceHealth(metricName string) int64 {
 	if object, found := throttler.shareDomainMetricHealth.Get(metricName); found {
 		metricHealth := object.(*base.MetricHealth)
-		return float64(metricHealth.SecondsSinceLastHealthy)
+		return metricHealth.SecondsSinceLastHealthy
 	}
 	return 0
 }
