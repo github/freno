@@ -31,7 +31,7 @@ func main() {
 	raftBind := flag.String("raft-bind", "", "Raft bind address (example: '127.0.0.1:10008'). Overrides config's RaftBind")
 	raftNodes := flag.String("raft-nodes", "", "Comma separated (e.g. 'host:port[,host:port]') list of raft nodes. Overrides config's RaftNodes")
 
-	group.ForceLeadership = *flag.Bool("force-leadership", false, "Make this node consider itself a leader no matter what consensus logic says")
+	forceLeadership := flag.Bool("force-leadership", false, "Make this node consider itself a leader no matter what consensus logic says")
 
 	quiet := flag.Bool("quiet", false, "quiet")
 	verbose := flag.Bool("verbose", false, "verbose")
@@ -40,6 +40,7 @@ func main() {
 
 	help := flag.Bool("help", false, "show the help")
 	flag.Parse()
+	group.ForceLeadership = *forceLeadership
 
 	if *help {
 		printHelp()
@@ -105,6 +106,7 @@ func loadConfiguration(configFile string) {
 func httpServe() error {
 	throttler := throttle.NewThrottler()
 	log.Infof("Starting consensus service")
+	log.Infof("- forced leadership: %+v", group.ForceLeadership)
 	consensusServiceProvider, err := group.NewConsensusServiceProvider(throttler)
 	if err != nil {
 		return err
