@@ -25,9 +25,9 @@ import (
 )
 
 const leaderCheckInterval = 1 * time.Second
-const mysqlCollectInterval = 100 * time.Millisecond
+const mysqlCollectInterval = 50 * time.Millisecond
 const mysqlRefreshInterval = 10 * time.Second
-const mysqlAggreateInterval = 50 * time.Millisecond
+const mysqlAggreateInterval = 25 * time.Millisecond
 const mysqlHttpCheckInterval = 5 * time.Second
 const sharedDomainCollectInterval = 1 * time.Second
 
