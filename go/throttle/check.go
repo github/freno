@@ -16,6 +16,7 @@ const frenoShareDmainAppName = "freno-share-domain"
 const selfCheckInterval = 100 * time.Millisecond
 
 type CheckFlags struct {
+	ReadCheck         bool
 	OverrideThreshold float64
 	LowPriority       bool
 	OKIfNotExists     bool
@@ -72,7 +73,7 @@ func (check *ThrottlerCheck) checkAppMetricResult(appName string, storeType stri
 		statusCode = http.StatusTooManyRequests // 429
 		err = base.ThresholdExceededError
 
-		if !flags.LowPriority && appName != frenoAppName {
+		if !flags.LowPriority && !flags.ReadCheck && appName != frenoAppName {
 			// low priority requests will henceforth be denied
 			go check.throttler.nonLowPriorityAppRequestsThrottled.SetDefault(metricName, true)
 		}
@@ -119,12 +120,22 @@ func (check *ThrottlerCheck) Check(appName string, storeType string, storeName s
 		metrics.GetOrRegisterCounter(fmt.Sprintf("check.any.%s.%s.total", storeType, storeName), nil).Inc(1)
 		metrics.GetOrRegisterCounter(fmt.Sprintf("check.%s.%s.%s.total", appName, storeType, storeName), nil).Inc(1)
 
+		if flags.LowPriority {
+			metrics.GetOrRegisterCounter(fmt.Sprintf("check.low_priority.any.%s.%s.total", storeType, storeName), nil).Inc(1)
+			metrics.GetOrRegisterCounter(fmt.Sprintf("check.low_priority.%s.%s.%s.total", appName, storeType, storeName), nil).Inc(1)
+		}
+
 		if statusCode != http.StatusOK {
 			metrics.GetOrRegisterCounter("check.any.error", nil).Inc(1)
 			metrics.GetOrRegisterCounter(fmt.Sprintf("check.%s.error", appName), nil).Inc(1)
 
 			metrics.GetOrRegisterCounter(fmt.Sprintf("check.any.%s.%s.error", storeType, storeName), nil).Inc(1)
 			metrics.GetOrRegisterCounter(fmt.Sprintf("check.%s.%s.%s.error", appName, storeType, storeName), nil).Inc(1)
+
+			if flags.LowPriority {
+				metrics.GetOrRegisterCounter(fmt.Sprintf("check.low_priority.any.%s.%s.error", storeType, storeName), nil).Inc(1)
+				metrics.GetOrRegisterCounter(fmt.Sprintf("check.low_priority.%s.%s.%s.error", appName, storeType, storeName), nil).Inc(1)
+			}
 		}
 
 		check.throttler.markRecentApp(appName, remoteAddr)

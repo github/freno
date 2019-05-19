@@ -177,7 +177,7 @@ func (api *APIImpl) ReadCheck(w http.ResponseWriter, r *http.Request, ps httprou
 	if overrideThreshold, err := strconv.ParseFloat(ps.ByName("threshold"), 64); err != nil {
 		api.respondGeneric(w, r, err)
 	} else {
-		api.check(w, r, ps, &throttle.CheckFlags{OverrideThreshold: overrideThreshold})
+		api.check(w, r, ps, &throttle.CheckFlags{ReadCheck: true, OverrideThreshold: overrideThreshold})
 	}
 }
 
