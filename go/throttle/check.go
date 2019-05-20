@@ -120,22 +120,12 @@ func (check *ThrottlerCheck) Check(appName string, storeType string, storeName s
 		metrics.GetOrRegisterCounter(fmt.Sprintf("check.any.%s.%s.total", storeType, storeName), nil).Inc(1)
 		metrics.GetOrRegisterCounter(fmt.Sprintf("check.%s.%s.%s.total", appName, storeType, storeName), nil).Inc(1)
 
-		if flags.LowPriority {
-			metrics.GetOrRegisterCounter(fmt.Sprintf("check.low_priority.any.%s.%s.total", storeType, storeName), nil).Inc(1)
-			metrics.GetOrRegisterCounter(fmt.Sprintf("check.low_priority.%s.%s.%s.total", appName, storeType, storeName), nil).Inc(1)
-		}
-
 		if statusCode != http.StatusOK {
 			metrics.GetOrRegisterCounter("check.any.error", nil).Inc(1)
 			metrics.GetOrRegisterCounter(fmt.Sprintf("check.%s.error", appName), nil).Inc(1)
 
 			metrics.GetOrRegisterCounter(fmt.Sprintf("check.any.%s.%s.error", storeType, storeName), nil).Inc(1)
 			metrics.GetOrRegisterCounter(fmt.Sprintf("check.%s.%s.%s.error", appName, storeType, storeName), nil).Inc(1)
-
-			if flags.LowPriority {
-				metrics.GetOrRegisterCounter(fmt.Sprintf("check.low_priority.any.%s.%s.error", storeType, storeName), nil).Inc(1)
-				metrics.GetOrRegisterCounter(fmt.Sprintf("check.low_priority.%s.%s.%s.error", appName, storeType, storeName), nil).Inc(1)
-			}
 		}
 
 		check.throttler.markRecentApp(appName, remoteAddr)
