@@ -183,16 +183,18 @@ func (backend *MySQLBackend) GetStatus() *ConsensusServiceStatus {
 	for _, service := range shareDomainServices {
 		shareDomainServicesList = append(shareDomainServicesList, service)
 	}
+	healthyDomainServicesList, _ := backend.GetHealthyDomainServices()
 	return &ConsensusServiceStatus{
-		ServiceID:               backend.serviceId,
-		Healthy:                 backend.IsHealthy(),
-		IsLeader:                backend.IsLeader(),
-		Leader:                  backend.GetLeader(),
-		State:                   backend.GetStateDescription(),
-		Domain:                  backend.domain,
-		ShareDomain:             backend.shareDomain,
-		ShareDomainServices:     shareDomainServices,
-		ShareDomainServicesList: shareDomainServicesList,
+		ServiceID:                 backend.serviceId,
+		Healthy:                   backend.IsHealthy(),
+		IsLeader:                  backend.IsLeader(),
+		Leader:                    backend.GetLeader(),
+		State:                     backend.GetStateDescription(),
+		Domain:                    backend.domain,
+		ShareDomain:               backend.shareDomain,
+		ShareDomainServices:       shareDomainServices,
+		ShareDomainServicesList:   shareDomainServicesList,
+		HealthyDomainServicesList: healthyDomainServicesList,
 	}
 }
 
@@ -210,6 +212,27 @@ func (backend *MySQLBackend) RegisterHealth() error {
 	args := sqlutils.Args(backend.serviceId, backend.domain, backend.shareDomain)
 	_, err := sqlutils.ExecNoPrepare(backend.db, query, args...)
 	return err
+}
+
+// GetHealthyDomainServices returns list of services healthy within same domain as this service,
+// including this service
+func (backend *MySQLBackend) GetHealthyDomainServices() (services []string, err error) {
+	query := `
+		select
+			service_id
+		from
+			service_health
+		where
+			domain = ?
+			and last_seen_active >= now() - interval ? second
+	`
+	args := sqlutils.Args(backend.domain, electionExpireSeconds)
+	err = sqlutils.QueryRowsMap(backend.db, query, func(m sqlutils.RowMap) error {
+		services = append(services, m.GetString("service_id"))
+		return nil
+	}, args...)
+
+	return services, err
 }
 
 func (backend *MySQLBackend) AttemptLeadership() error {
