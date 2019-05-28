@@ -178,16 +178,21 @@ func (backend *MySQLBackend) GetStateDescription() string {
 }
 
 func (backend *MySQLBackend) GetStatus() *ConsensusServiceStatus {
+	shareDomainServicesList := []string{backend.serviceId}
 	shareDomainServices, _ := backend.GetSharedDomainServices()
+	for _, service := range shareDomainServices {
+		shareDomainServicesList = append(shareDomainServicesList, service)
+	}
 	return &ConsensusServiceStatus{
-		ServiceID:           backend.serviceId,
-		Healthy:             backend.IsHealthy(),
-		IsLeader:            backend.IsLeader(),
-		Leader:              backend.GetLeader(),
-		State:               backend.GetStateDescription(),
-		Domain:              backend.domain,
-		ShareDomain:         backend.shareDomain,
-		ShareDomainServices: shareDomainServices,
+		ServiceID:               backend.serviceId,
+		Healthy:                 backend.IsHealthy(),
+		IsLeader:                backend.IsLeader(),
+		Leader:                  backend.GetLeader(),
+		State:                   backend.GetStateDescription(),
+		Domain:                  backend.domain,
+		ShareDomain:             backend.shareDomain,
+		ShareDomainServices:     shareDomainServices,
+		ShareDomainServicesList: shareDomainServicesList,
 	}
 }
 
