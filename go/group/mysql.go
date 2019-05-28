@@ -169,6 +169,8 @@ func (backend *MySQLBackend) GetStatus() *ConsensusServiceStatus {
 		IsLeader:            backend.IsLeader(),
 		Leader:              backend.GetLeader(),
 		State:               backend.GetStateDescription(),
+		Domain:              backend.domain,
+		ShareDomain:         backend.shareDomain,
 		ShareDomainServices: shareDomainServices,
 	}
 }
