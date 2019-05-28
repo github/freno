@@ -12,6 +12,15 @@ CREATE TABLE service_election (
   KEY share_domain_idx (share_domain,last_seen_active)
 );
 
+CREATE TABLE service_health (
+service_id varchar(128) NOT NULL,
+  domain varchar(32) NOT NULL,
+  share_domain varchar(32) NOT NULL,
+  last_seen_active timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (service_id),
+  KEY last_seen_active_idx (last_seen_active)
+);
+
 CREATE TABLE throttled_apps (
   app_name varchar(128) NOT NULL,
 	throttled_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -54,6 +63,7 @@ const maxConnections = 3
 const electionExpireSeconds = 5
 
 const electionInterval = time.Second
+const healthInterval = 2 * electionInterval
 const stateInterval = 10 * time.Second
 
 func NewMySQLBackend(throttler *throttle.Throttler) (*MySQLBackend, error) {
@@ -94,11 +104,17 @@ func NewMySQLBackend(throttler *throttle.Throttler) (*MySQLBackend, error) {
 // Monitor is a utility function to routinely observe leadership state.
 // It doesn't actually do much; merely takes notes.
 func (backend *MySQLBackend) continuousOperations() {
+	healthTicker := time.NewTicker(healthInterval)
 	electionsTicker := time.NewTicker(electionInterval)
 	stateTicker := time.NewTicker(stateInterval)
 
 	for {
 		select {
+		case <-healthTicker.C:
+			{
+				err := backend.RegisterHealth()
+				log.Errore(err)
+			}
 		case <-electionsTicker.C:
 			{
 				err := backend.AttemptLeadership()
@@ -173,6 +189,22 @@ func (backend *MySQLBackend) GetStatus() *ConsensusServiceStatus {
 		ShareDomain:         backend.shareDomain,
 		ShareDomainServices: shareDomainServices,
 	}
+}
+
+func (backend *MySQLBackend) RegisterHealth() error {
+	query := `
+    insert ignore into service_health (
+        service_id, domain, share_domain, last_seen_active
+      ) values (
+        ?, ?, ?, now()
+      ) on duplicate key update
+			domain       = values(domain),
+      share_domain = values(share_domain),
+      last_seen_active = values(last_seen_active)
+  `
+	args := sqlutils.Args(backend.serviceId, backend.domain, backend.shareDomain)
+	_, err := sqlutils.ExecNoPrepare(backend.db, query, args...)
+	return err
 }
 
 func (backend *MySQLBackend) AttemptLeadership() error {
