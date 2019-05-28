@@ -49,7 +49,7 @@ func init() {
 type Throttler struct {
 	isLeader                 bool
 	isLeaderFunc             func() bool
-	sharedDomainServicesFunc func() ([]string, error)
+	sharedDomainServicesFunc func() (map[string]string, error)
 
 	mysqlThrottleMetricChan chan *mysql.MySQLThrottleMetric
 	mysqlHttpCheckChan      chan *mysql.MySQLHttpCheck
@@ -109,7 +109,7 @@ func (throttler *Throttler) SetLeaderFunc(isLeaderFunc func() bool) {
 	throttler.isLeaderFunc = isLeaderFunc
 }
 
-func (throttler *Throttler) SetSharedDomainServicesFuncFunc(sharedDomainServicesFunc func() ([]string, error)) {
+func (throttler *Throttler) SetSharedDomainServicesFunc(sharedDomainServicesFunc func() (map[string]string, error)) {
 	throttler.sharedDomainServicesFunc = sharedDomainServicesFunc
 }
 
