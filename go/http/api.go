@@ -124,6 +124,7 @@ func (api *APIImpl) ConsensusState(w http.ResponseWriter, r *http.Request, _ htt
 
 // ConsensusLeader returns the consensus state of this node
 func (api *APIImpl) ConsensusStatus(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(api.consensusService.GetStatus())
 }
 
