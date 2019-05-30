@@ -24,6 +24,7 @@ type API interface {
 	LeaderCheck(w http.ResponseWriter, _ *http.Request, _ httprouter.Params)
 	ConsensusLeader(w http.ResponseWriter, _ *http.Request, _ httprouter.Params)
 	ConsensusState(w http.ResponseWriter, _ *http.Request, _ httprouter.Params)
+	ConsensusStatus(w http.ResponseWriter, _ *http.Request, _ httprouter.Params)
 	Hostname(w http.ResponseWriter, _ *http.Request, _ httprouter.Params)
 	WriteCheck(w http.ResponseWriter, r *http.Request, _ httprouter.Params)
 	WriteCheckIfExists(w http.ResponseWriter, r *http.Request, _ httprouter.Params)
@@ -119,6 +120,12 @@ func (api *APIImpl) ConsensusLeader(w http.ResponseWriter, r *http.Request, _ ht
 // ConsensusLeader returns the consensus state of this node
 func (api *APIImpl) ConsensusState(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
 	json.NewEncoder(w).Encode(api.consensusService.GetStateDescription())
+}
+
+// ConsensusLeader returns the consensus state of this node
+func (api *APIImpl) ConsensusStatus(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(api.consensusService.GetStatus())
 }
 
 // Hostname returns the hostname this process executes on
@@ -327,6 +334,7 @@ func ConfigureRoutes(api API) *httprouter.Router {
 	register(router, "/raft/state", api.ConsensusState)
 	register(router, "/consensus/leader", api.ConsensusLeader)
 	register(router, "/consensus/state", api.ConsensusState)
+	register(router, "/consensus/status", api.ConsensusStatus)
 	register(router, "/hostname", api.Hostname)
 
 	register(router, "/check/:app/:storeType/:storeName", api.WriteCheck)

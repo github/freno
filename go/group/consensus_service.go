@@ -8,6 +8,19 @@ import (
 
 const monitorInterval = 5 * time.Second
 
+type ConsensusServiceStatus struct {
+	ServiceID                 string
+	Healthy                   bool
+	IsLeader                  bool
+	Leader                    string
+	State                     string
+	Domain                    string
+	ShareDomain               string
+	ShareDomainServices       map[string]string
+	ShareDomainServicesList   []string // list of this service ID and share domain services, combined
+	HealthyDomainServicesList []string
+}
+
 // ConsensusService is a freno-oriented interface for making requests that require consensus.
 type ConsensusService interface {
 	ThrottleApp(appName string, ttlMinutes int64, expireAt time.Time, ratio float64) error
@@ -19,8 +32,8 @@ type ConsensusService interface {
 	IsLeader() bool
 	GetLeader() string
 	GetStateDescription() string
-
-	GetSharedDomainServices() ([]string, error)
+	GetSharedDomainServices() (map[string]string, error)
+	GetStatus() *ConsensusServiceStatus
 
 	Monitor()
 }

@@ -12,6 +12,15 @@ CREATE TABLE service_election (
   KEY share_domain_idx (share_domain,last_seen_active)
 );
 
+CREATE TABLE service_health (
+service_id varchar(128) NOT NULL,
+  domain varchar(32) NOT NULL,
+  share_domain varchar(32) NOT NULL,
+  last_seen_active timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (service_id),
+  KEY last_seen_active_idx (last_seen_active)
+);
+
 CREATE TABLE throttled_apps (
   app_name varchar(128) NOT NULL,
 	throttled_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -54,6 +63,7 @@ const maxConnections = 3
 const electionExpireSeconds = 5
 
 const electionInterval = time.Second
+const healthInterval = 2 * electionInterval
 const stateInterval = 10 * time.Second
 
 func NewMySQLBackend(throttler *throttle.Throttler) (*MySQLBackend, error) {
@@ -94,11 +104,17 @@ func NewMySQLBackend(throttler *throttle.Throttler) (*MySQLBackend, error) {
 // Monitor is a utility function to routinely observe leadership state.
 // It doesn't actually do much; merely takes notes.
 func (backend *MySQLBackend) continuousOperations() {
+	healthTicker := time.NewTicker(healthInterval)
 	electionsTicker := time.NewTicker(electionInterval)
 	stateTicker := time.NewTicker(stateInterval)
 
 	for {
 		select {
+		case <-healthTicker.C:
+			{
+				err := backend.RegisterHealth()
+				log.Errore(err)
+			}
 		case <-electionsTicker.C:
 			{
 				err := backend.AttemptLeadership()
@@ -161,6 +177,64 @@ func (backend *MySQLBackend) GetStateDescription() string {
 	return "Unhealthy"
 }
 
+func (backend *MySQLBackend) GetStatus() *ConsensusServiceStatus {
+	shareDomainServicesList := []string{backend.serviceId}
+	shareDomainServices, _ := backend.GetSharedDomainServices()
+	for _, service := range shareDomainServices {
+		shareDomainServicesList = append(shareDomainServicesList, service)
+	}
+	healthyDomainServicesList, _ := backend.GetHealthyDomainServices()
+	return &ConsensusServiceStatus{
+		ServiceID:                 backend.serviceId,
+		Healthy:                   backend.IsHealthy(),
+		IsLeader:                  backend.IsLeader(),
+		Leader:                    backend.GetLeader(),
+		State:                     backend.GetStateDescription(),
+		Domain:                    backend.domain,
+		ShareDomain:               backend.shareDomain,
+		ShareDomainServices:       shareDomainServices,
+		ShareDomainServicesList:   shareDomainServicesList,
+		HealthyDomainServicesList: healthyDomainServicesList,
+	}
+}
+
+func (backend *MySQLBackend) RegisterHealth() error {
+	query := `
+    insert ignore into service_health (
+        service_id, domain, share_domain, last_seen_active
+      ) values (
+        ?, ?, ?, now()
+      ) on duplicate key update
+			domain       = values(domain),
+      share_domain = values(share_domain),
+      last_seen_active = values(last_seen_active)
+  `
+	args := sqlutils.Args(backend.serviceId, backend.domain, backend.shareDomain)
+	_, err := sqlutils.ExecNoPrepare(backend.db, query, args...)
+	return err
+}
+
+// GetHealthyDomainServices returns list of services healthy within same domain as this service,
+// including this service
+func (backend *MySQLBackend) GetHealthyDomainServices() (services []string, err error) {
+	query := `
+		select
+			service_id
+		from
+			service_health
+		where
+			domain = ?
+			and last_seen_active >= now() - interval ? second
+	`
+	args := sqlutils.Args(backend.domain, electionExpireSeconds)
+	err = sqlutils.QueryRowsMap(backend.db, query, func(m sqlutils.RowMap) error {
+		services = append(services, m.GetString("service_id"))
+		return nil
+	}, args...)
+
+	return services, err
+}
+
 func (backend *MySQLBackend) AttemptLeadership() error {
 	query := `
     insert ignore into service_election (
@@ -220,12 +294,14 @@ func (backend *MySQLBackend) ReadLeadership() (leaderState int64, leader string,
 // GetSharedDomainServices returns active leader services that have same ShareDomain as this service:
 // - assuming ShareDomain is not empty
 // - excluding this very service
-func (backend *MySQLBackend) GetSharedDomainServices() (services []string, err error) {
+func (backend *MySQLBackend) GetSharedDomainServices() (services map[string]string, err error) {
 	if backend.shareDomain == "" {
 		return services, err
 	}
+	services = make(map[string]string)
 	query := `
 		select
+			domain,
 			service_id
 		from
 			service_election
@@ -236,7 +312,7 @@ func (backend *MySQLBackend) GetSharedDomainServices() (services []string, err e
 	`
 	args := sqlutils.Args(backend.shareDomain, electionExpireSeconds, backend.serviceId)
 	err = sqlutils.QueryRowsMap(backend.db, query, func(m sqlutils.RowMap) error {
-		services = append(services, m.GetString("service_id"))
+		services[m.GetString("domain")] = m.GetString("service_id")
 		return nil
 	}, args...)
 

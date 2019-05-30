@@ -211,8 +211,20 @@ func (store *Store) GetStateDescription() string {
 	return store.GetState().String()
 }
 
-func (store *Store) GetSharedDomainServices() (services []string, err error) {
+func (store *Store) GetSharedDomainServices() (services map[string]string, err error) {
 	return services, nil
+}
+
+func (store *Store) GetStatus() *ConsensusServiceStatus {
+	shareDomainServices, _ := store.GetSharedDomainServices()
+	return &ConsensusServiceStatus{
+		ServiceID:           store.raftBind,
+		Healthy:             store.IsHealthy(),
+		IsLeader:            store.IsLeader(),
+		Leader:              store.GetLeader(),
+		State:               store.GetStateDescription(),
+		ShareDomainServices: shareDomainServices,
+	}
 }
 
 // Monitor is a utility function to routinely observe leadership state.
