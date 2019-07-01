@@ -17,8 +17,8 @@ func SetupHttpClient(httpTimeout time.Duration) *http.Client {
 		return net.DialTimeout(network, addr, httpTimeout)
 	}
 	httpTransport := &http.Transport{
-		TLSClientConfig: &tls.Config{InsecureSkipVerify: false},
-		Dial:            dialTimeout,
+		TLSClientConfig:       &tls.Config{InsecureSkipVerify: false},
+		Dial:                  dialTimeout,
 		ResponseHeaderTimeout: httpTimeout,
 	}
 	httpClient := &http.Client{Transport: httpTransport}
