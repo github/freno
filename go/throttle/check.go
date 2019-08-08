@@ -77,9 +77,7 @@ func (check *ThrottlerCheck) checkAppMetricResult(appName string, storeType stri
 			// low priority requests will henceforth be denied
 			go check.throttler.nonLowPriorityAppRequestsThrottled.SetDefault(metricName, true)
 		}
-	} else if appName == frenoShareDmainAppName && appName != frenoAppName && check.throttler.getShareDomainSecondsSinceHealth(metricName) >= 1 {
-		// Dark shipping the share domain functionality. Only the internal frenoShareDmainAppName uses share domain dependencies.
-
+	} else if appName != frenoAppName && check.throttler.getShareDomainSecondsSinceHealth(metricName) >= 1 {
 		// throttling based on shared domain metric.
 		// we exclude the "freno" app itself, or else this could turn into a snowball: this service ("a") seeing
 		// another service ("b") as unhealthy, itself becoming unhealthy, makind b's read into a's state as unheathly,
