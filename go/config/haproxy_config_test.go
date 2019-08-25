@@ -61,6 +61,14 @@ func TestParseAddresses(t *testing.T) {
 		test.S(t).ExpectEquals(addresses[1].String(), "https://otherhost:5679")
 	}
 	{
+		c := &HAProxyConfigurationSettings{Addresses: "http://localhost:1234/stats/pool/,https://otherhost:5679"}
+		addresses, err := c.parseAddresses()
+		test.S(t).ExpectNil(err)
+		test.S(t).ExpectEquals(len(addresses), 2)
+		test.S(t).ExpectEquals(addresses[0].String(), "http://localhost:1234/stats/pool/")
+		test.S(t).ExpectEquals(addresses[1].String(), "https://otherhost:5679")
+	}
+	{
 		c := &HAProxyConfigurationSettings{Addresses: "localhost"}
 		_, err := c.parseAddresses()
 		test.S(t).ExpectNotNil(err)
