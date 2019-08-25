@@ -6,6 +6,7 @@ package config
 
 import (
 	"fmt"
+	"net/url"
 	"os"
 	"strconv"
 	"strings"
@@ -20,14 +21,12 @@ func (h *HostPort) String() string {
 	return fmt.Sprintf("%s:%d", h.Host, h.Port)
 }
 
-type HAProxyConfigurationSettings struct {
-	Host      string
-	Port      int
-	Addresses string
-	PoolName  string
+func (h *HostPort) URL() *url.URL {
+	u, _ := url.Parse(fmt.Sprintf("http://%s:%d", h.Host, h.Port))
+	return u
 }
 
-func (settings *HAProxyConfigurationSettings) parseHostPort(address string) (hostPort *HostPort, err error) {
+func ParseHostPort(address string) (hostPort *HostPort, err error) {
 	tokens := strings.SplitN(address, ":", 2)
 	if len(tokens) != 2 {
 		return nil, fmt.Errorf("Cannot parse HostPort from %s. Expected format is host:port", address)
@@ -39,40 +38,59 @@ func (settings *HAProxyConfigurationSettings) parseHostPort(address string) (hos
 	}
 
 	return hostPort, nil
-
 }
 
-func (settings *HAProxyConfigurationSettings) parseAddresses() (addresses [](*HostPort), err error) {
+type HAProxyConfigurationSettings struct {
+	Host      string
+	Port      int
+	Addresses string
+	PoolName  string
+}
+
+func parseAddress(address string) (u *url.URL, err error) {
+	if hostPort, err := ParseHostPort(address); err == nil {
+		// covers the case for e.g. "my.host.name:1234", which has no scheme
+		return hostPort.URL(), nil
+	}
+	u, err = url.Parse(address)
+
+	if err != nil {
+		return u, err
+	}
+	if _, err := ParseHostPort(u.Host); err != nil {
+		return u, err
+	}
+	return u, nil
+}
+
+func (settings *HAProxyConfigurationSettings) parseAddresses() (addresses [](*url.URL), err error) {
 	tokens := strings.Split(settings.Addresses, ",")
 	for _, token := range tokens {
 		if token = strings.TrimSpace(token); token != "" {
-			hostPort, err := settings.parseHostPort(token)
+			u, err := parseAddress(token)
 			if err != nil {
 				return addresses, err
 			}
-			addresses = append(addresses, hostPort)
+			addresses = append(addresses, u)
 		}
 	}
 	return addresses, err
 }
 
-func (settings *HAProxyConfigurationSettings) GetProxyAddresses() [](*HostPort) {
+func (settings *HAProxyConfigurationSettings) GetProxyAddresses() (addresses [](*url.URL), err error) {
 	if settings.Host != "" && settings.Port > 0 {
-		h := &HostPort{Host: settings.Host, Port: settings.Port}
-		return [](*HostPort){h}
+		u := (&HostPort{Host: settings.Host, Port: settings.Port}).URL()
+		return [](*url.URL){u}, nil
 	}
-	addresses, err := settings.parseAddresses()
-	if err != nil {
-		return [](*HostPort){}
-	}
-	return addresses
+	return settings.parseAddresses()
 }
 
 func (settings *HAProxyConfigurationSettings) IsEmpty() bool {
 	if settings.PoolName == "" {
 		return true
 	}
-	return len(settings.GetProxyAddresses()) == 0
+	addresses, _ := settings.GetProxyAddresses()
+	return len(addresses) == 0
 }
 
 func (settings *HAProxyConfigurationSettings) postReadAdjustments() error {

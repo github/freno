@@ -34,15 +34,15 @@ func TestParseAddresses(t *testing.T) {
 		addresses, err := c.parseAddresses()
 		test.S(t).ExpectNil(err)
 		test.S(t).ExpectEquals(len(addresses), 1)
-		test.S(t).ExpectEquals(addresses[0].String(), "localhost:1234")
+		test.S(t).ExpectEquals(addresses[0].String(), "http://localhost:1234")
 	}
 	{
 		c := &HAProxyConfigurationSettings{Addresses: "localhost:1234,otherhost:5678"}
 		addresses, err := c.parseAddresses()
 		test.S(t).ExpectNil(err)
 		test.S(t).ExpectEquals(len(addresses), 2)
-		test.S(t).ExpectEquals(addresses[0].String(), "localhost:1234")
-		test.S(t).ExpectEquals(addresses[1].String(), "otherhost:5678")
+		test.S(t).ExpectEquals(addresses[0].String(), "http://localhost:1234")
+		test.S(t).ExpectEquals(addresses[1].String(), "http://otherhost:5678")
 	}
 	{
 		c := &HAProxyConfigurationSettings{Addresses: "localhost"}
@@ -69,32 +69,37 @@ func TestParseAddresses(t *testing.T) {
 func TestGetProxyAddresses(t *testing.T) {
 	{
 		c := &HAProxyConfigurationSettings{Addresses: ""}
-		addresses := c.GetProxyAddresses()
+		addresses, err := c.GetProxyAddresses()
+		test.S(t).ExpectNil(err)
 		test.S(t).ExpectEquals(len(addresses), 0)
 	}
 	{
 		c := &HAProxyConfigurationSettings{Addresses: ",,, , , , ,,"}
-		addresses := c.GetProxyAddresses()
+		addresses, err := c.GetProxyAddresses()
+		test.S(t).ExpectNil(err)
 		test.S(t).ExpectEquals(len(addresses), 0)
 	}
 	{
 		c := &HAProxyConfigurationSettings{Addresses: ",,, , , , ,localhost:1234 ,"}
-		addresses := c.GetProxyAddresses()
+		addresses, err := c.GetProxyAddresses()
+		test.S(t).ExpectNil(err)
 		test.S(t).ExpectEquals(len(addresses), 1)
-		test.S(t).ExpectEquals(addresses[0].String(), "localhost:1234")
+		test.S(t).ExpectEquals(addresses[0].String(), "http://localhost:1234")
 	}
 	{
 		c := &HAProxyConfigurationSettings{Addresses: "localhost:1234,otherhost:5678"}
-		addresses := c.GetProxyAddresses()
+		addresses, err := c.GetProxyAddresses()
+		test.S(t).ExpectNil(err)
 		test.S(t).ExpectEquals(len(addresses), 2)
-		test.S(t).ExpectEquals(addresses[0].String(), "localhost:1234")
-		test.S(t).ExpectEquals(addresses[1].String(), "otherhost:5678")
+		test.S(t).ExpectEquals(addresses[0].String(), "http://localhost:1234")
+		test.S(t).ExpectEquals(addresses[1].String(), "http://otherhost:5678")
 	}
 	{
 		c := &HAProxyConfigurationSettings{Host: "explicit", Port: 1000, Addresses: "localhost:1234,otherhost:5678"}
-		addresses := c.GetProxyAddresses()
+		addresses, err := c.GetProxyAddresses()
+		test.S(t).ExpectNil(err)
 		test.S(t).ExpectEquals(len(addresses), 1)
-		test.S(t).ExpectEquals(addresses[0].String(), "explicit:1000")
+		test.S(t).ExpectEquals(addresses[0].String(), "http://explicit:1000")
 	}
 }
 

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
@@ -129,11 +130,11 @@ func ParseCsvHosts(csv string, poolName string) (backendHosts [](*BackendHost), 
 }
 
 // Read will read HAProxy URI and return with the CSV text
-func Read(host string, port int) (csv string, err error) {
+func Read(u *url.URL) (csv string, err error) {
 	httpGetConcurrencyChan <- true
 	defer func() { <-httpGetConcurrencyChan }()
 
-	haproxyUrl := fmt.Sprintf("http://%s:%d/;csv;norefresh", host, port)
+	haproxyUrl := fmt.Sprintf("%s;csv;norefresh", u.String())
 
 	if cachedCSV, found := csvCache.Get(haproxyUrl); found {
 		return cachedCSV.(string), nil
