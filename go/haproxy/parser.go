@@ -129,12 +129,17 @@ func ParseCsvHosts(csv string, poolName string) (backendHosts [](*BackendHost), 
 	return ParseHosts(csvLines, poolName)
 }
 
+func toCSVUrl(u url.URL) *url.URL {
+	u.Path = fmt.Sprintf("%s;csv;norefresh", u.Path)
+	return &u
+}
+
 // Read will read HAProxy URI and return with the CSV text
 func Read(u *url.URL) (csv string, err error) {
 	httpGetConcurrencyChan <- true
 	defer func() { <-httpGetConcurrencyChan }()
 
-	haproxyUrl := fmt.Sprintf("%s;csv;norefresh", u.String())
+	haproxyUrl := toCSVUrl(*u).String()
 
 	if cachedCSV, found := csvCache.Get(haproxyUrl); found {
 		return cachedCSV.(string), nil
