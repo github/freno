@@ -6,6 +6,7 @@
 package haproxy
 
 import (
+	"net/url"
 	"reflect"
 	"testing"
 
@@ -79,6 +80,27 @@ statsctl,BACKEND,0,0,0,0,200,0,2788357,173364223,0,0,,0,0,0,0,UP,0,0,0,,0,103206
 
 func init() {
 	log.SetLevel(log.ERROR)
+}
+
+func TestToCsvUrl(t *testing.T) {
+	{
+		u, err := url.Parse("http://10.0.0.2:1234")
+		test.S(t).ExpectNil(err)
+		csvUrl := toCSVUrl(*u)
+		test.S(t).ExpectEquals(csvUrl.String(), "http://10.0.0.2:1234/;csv;norefresh")
+	}
+	{
+		u, err := url.Parse("http://10.0.0.2:1234/")
+		test.S(t).ExpectNil(err)
+		csvUrl := toCSVUrl(*u)
+		test.S(t).ExpectEquals(csvUrl.String(), "http://10.0.0.2:1234/;csv;norefresh")
+	}
+	{
+		u, err := url.Parse("http://10.0.0.2:1234/stats/pool")
+		test.S(t).ExpectNil(err)
+		csvUrl := toCSVUrl(*u)
+		test.S(t).ExpectEquals(csvUrl.String(), "http://10.0.0.2:1234/stats/pool;csv;norefresh")
+	}
 }
 
 func TestParseHeader(t *testing.T) {
