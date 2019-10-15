@@ -29,6 +29,9 @@ type API interface {
 	WriteCheck(w http.ResponseWriter, r *http.Request, _ httprouter.Params)
 	WriteCheckIfExists(w http.ResponseWriter, r *http.Request, _ httprouter.Params)
 	ReadCheck(w http.ResponseWriter, r *http.Request, _ httprouter.Params)
+	SkipHost(w http.ResponseWriter, r *http.Request, _ httprouter.Params)
+	RecoverHost(w http.ResponseWriter, r *http.Request, _ httprouter.Params)
+	SkippedHosts(w http.ResponseWriter, r *http.Request, _ httprouter.Params)
 	AggregatedMetrics(w http.ResponseWriter, r *http.Request, _ httprouter.Params)
 	MetricsHealth(w http.ResponseWriter, r *http.Request, _ httprouter.Params)
 	ThrottleApp(w http.ResponseWriter, r *http.Request, _ httprouter.Params)
@@ -188,6 +191,43 @@ func (api *APIImpl) ReadCheck(w http.ResponseWriter, r *http.Request, ps httprou
 	}
 }
 
+// SkipHost Add specific host to ignore host list
+func (api *APIImpl) SkipHost(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
+	hostName := ps.ByName("hostName")
+	config.Settings().Stores.MySQL.AddIgnoreHost(hostName)
+	err := config.Instance().Save()
+	if err != nil {
+		config.Settings().Stores.MySQL.RemoveIgnoreHost(hostName)
+		api.respondGeneric(w, r, err)
+	} else {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(NewGeneralResponse(http.StatusOK, hostName))
+	}
+}
+
+// RecoverHost Remove specific host from ignore host list
+func (api *APIImpl) RecoverHost(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
+	hostName := ps.ByName("hostName")
+	config.Settings().Stores.MySQL.RemoveIgnoreHost(hostName)
+	err := config.Instance().Save()
+	if err != nil {
+		config.Settings().Stores.MySQL.AddIgnoreHost(hostName)
+		api.respondGeneric(w, r, err)
+	} else {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(NewGeneralResponse(http.StatusOK, hostName))
+	}
+}
+
+// SkippedHosts List all ignored hosts a specific host
+func (api *APIImpl) SkippedHosts(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
+	type HostList struct {
+		Hosts []string
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(HostList{Hosts: config.Settings().Stores.MySQL.IgnoreHosts})
+}
+
 // AggregatedMetrics returns a snapshot of all current aggregated metrics
 func (api *APIImpl) AggregatedMetrics(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 	brief := (r.URL.Query().Get("brief") == "true")
@@ -340,6 +380,10 @@ func ConfigureRoutes(api API) *httprouter.Router {
 	register(router, "/check/:app/:storeType/:storeName", api.WriteCheck)
 	register(router, "/check-if-exists/:app/:storeType/:storeName", api.WriteCheckIfExists)
 	register(router, "/check-read/:app/:storeType/:storeName/:threshold", api.ReadCheck)
+
+	register(router, "/skip-host/:hostName", api.SkipHost)
+	register(router, "/skipped-hosts/", api.SkippedHosts)
+	register(router, "/recover-host/:hostName", api.RecoverHost)
 
 	register(router, "/aggregated-metrics", api.AggregatedMetrics)
 	register(router, "/metrics-health", api.MetricsHealth)

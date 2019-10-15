@@ -117,3 +117,23 @@ func (settings *MySQLConfigurationSettings) postReadAdjustments() error {
 	}
 	return nil
 }
+
+func (settings *MySQLConfigurationSettings) AddIgnoreHost(hostName string) {
+	for _, ignoredHost := range settings.IgnoreHosts {
+        if ignoredHost == hostName {
+			return
+		}
+    }
+    settings.IgnoreHosts = append(settings.IgnoreHosts, hostName)
+}
+
+func (settings *MySQLConfigurationSettings) RemoveIgnoreHost(hostName string) {
+	newIngoredHosts := []string{}
+	for _, ignoredHost := range settings.IgnoreHosts {
+        if ignoredHost == hostName {
+			continue
+		}
+		newIngoredHosts = append(newIngoredHosts, ignoredHost)
+    }
+	settings.IgnoreHosts = newIngoredHosts
+}
