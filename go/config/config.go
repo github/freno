@@ -81,6 +81,27 @@ func (config *Configuration) Read(fileNames ...string) error {
 	return nil
 }
 
+func (config *Configuration) Save() error {
+	fileName := config.readFileNames[len(config.readFileNames)-1]
+	file, err := os.OpenFile(fileName, os.O_WRONLY, 0644)
+	if err != nil {
+		return log.Errorf("Cannot read config file %s, error was: %s", fileName, err)
+	}
+	defer file.Close()
+
+	enconder, err := json.Marshal(config.settings)
+	if err != nil {
+		return err
+	}
+	_, err = file.Write(enconder)
+	if err == nil {
+		log.Infof("Config save from %s", fileName)
+	} else {
+		return fmt.Errorf("Cannot write config file %s, error was: %s", fileName, err)
+	}
+	return nil
+}
+
 // Reload re-reads configuration from last used files
 func (config *Configuration) Reload() error {
 	return config.Read(config.readFileNames...)
