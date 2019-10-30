@@ -97,6 +97,10 @@ Notes:
 
   However this check is known to be useful, at least in one common scenario: a monitoring of a MySQL cluster based on replication lag. In such case, we may have write requests followed by read requests. We may happen to know the elapsed time between write & read. As an example, say `2.5s` have passed between the write and read. The check `/check-read/archive/mysql/main1/2.5` confirms or denies that relevant replicas are up-to-date for the `2.5s` elapsed time. We can therefore read from the replicas and safely expect to find the data we wrote `2.5s` ago on the master.
 
+- `/check-if-exists/<app>/<store-type>/<store-name>`: like `/check`, but if the metric is unknown (e.g. `<store-name>` not in `freno`'s configuration), return `200 OK`. This is useful for hybrid systems where some metrics need to be strictly controlled, and some not. `freno` would probe the important stores, and still can serve requests for all stores.
+
+- `/check-read-if-exists/<app>/<store-type>/<store-name>/<threshold>`: like `/check-read`, but if the metric is unknown (e.g. `<store-name>` not in `freno`'s configuration), return `200 OK`. This is useful for hybrid systems where some metrics need to be strictly controlled, and some not. `freno` would probe the important stores, and still can serve requests for all stores.
+
 ### Other requests
 
 - `/help`: show all supported request paths

@@ -29,6 +29,7 @@ type API interface {
 	WriteCheck(w http.ResponseWriter, r *http.Request, _ httprouter.Params)
 	WriteCheckIfExists(w http.ResponseWriter, r *http.Request, _ httprouter.Params)
 	ReadCheck(w http.ResponseWriter, r *http.Request, _ httprouter.Params)
+	ReadCheckIfExists(w http.ResponseWriter, r *http.Request, _ httprouter.Params)
 	AggregatedMetrics(w http.ResponseWriter, r *http.Request, _ httprouter.Params)
 	MetricsHealth(w http.ResponseWriter, r *http.Request, _ httprouter.Params)
 	ThrottleApp(w http.ResponseWriter, r *http.Request, _ httprouter.Params)
@@ -179,13 +180,25 @@ func (api *APIImpl) WriteCheckIfExists(w http.ResponseWriter, r *http.Request, p
 	api.check(w, r, ps, okIfNotExistsFlags)
 }
 
-// ReadCheck
-func (api *APIImpl) ReadCheck(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
+func (api *APIImpl) readCheck(w http.ResponseWriter, r *http.Request, ps httprouter.Params, flags *throttle.CheckFlags) {
 	if overrideThreshold, err := strconv.ParseFloat(ps.ByName("threshold"), 64); err != nil {
 		api.respondGeneric(w, r, err)
 	} else {
-		api.check(w, r, ps, &throttle.CheckFlags{ReadCheck: true, OverrideThreshold: overrideThreshold})
+		flags.ReadCheck = true
+		flags.OverrideThreshold = overrideThreshold
+		api.check(w, r, ps, flags)
 	}
+}
+
+// ReadCheck
+func (api *APIImpl) ReadCheck(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
+	api.readCheck(w, r, ps, &throttle.CheckFlags{})
+}
+
+// WriteCheckIfExists checks for a metric, but reports an OK if the metric does not exist.
+// If the metric does exist, then all usual checks are made.
+func (api *APIImpl) ReadCheckIfExists(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
+	api.readCheck(w, r, ps, &throttle.CheckFlags{OKIfNotExists: true})
 }
 
 // AggregatedMetrics returns a snapshot of all current aggregated metrics
@@ -340,6 +353,7 @@ func ConfigureRoutes(api API) *httprouter.Router {
 	register(router, "/check/:app/:storeType/:storeName", api.WriteCheck)
 	register(router, "/check-if-exists/:app/:storeType/:storeName", api.WriteCheckIfExists)
 	register(router, "/check-read/:app/:storeType/:storeName/:threshold", api.ReadCheck)
+	register(router, "/check-read-if-exists/:app/:storeType/:storeName/:threshold", api.ReadCheckIfExists)
 
 	register(router, "/aggregated-metrics", api.AggregatedMetrics)
 	register(router, "/metrics-health", api.MetricsHealth)
