@@ -3,3 +3,5 @@ bin/
 main
 conf/freno.local.conf.json
 .vendor/
+server.crt
+server.key

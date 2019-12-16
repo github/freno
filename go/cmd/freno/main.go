@@ -1,6 +1,7 @@
 package main
 
 import (
+	"crypto/tls"
 	"flag"
 	"fmt"
 	gohttp "net/http"
@@ -9,6 +10,7 @@ import (
 	"github.com/github/freno/go/config"
 	"github.com/github/freno/go/group"
 	"github.com/github/freno/go/http"
+
 	"github.com/github/freno/go/throttle"
 	"github.com/outbrain/golib/log"
 )
@@ -122,8 +124,55 @@ func httpServe() error {
 	api := http.NewAPIImpl(throttlerCheck, consensusServiceProvider.GetConsensusService())
 	router := http.ConfigureRoutes(api)
 	port := config.Settings().ListenPort
-	log.Infof("Starting server in port %d", port)
-	return gohttp.ListenAndServe(fmt.Sprintf(":%d", port), router)
+
+	if config.Settings().UseSSL {
+		log.Infof("Starting HTTPS server on port %d", port)
+
+		keyFile := config.Settings().SSLPrivateKeyFile
+		cert := config.Settings().SSLCertFile
+		log.Infof("Using SSLCertFile: %s", cert)
+		log.Infof("Using SSLPrivateKeyFile: %s", keyFile)
+
+		tlsConfig := NewTLSConfig(config.Settings())
+		srv := &gohttp.Server{
+			Addr:         fmt.Sprintf(":%d", port),
+			Handler:      router,
+			TLSConfig:    tlsConfig,
+			TLSNextProto: make(map[string]func(*gohttp.Server, *tls.Conn, gohttp.Handler), 0),
+		}
+		if err = srv.ListenAndServeTLS(cert, keyFile); err != nil {
+			log.Fatale(err)
+		}
+	} else {
+		log.Infof("Starting HTTP server on port %d", port)
+		err := gohttp.ListenAndServe(fmt.Sprintf(":%d", port), router)
+		if err != nil {
+			log.Fatale(err)
+		}
+	}
+	return nil
+}
+
+// NewTLSConfig returns an initialized TLS configuration
+func NewTLSConfig(conf *config.ConfigurationSettings) *tls.Config {
+	return &tls.Config{
+		MinVersion:               tls.VersionTLS12,
+		CurvePreferences:         []tls.CurveID{tls.CurveP521, tls.CurveP384, tls.CurveP256},
+		PreferServerCipherSuites: true,
+		CipherSuites: []uint16{
+			tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
+			tls.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
+			tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
+			tls.TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,
+			tls.TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA,
+			tls.TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA,
+			tls.TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA,
+			tls.TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA,
+			tls.TLS_RSA_WITH_AES_128_CBC_SHA,
+			tls.TLS_RSA_WITH_AES_256_CBC_SHA,
+		},
+		InsecureSkipVerify: conf.SSLSkipVerify,
+	}
 }
 
 func printHelp() {

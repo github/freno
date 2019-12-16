@@ -109,6 +109,10 @@ type ConfigurationSettings struct {
 	MemcacheServers      []string // if given, freno will report to aggregated values to given memcache
 	MemcachePath         string   // use as prefix to metric path in memcache key, e.g. if `MemcachePath` is "myprefix" the key would be "myprefix/mysql/maincluster". Default: "freno"
 	Stores               StoresSettings
+	UseSSL               bool
+	SSLCertFile          string
+	SSLPrivateKeyFile    string
+	SSLSkipVerify        bool
 }
 
 func newConfigurationSettings() *ConfigurationSettings {
