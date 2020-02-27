@@ -3,3 +3,4 @@ bin/
 main
 conf/freno.local.conf.json
 .vendor/
+.idea/
