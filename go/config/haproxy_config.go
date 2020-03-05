@@ -27,6 +27,14 @@ func (h *HostPort) URL() *url.URL {
 }
 
 func ParseHostPort(address string) (hostPort *HostPort, err error) {
+	if !strings.Contains(address, ":") {
+		if address == "" {
+			return &HostPort{address, 80}, fmt.Errorf("Invalid host address: %s", address)
+		}
+
+		return &HostPort{Host: address, Port: 80}, nil
+	}
+
 	tokens := strings.SplitN(address, ":", 2)
 	if len(tokens) != 2 {
 		return nil, fmt.Errorf("Cannot parse HostPort from %s. Expected format is host:port", address)
