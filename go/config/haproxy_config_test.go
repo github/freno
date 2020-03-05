@@ -71,7 +71,7 @@ func TestParseAddresses(t *testing.T) {
 	{
 		c := &HAProxyConfigurationSettings{Addresses: "localhost"}
 		_, err := c.parseAddresses()
-		test.S(t).ExpectNotNil(err)
+		test.S(t).ExpectNil(err)
 	}
 	{
 		c := &HAProxyConfigurationSettings{Addresses: "localhost:"}

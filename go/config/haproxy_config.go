@@ -28,6 +28,10 @@ func (h *HostPort) URL() *url.URL {
 
 func ParseHostPort(address string) (hostPort *HostPort, err error) {
 	if !strings.Contains(address, ":") {
+		if address == "" {
+			return &HostPort{address, 80}, fmt.Errorf("Invalid host address: %s", address)
+		}
+
 		return &HostPort{Host: address, Port: 80}, nil
 	}
 
