@@ -5,7 +5,7 @@ import (
 	"io"
 	"time"
 
-	"github.com/hashicorp/raft"
+	"github.com/github/freno/internal/raft"
 	"github.com/outbrain/golib/log"
 )
 
