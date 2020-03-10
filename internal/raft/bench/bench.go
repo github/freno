@@ -6,7 +6,7 @@ package raftbench
 // makes comparing backend performance easier by sharing the tests.
 
 import (
-	"github.com/hashicorp/raft"
+	"github.com/github/freno/internal/raft"
 	"testing"
 )
 
