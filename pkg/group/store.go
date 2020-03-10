@@ -19,7 +19,7 @@ import (
 	"github.com/github/freno/pkg/throttle"
 
 	"github.com/github/freno/internal/raft"
-	"github.com/hashicorp/raft-boltdb"
+	"github.com/github/freno/internal/raft-boltdb"
 	"github.com/outbrain/golib/log"
 	metrics "github.com/rcrowley/go-metrics"
 )

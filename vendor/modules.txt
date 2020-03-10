@@ -16,8 +16,7 @@ github.com/hashicorp/go-msgpack/codec
 github.com/hashicorp/golang-lru/simplelru
 # github.com/hashicorp/raft v1.1.2
 github.com/hashicorp/raft
-# github.com/hashicorp/raft-boltdb v0.0.0-20191021154308-4207f1bf0617
-github.com/hashicorp/raft-boltdb
+github.com/hashicorp/raft/bench
 # github.com/julienschmidt/httprouter v1.3.0
 github.com/julienschmidt/httprouter
 # github.com/outbrain/golib v0.0.0-20180830062331-ab954725f502
