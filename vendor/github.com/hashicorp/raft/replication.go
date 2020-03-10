@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/armon/go-metrics"
@@ -24,32 +25,68 @@ var (
 	ErrPipelineReplicationNotSupported = errors.New("pipeline replication not supported")
 )
 
+// followerReplication is in charge of sending snapshots and log entries from
+// this leader during this particular term to a remote follower.
 type followerReplication struct {
-	peer     string
-	inflight *inflight
+	// currentTerm and nextIndex must be kept at the top of the struct so
+	// they're 64 bit aligned which is a requirement for atomic ops on 32 bit
+	// platforms.
 
-	stopCh    chan uint64
+	// currentTerm is the term of this leader, to be included in AppendEntries
+	// requests.
+	currentTerm uint64
+
+	// nextIndex is the index of the next log entry to send to the follower,
+	// which may fall past the end of the log.
+	nextIndex uint64
+
+	// peer contains the network address and ID of the remote follower.
+	peer Server
+
+	// commitment tracks the entries acknowledged by followers so that the
+	// leader's commit index can advance. It is updated on successful
+	// AppendEntries responses.
+	commitment *commitment
+
+	// stopCh is notified/closed when this leader steps down or the follower is
+	// removed from the cluster. In the follower removed case, it carries a log
+	// index; replication should be attempted with a best effort up through that
+	// index, before exiting.
+	stopCh chan uint64
+
+	// triggerCh is notified every time new entries are appended to the log.
 	triggerCh chan struct{}
 
-	currentTerm uint64
-	matchIndex  uint64
-	nextIndex   uint64
+	// triggerDeferErrorCh is used to provide a backchannel. By sending a
+	// deferErr, the sender can be notifed when the replication is done.
+	triggerDeferErrorCh chan *deferError
 
-	lastContact     time.Time
+	// lastContact is updated to the current time whenever any response is
+	// received from the follower (successful or not). This is used to check
+	// whether the leader should step down (Raft.checkLeaderLease()).
+	lastContact time.Time
+	// lastContactLock protects 'lastContact'.
 	lastContactLock sync.RWMutex
 
+	// failures counts the number of failed RPCs since the last success, which is
+	// used to apply backoff.
 	failures uint64
 
-	notifyCh   chan struct{}
-	notify     []*verifyFuture
+	// notifyCh is notified to send out a heartbeat, which is used to check that
+	// this server is still leader.
+	notifyCh chan struct{}
+	// notify is a map of futures to be resolved upon receipt of an
+	// acknowledgement, then cleared from this map.
+	notify map[*verifyFuture]struct{}
+	// notifyLock protects 'notify'.
 	notifyLock sync.Mutex
 
 	// stepDown is used to indicate to the leader that we
 	// should step down based on information from a follower.
 	stepDown chan struct{}
 
-	// allowPipeline is used to control it seems like
-	// pipeline replication should be enabled.
+	// allowPipeline is used to determine when to pipeline the AppendEntries RPCs.
+	// It is private to this replication goroutine.
 	allowPipeline bool
 }
 
@@ -59,13 +96,20 @@ func (s *followerReplication) notifyAll(leader bool) {
 	// Clear the waiting notifies minimizing lock time
 	s.notifyLock.Lock()
 	n := s.notify
-	s.notify = nil
+	s.notify = make(map[*verifyFuture]struct{})
 	s.notifyLock.Unlock()
 
 	// Submit our votes
-	for _, v := range n {
+	for v := range n {
 		v.vote(leader)
 	}
+}
+
+// cleanNotify is used to delete notify, .
+func (s *followerReplication) cleanNotify(v *verifyFuture) {
+	s.notifyLock.Lock()
+	delete(s.notify, v)
+	s.notifyLock.Unlock()
 }
 
 // LastContact returns the time of last contact.
@@ -83,8 +127,8 @@ func (s *followerReplication) setLastContact() {
 	s.lastContactLock.Unlock()
 }
 
-// replicate is a long running routine that is used to manage
-// the process of replicating logs to our followers.
+// replicate is a long running routine that replicates log entries to a single
+// follower.
 func (r *Raft) replicate(s *followerReplication) {
 	// Start an async heartbeating routing
 	stopHeartbeat := make(chan struct{})
@@ -101,9 +145,22 @@ RPC:
 				r.replicateTo(s, maxIndex)
 			}
 			return
+		case deferErr := <-s.triggerDeferErrorCh:
+			lastLogIdx, _ := r.getLastLog()
+			shouldStop = r.replicateTo(s, lastLogIdx)
+			if !shouldStop {
+				deferErr.respond(nil)
+			} else {
+				deferErr.respond(fmt.Errorf("replication failed"))
+			}
 		case <-s.triggerCh:
 			lastLogIdx, _ := r.getLastLog()
 			shouldStop = r.replicateTo(s, lastLogIdx)
+		// This is _not_ our heartbeat mechanism but is to ensure
+		// followers quickly learn the leader's commit index when
+		// raft commits stop flowing naturally. The actual heartbeats
+		// can't do this to keep them unblocked by disk IO on the
+		// follower. See https://github.com/hashicorp/raft/issues/282.
 		case <-randomTimeout(r.conf.CommitTimeout):
 			lastLogIdx, _ := r.getLastLog()
 			shouldStop = r.replicateTo(s, lastLogIdx)
@@ -125,13 +182,14 @@ PIPELINE:
 	// to standard mode on failure.
 	if err := r.pipelineReplicate(s); err != nil {
 		if err != ErrPipelineReplicationNotSupported {
-			r.logger.Printf("[ERR] raft: Failed to start pipeline replication to %s: %s", s.peer, err)
+			r.logger.Error("failed to start pipeline replication to", "peer", s.peer, "error", err)
 		}
 	}
 	goto RPC
 }
 
-// replicateTo is used to replicate the logs up to a given last index.
+// replicateTo is a helper to replicate(), used to replicate the logs up to a
+// given last index.
 // If the follower log is behind, we take care to bring them up to date.
 func (r *Raft) replicateTo(s *followerReplication, lastIndex uint64) (shouldStop bool) {
 	// Create the base request
@@ -148,7 +206,7 @@ START:
 	}
 
 	// Setup the request
-	if err := r.setupAppendEntries(s, &req, s.nextIndex, lastIndex); err == ErrLogNotFound {
+	if err := r.setupAppendEntries(s, &req, atomic.LoadUint64(&s.nextIndex), lastIndex); err == ErrLogNotFound {
 		goto SEND_SNAP
 	} else if err != nil {
 		return
@@ -156,12 +214,12 @@ START:
 
 	// Make the RPC call
 	start = time.Now()
-	if err := r.trans.AppendEntries(s.peer, &req, &resp); err != nil {
-		r.logger.Printf("[ERR] raft: Failed to AppendEntries to %v: %v", s.peer, err)
+	if err := r.trans.AppendEntries(s.peer.ID, s.peer.Address, &req, &resp); err != nil {
+		r.logger.Error("failed to appendEntries to", "peer", s.peer, "error", err)
 		s.failures++
 		return
 	}
-	appendStats(s.peer, start, float32(len(req.Entries)))
+	appendStats(string(s.peer.ID), start, float32(len(req.Entries)))
 
 	// Check for a newer term, stop running
 	if resp.Term > req.Term {
@@ -181,19 +239,29 @@ START:
 		s.failures = 0
 		s.allowPipeline = true
 	} else {
-		s.nextIndex = max(min(s.nextIndex-1, resp.LastLog+1), 1)
-		s.matchIndex = s.nextIndex - 1
+		atomic.StoreUint64(&s.nextIndex, max(min(s.nextIndex-1, resp.LastLog+1), 1))
 		if resp.NoRetryBackoff {
 			s.failures = 0
 		} else {
 			s.failures++
 		}
-		r.logger.Printf("[WARN] raft: AppendEntries to %v rejected, sending older logs (next: %d)", s.peer, s.nextIndex)
+		r.logger.Warn("appendEntries rejected, sending older logs", "peer", s.peer, "next", atomic.LoadUint64(&s.nextIndex))
 	}
 
 CHECK_MORE:
+	// Poll the stop channel here in case we are looping and have been asked
+	// to stop, or have stepped down as leader. Even for the best effort case
+	// where we are asked to replicate to a given index and then shutdown,
+	// it's better to not loop in here to send lots of entries to a straggler
+	// that's leaving the cluster anyways.
+	select {
+	case <-s.stopCh:
+		return true
+	default:
+	}
+
 	// Check if there are more logs to replicate
-	if s.nextIndex <= lastIndex {
+	if atomic.LoadUint64(&s.nextIndex) <= lastIndex {
 		goto START
 	}
 	return
@@ -204,7 +272,7 @@ SEND_SNAP:
 	if stop, err := r.sendLatestSnapshot(s); stop {
 		return true
 	} else if err != nil {
-		r.logger.Printf("[ERR] raft: Failed to send snapshot to %v: %v", s.peer, err)
+		r.logger.Error("failed to send snapshot to", "peer", s.peer, "error", err)
 		return
 	}
 
@@ -218,7 +286,7 @@ func (r *Raft) sendLatestSnapshot(s *followerReplication) (bool, error) {
 	// Get the snapshots
 	snapshots, err := r.snapshots.List()
 	if err != nil {
-		r.logger.Printf("[ERR] raft: Failed to list snapshots: %v", err)
+		r.logger.Error("failed to list snapshots", "error", err)
 		return false, err
 	}
 
@@ -231,30 +299,34 @@ func (r *Raft) sendLatestSnapshot(s *followerReplication) (bool, error) {
 	snapID := snapshots[0].ID
 	meta, snapshot, err := r.snapshots.Open(snapID)
 	if err != nil {
-		r.logger.Printf("[ERR] raft: Failed to open snapshot %v: %v", snapID, err)
+		r.logger.Error("failed to open snapshot", "id", snapID, "error", err)
 		return false, err
 	}
 	defer snapshot.Close()
 
 	// Setup the request
 	req := InstallSnapshotRequest{
-		Term:         s.currentTerm,
-		Leader:       r.trans.EncodePeer(r.localAddr),
-		LastLogIndex: meta.Index,
-		LastLogTerm:  meta.Term,
-		Peers:        meta.Peers,
-		Size:         meta.Size,
+		RPCHeader:          r.getRPCHeader(),
+		SnapshotVersion:    meta.Version,
+		Term:               s.currentTerm,
+		Leader:             r.trans.EncodePeer(r.localID, r.localAddr),
+		LastLogIndex:       meta.Index,
+		LastLogTerm:        meta.Term,
+		Peers:              meta.Peers,
+		Size:               meta.Size,
+		Configuration:      EncodeConfiguration(meta.Configuration),
+		ConfigurationIndex: meta.ConfigurationIndex,
 	}
 
 	// Make the call
 	start := time.Now()
 	var resp InstallSnapshotResponse
-	if err := r.trans.InstallSnapshot(s.peer, &req, &resp, snapshot); err != nil {
-		r.logger.Printf("[ERR] raft: Failed to install snapshot %v: %v", snapID, err)
+	if err := r.trans.InstallSnapshot(s.peer.ID, s.peer.Address, &req, &resp, snapshot); err != nil {
+		r.logger.Error("failed to install snapshot", "id", snapID, "error", err)
 		s.failures++
 		return false, err
 	}
-	metrics.MeasureSince([]string{"raft", "replication", "installSnapshot", s.peer}, start)
+	metrics.MeasureSince([]string{"raft", "replication", "installSnapshot", string(s.peer.ID)}, start)
 
 	// Check for a newer term, stop running
 	if resp.Term > req.Term {
@@ -267,12 +339,9 @@ func (r *Raft) sendLatestSnapshot(s *followerReplication) (bool, error) {
 
 	// Check for success
 	if resp.Success {
-		// Mark any inflight logs as committed
-		s.inflight.CommitRange(s.matchIndex+1, meta.Index)
-
 		// Update the indexes
-		s.matchIndex = meta.Index
-		s.nextIndex = s.matchIndex + 1
+		atomic.StoreUint64(&s.nextIndex, meta.Index+1)
+		s.commitment.match(s.peer.ID, meta.Index)
 
 		// Clear any failures
 		s.failures = 0
@@ -281,7 +350,7 @@ func (r *Raft) sendLatestSnapshot(s *followerReplication) (bool, error) {
 		s.notifyAll(true)
 	} else {
 		s.failures++
-		r.logger.Printf("[WARN] raft: InstallSnapshot to %v rejected", s.peer)
+		r.logger.Warn("installSnapshot rejected to", "peer", s.peer)
 	}
 	return false, nil
 }
@@ -292,8 +361,9 @@ func (r *Raft) sendLatestSnapshot(s *followerReplication) (bool, error) {
 func (r *Raft) heartbeat(s *followerReplication, stopCh chan struct{}) {
 	var failures uint64
 	req := AppendEntriesRequest{
-		Term:   s.currentTerm,
-		Leader: r.trans.EncodePeer(r.localAddr),
+		RPCHeader: r.getRPCHeader(),
+		Term:      s.currentTerm,
+		Leader:    r.trans.EncodePeer(r.localID, r.localAddr),
 	}
 	var resp AppendEntriesResponse
 	for {
@@ -306,8 +376,8 @@ func (r *Raft) heartbeat(s *followerReplication, stopCh chan struct{}) {
 		}
 
 		start := time.Now()
-		if err := r.trans.AppendEntries(s.peer, &req, &resp); err != nil {
-			r.logger.Printf("[ERR] raft: Failed to heartbeat to %v: %v", s.peer, err)
+		if err := r.trans.AppendEntries(s.peer.ID, s.peer.Address, &req, &resp); err != nil {
+			r.logger.Error("failed to heartbeat to", "peer", s.peer.Address, "error", err)
 			failures++
 			select {
 			case <-time.After(backoff(failureWait, failures, maxFailureScale)):
@@ -316,7 +386,7 @@ func (r *Raft) heartbeat(s *followerReplication, stopCh chan struct{}) {
 		} else {
 			s.setLastContact()
 			failures = 0
-			metrics.MeasureSince([]string{"raft", "replication", "heartbeat", s.peer}, start)
+			metrics.MeasureSince([]string{"raft", "replication", "heartbeat", string(s.peer.ID)}, start)
 			s.notifyAll(resp.Success)
 		}
 	}
@@ -328,15 +398,15 @@ func (r *Raft) heartbeat(s *followerReplication, stopCh chan struct{}) {
 // back to the standard replication which can handle more complex situations.
 func (r *Raft) pipelineReplicate(s *followerReplication) error {
 	// Create a new pipeline
-	pipeline, err := r.trans.AppendEntriesPipeline(s.peer)
+	pipeline, err := r.trans.AppendEntriesPipeline(s.peer.ID, s.peer.Address)
 	if err != nil {
 		return err
 	}
 	defer pipeline.Close()
 
 	// Log start and stop of pipeline
-	r.logger.Printf("[INFO] raft: pipelining replication to peer %v", s.peer)
-	defer r.logger.Printf("[INFO] raft: aborting pipeline replication to peer %v", s.peer)
+	r.logger.Info("pipelining replication", "peer", s.peer)
+	defer r.logger.Info("aborting pipeline replication", "peer", s.peer)
 
 	// Create a shutdown and finish channel
 	stopCh := make(chan struct{})
@@ -346,7 +416,7 @@ func (r *Raft) pipelineReplicate(s *followerReplication) error {
 	r.goFunc(func() { r.pipelineDecode(s, pipeline, stopCh, finishCh) })
 
 	// Start pipeline sends at the last good nextIndex
-	nextIndex := s.nextIndex
+	nextIndex := atomic.LoadUint64(&s.nextIndex)
 
 	shouldStop := false
 SEND:
@@ -355,10 +425,19 @@ SEND:
 		case <-finishCh:
 			break SEND
 		case maxIndex := <-s.stopCh:
+			// Make a best effort to replicate up to this index
 			if maxIndex > 0 {
 				r.pipelineSend(s, pipeline, &nextIndex, maxIndex)
 			}
 			break SEND
+		case deferErr := <-s.triggerDeferErrorCh:
+			lastLogIdx, _ := r.getLastLog()
+			shouldStop = r.pipelineSend(s, pipeline, &nextIndex, lastLogIdx)
+			if !shouldStop {
+				deferErr.respond(nil)
+			} else {
+				deferErr.respond(fmt.Errorf("replication failed"))
+			}
 		case <-s.triggerCh:
 			lastLogIdx, _ := r.getLastLog()
 			shouldStop = r.pipelineSend(s, pipeline, &nextIndex, lastLogIdx)
@@ -377,7 +456,8 @@ SEND:
 	return nil
 }
 
-// pipelineSend is used to send data over a pipeline.
+// pipelineSend is used to send data over a pipeline. It is a helper to
+// pipelineReplicate.
 func (r *Raft) pipelineSend(s *followerReplication, p AppendPipeline, nextIdx *uint64, lastIndex uint64) (shouldStop bool) {
 	// Create a new append request
 	req := new(AppendEntriesRequest)
@@ -387,14 +467,14 @@ func (r *Raft) pipelineSend(s *followerReplication, p AppendPipeline, nextIdx *u
 
 	// Pipeline the append entries
 	if _, err := p.AppendEntries(req, new(AppendEntriesResponse)); err != nil {
-		r.logger.Printf("[ERR] raft: Failed to pipeline AppendEntries to %v: %v", s.peer, err)
+		r.logger.Error("failed to pipeline appendEntries", "peer", s.peer, "error", err)
 		return true
 	}
 
 	// Increase the next send log to avoid re-sending old logs
 	if n := len(req.Entries); n > 0 {
 		last := req.Entries[n-1]
-		*nextIdx = last.Index + 1
+		atomic.StoreUint64(nextIdx, last.Index+1)
 	}
 	return false
 }
@@ -407,7 +487,7 @@ func (r *Raft) pipelineDecode(s *followerReplication, p AppendPipeline, stopCh, 
 		select {
 		case ready := <-respCh:
 			req, resp := ready.Request(), ready.Response()
-			appendStats(s.peer, ready.Start(), float32(len(req.Entries)))
+			appendStats(string(s.peer.ID), ready.Start(), float32(len(req.Entries)))
 
 			// Check for a newer term, stop running
 			if resp.Term > req.Term {
@@ -433,8 +513,9 @@ func (r *Raft) pipelineDecode(s *followerReplication, p AppendPipeline, stopCh, 
 
 // setupAppendEntries is used to setup an append entries request.
 func (r *Raft) setupAppendEntries(s *followerReplication, req *AppendEntriesRequest, nextIndex, lastIndex uint64) error {
+	req.RPCHeader = r.getRPCHeader()
 	req.Term = s.currentTerm
-	req.Leader = r.trans.EncodePeer(r.localAddr)
+	req.Leader = r.trans.EncodePeer(r.localID, r.localAddr)
 	req.LeaderCommitIndex = r.getCommitIndex()
 	if err := r.setPreviousLog(req, nextIndex); err != nil {
 		return err
@@ -462,8 +543,7 @@ func (r *Raft) setPreviousLog(req *AppendEntriesRequest, nextIndex uint64) error
 	} else {
 		var l Log
 		if err := r.logs.GetLog(nextIndex-1, &l); err != nil {
-			r.logger.Printf("[ERR] raft: Failed to get log at index %d: %v",
-				nextIndex-1, err)
+			r.logger.Error("failed to get log", "index", nextIndex-1, "error", err)
 			return err
 		}
 
@@ -482,7 +562,7 @@ func (r *Raft) setNewLogs(req *AppendEntriesRequest, nextIndex, lastIndex uint64
 	for i := nextIndex; i <= maxIndex; i++ {
 		oldLog := new(Log)
 		if err := r.logs.GetLog(i, oldLog); err != nil {
-			r.logger.Printf("[ERR] raft: Failed to get log at index %d: %v", i, err)
+			r.logger.Error("failed to get log", "index", i, "error", err)
 			return err
 		}
 		req.Entries = append(req.Entries, oldLog)
@@ -498,23 +578,20 @@ func appendStats(peer string, start time.Time, logs float32) {
 
 // handleStaleTerm is used when a follower indicates that we have a stale term.
 func (r *Raft) handleStaleTerm(s *followerReplication) {
-	r.logger.Printf("[ERR] raft: peer %v has newer term, stopping replication", s.peer)
+	r.logger.Error("peer has newer term, stopping replication", "peer", s.peer)
 	s.notifyAll(false) // No longer leader
 	asyncNotifyCh(s.stepDown)
 }
 
-// updateLastAppended is used to update follower replication state after a successful
-// AppendEntries RPC.
+// updateLastAppended is used to update follower replication state after a
+// successful AppendEntries RPC.
+// TODO: This isn't used during InstallSnapshot, but the code there is similar.
 func updateLastAppended(s *followerReplication, req *AppendEntriesRequest) {
 	// Mark any inflight logs as committed
 	if logs := req.Entries; len(logs) > 0 {
-		first := logs[0]
 		last := logs[len(logs)-1]
-		s.inflight.CommitRange(first.Index, last.Index)
-
-		// Update the indexes
-		s.matchIndex = last.Index
-		s.nextIndex = last.Index + 1
+		atomic.StoreUint64(&s.nextIndex, last.Index+1)
+		s.commitment.match(s.peer.ID, last.Index)
 	}
 
 	// Notify still leader

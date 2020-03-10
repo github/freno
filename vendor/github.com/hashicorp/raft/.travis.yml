@@ -1,12 +1,17 @@
 language: go
 
 go:
-    - 1.4
-    - 1.5
-    - 1.6
+    # Disabled until https://github.com/armon/go-metrics/issues/59 is fixed
+    # - 1.6
+    - 1.8
+    - 1.9
+    - 1.12
     - tip
 
-install: make deps
+install: 
+    - make deps 
+    - curl -sfL https://install.goreleaser.com/github.com/golangci/golangci-lint.sh | sh -s -- -b $(go env GOPATH)/bin latest 
+
 script:
     - make integ
 

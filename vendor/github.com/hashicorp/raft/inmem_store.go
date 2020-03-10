@@ -1,6 +1,7 @@
 package raft
 
 import (
+	"errors"
 	"sync"
 )
 
@@ -81,7 +82,16 @@ func (i *InmemStore) DeleteRange(min, max uint64) error {
 	for j := min; j <= max; j++ {
 		delete(i.logs, j)
 	}
-	i.lowIndex = max + 1
+	if min <= i.lowIndex {
+		i.lowIndex = max + 1
+	}
+	if max >= i.highIndex {
+		i.highIndex = min - 1
+	}
+	if i.lowIndex > i.highIndex {
+		i.lowIndex = 0
+		i.highIndex = 0
+	}
 	return nil
 }
 
@@ -97,7 +107,11 @@ func (i *InmemStore) Set(key []byte, val []byte) error {
 func (i *InmemStore) Get(key []byte) ([]byte, error) {
 	i.l.RLock()
 	defer i.l.RUnlock()
-	return i.kv[string(key)], nil
+	val := i.kv[string(key)]
+	if val == nil {
+		return nil, errors.New("not found")
+	}
+	return val, nil
 }
 
 // SetUint64 implements the StableStore interface.
