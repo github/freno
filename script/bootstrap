@@ -2,16 +2,15 @@
 
 set -e
 
-# Make sure we have the version of Go we want to depend on, either from the
-# system or one we grab ourselves.
-# If executing from within Dockerfile then this assumption is inherently true, since we use a `golang` docker image.
-. script/ensure-go-installed
+readonly supportedGo="go1.1[234]"
 
-# Since we want to be able to build this outside of GOPATH, we set it
-# up so it points back to us and go is none the wiser
+# Ensure go is installed
+if ! command -v go ; then
+  echo "Error: Could not locate go binary!"
+  exit 1
+fi
 
-set -x
-rm -rf .gopath
-mkdir -p .gopath/src/github.com/github
-ln -s "$PWD" .gopath/src/github.com/github/freno
-export GOPATH=$PWD/.gopath:$GOPATH
+if [[ ! "$(go version)" =~ ${supportedGo} ]] ; then
+  echo "Error: Unsupported version of go installed!"
+  exit 1
+fi
