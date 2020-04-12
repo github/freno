@@ -4,14 +4,16 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"regexp"
 
+	"github.com/github/freno/pkg/config/util"
 	"github.com/outbrain/golib/log"
 )
 
-var (
-	envVariableRegexp = regexp.MustCompile("[$][{](.*?)[}]")
-)
+type Provider interface {
+	GetProxyAddresses() (addresses [](*util.HostPort), err error)
+	IsEmpty() bool
+	PostReadAdjustments() error
+}
 
 var instance = newConfiguration()
 
@@ -132,16 +134,16 @@ func newConfigurationSettings() *ConfigurationSettings {
 
 // Hook to implement adjustments after reading each configuration file.
 func (settings *ConfigurationSettings) postReadAdjustments() error {
-	if submatch := envVariableRegexp.FindStringSubmatch(settings.BackendMySQLHost); len(submatch) > 1 {
+	if submatch := util.EnvVariableRegexp.FindStringSubmatch(settings.BackendMySQLHost); len(submatch) > 1 {
 		settings.BackendMySQLHost = os.Getenv(submatch[1])
 	}
-	if submatch := envVariableRegexp.FindStringSubmatch(settings.BackendMySQLSchema); len(submatch) > 1 {
+	if submatch := util.EnvVariableRegexp.FindStringSubmatch(settings.BackendMySQLSchema); len(submatch) > 1 {
 		settings.BackendMySQLSchema = os.Getenv(submatch[1])
 	}
-	if submatch := envVariableRegexp.FindStringSubmatch(settings.BackendMySQLUser); len(submatch) > 1 {
+	if submatch := util.EnvVariableRegexp.FindStringSubmatch(settings.BackendMySQLUser); len(submatch) > 1 {
 		settings.BackendMySQLUser = os.Getenv(submatch[1])
 	}
-	if submatch := envVariableRegexp.FindStringSubmatch(settings.BackendMySQLPassword); len(submatch) > 1 {
+	if submatch := util.EnvVariableRegexp.FindStringSubmatch(settings.BackendMySQLPassword); len(submatch) > 1 {
 		settings.BackendMySQLPassword = os.Getenv(submatch[1])
 	}
 	if settings.RaftDataDir == "" && settings.BackendMySQLHost == "" {

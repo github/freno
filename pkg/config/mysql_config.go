@@ -6,6 +6,11 @@ package config
 
 import (
 	"os"
+
+	"github.com/github/freno/pkg/config/haproxy"
+	"github.com/github/freno/pkg/config/static_hosts"
+	"github.com/github/freno/pkg/config/util"
+	"github.com/github/freno/pkg/config/vitess"
 )
 
 const DefaultMySQLPort = 3306
@@ -23,9 +28,9 @@ type MySQLClusterConfigurationSettings struct {
 	HttpCheckPath        string   // Specify if different than specified by MySQLConfigurationSettings
 	IgnoreHosts          []string // override MySQLConfigurationSettings's, or leave empty to inherit those settings
 
-	HAProxySettings     HAProxyConfigurationSettings // If list of servers is to be acquired via HAProxy, provide this field
-	VitessSettings      VitessConfigurationSettings  // If list of servers is to be acquired via Vitess, provide this field
-	StaticHostsSettings StaticHostsConfigurationSettings
+	HAProxySettings     haproxy.ConfigurationSettings      // If list of servers is to be acquired via HAProxy, provide this field
+	StaticHostsSettings static_hosts.ConfigurationSettings // If list of servers is to be acquired via a static config, provide this field
+	VitessSettings      vitess.ConfigurationSettings       // If list of servers is to be acquired via Vitess, provide this field
 }
 
 // Hook to implement adjustments after reading each configuration file.
@@ -33,13 +38,13 @@ func (settings *MySQLClusterConfigurationSettings) postReadAdjustments() error {
 	// Username & password may be given as plaintext in the config file, or can be delivered
 	// via environment variables. We accept user & password in the form "${SOME_ENV_VARIABLE}"
 	// in which case we get the value from this process' invoking environment.
-	if submatch := envVariableRegexp.FindStringSubmatch(settings.User); len(submatch) > 1 {
+	if submatch := util.EnvVariableRegexp.FindStringSubmatch(settings.User); len(submatch) > 1 {
 		settings.User = os.Getenv(submatch[1])
 	}
-	if submatch := envVariableRegexp.FindStringSubmatch(settings.Password); len(submatch) > 1 {
+	if submatch := util.EnvVariableRegexp.FindStringSubmatch(settings.Password); len(submatch) > 1 {
 		settings.Password = os.Getenv(submatch[1])
 	}
-	if err := settings.HAProxySettings.postReadAdjustments(); err != nil {
+	if err := settings.HAProxySettings.PostReadAdjustments(); err != nil {
 		return err
 	}
 	return nil
@@ -70,10 +75,10 @@ func (settings *MySQLConfigurationSettings) postReadAdjustments() error {
 	// Username & password may be given as plaintext in the config file, or can be delivered
 	// via environment variables. We accept user & password in the form "${SOME_ENV_VARIABLE}"
 	// in which case we get the value from this process' invoking environment.
-	if submatch := envVariableRegexp.FindStringSubmatch(settings.User); len(submatch) > 1 {
+	if submatch := util.EnvVariableRegexp.FindStringSubmatch(settings.User); len(submatch) > 1 {
 		settings.User = os.Getenv(submatch[1])
 	}
-	if submatch := envVariableRegexp.FindStringSubmatch(settings.Password); len(submatch) > 1 {
+	if submatch := util.EnvVariableRegexp.FindStringSubmatch(settings.Password); len(submatch) > 1 {
 		settings.Password = os.Getenv(submatch[1])
 	}
 

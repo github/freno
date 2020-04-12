@@ -3,7 +3,7 @@
 	 See https://github.com/github/freno/blob/master/LICENSE
 */
 
-package config
+package haproxy
 
 import (
 	"testing"

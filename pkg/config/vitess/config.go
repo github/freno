@@ -1,16 +1,16 @@
-package config
+package vitess
 
 //
 // HAProxy-specific configuration
 //
 
-type VitessConfigurationSettings struct {
+type ConfigurationSettings struct {
 	API      string
 	Keyspace string
 	Shard    string
 }
 
-func (settings *VitessConfigurationSettings) IsEmpty() bool {
+func (settings *ConfigurationSettings) IsEmpty() bool {
 	if settings.API == "" {
 		return true
 	}

@@ -289,7 +289,7 @@ func (throttler *Throttler) refreshMySQLInventory() error {
 				addresses, _ := clusterSettings.HAProxySettings.GetProxyAddresses()
 				for _, u := range addresses {
 					log.Debugf("getting haproxy data from %s", u.String())
-					csv, err := haproxy.Read(u)
+					csv, err := haproxy.Read(u.URL())
 					if err != nil {
 						return log.Errorf("Unable to get HAproxy data from %s: %+v", u.String(), err)
 					}
