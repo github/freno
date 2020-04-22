@@ -18,8 +18,8 @@ type Tablet struct {
 	Type          topodata.TabletType `json:"type,omitempty"`
 }
 
-// IsReplica returns a bool reflecting if a tablet type is REPLICA
-func (t Tablet) IsReplica() bool {
+// isReplica returns a bool reflecting if a tablet type is REPLICA
+func (t Tablet) isReplica() bool {
 	return t.Type == topodata.TabletType_REPLICA
 }
 
@@ -60,7 +60,7 @@ func ParseTablets(api string, keyspace string, shard string) (tablets []Tablet, 
 func FilterReplicaTablets(tablets []Tablet) []Tablet {
 	replicas := make([]Tablet, 0)
 	for _, tablet := range tablets {
-		if tablet.IsReplica() {
+		if tablet.isReplica() {
 			replicas = append(replicas, tablet)
 		}
 	}
