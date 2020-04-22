@@ -48,7 +48,7 @@ func filterReplicaTablets(tablets []Tablet) (replicas []Tablet) {
 }
 
 // ParseTablets reads from vitess /api/ks_tablets/<keyspace>/[shard] and returns a
-// tablet (mysql_hostname, mysql_port) listing
+// listing (mysql_hostname, mysql_port) of REPLICA tablets
 func ParseTablets(api string, keyspace string, shard string) (tablets []Tablet, err error) {
 	url := constructAPIURL(api, keyspace, shard)
 	resp, err := httpClient.Get(url)
