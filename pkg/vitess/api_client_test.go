@@ -18,11 +18,15 @@ func TestFilterReplicaTablets(t *testing.T) {
 		},
 		{
 			MysqlHostname: t.Name() + "3",
+			Type:          topodata.TabletType_SPARE,
+		},
+		{
+			MysqlHostname: t.Name() + "4",
 			Type:          topodata.TabletType_BACKUP,
 		},
 		{
 
-			MysqlHostname: t.Name() + "4",
+			MysqlHostname: t.Name() + "5",
 			Type:          topodata.TabletType_RESTORE,
 		},
 	})
