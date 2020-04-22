@@ -327,13 +327,14 @@ func (throttler *Throttler) refreshMySQLInventory() error {
 				if err != nil {
 					return log.Errorf("Unable to get vitess hosts from %s, %s/%s: %+v", clusterSettings.VitessSettings.API, keyspace, shard, err)
 				}
-				log.Debugf("Read %+v hosts from vitess %s, %s/%s", len(tablets), clusterSettings.VitessSettings.API, keyspace, shard)
+				replicas := vitess.FilterReplicaTablets(tablets)
+				log.Debugf("Read %+v replica hosts from vitess %s, %s/%s", len(replicas), clusterSettings.VitessSettings.API, keyspace, shard)
 				clusterProbes := &mysql.ClusterProbes{
 					ClusterName:      clusterName,
 					IgnoreHostsCount: clusterSettings.IgnoreHostsCount,
 					InstanceProbes:   mysql.NewProbes(),
 				}
-				for _, tablet := range tablets {
+				for _, tablet := range replicas {
 					key := mysql.InstanceKey{Hostname: tablet.MysqlHostname, Port: int(tablet.MysqlPort)}
 					addInstanceKey(&key, clusterName, clusterSettings, clusterProbes.InstanceProbes)
 				}
