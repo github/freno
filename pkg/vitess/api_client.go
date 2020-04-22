@@ -37,6 +37,16 @@ func constructAPIURL(api string, keyspace string, shard string) (url string) {
 	return url
 }
 
+// filterReplicaTablets parses a list of tablets, returning replica tablets only
+func filterReplicaTablets(tablets []Tablet) (replicas []Tablet) {
+	for _, tablet := range tablets {
+		if tablet.isReplica() {
+			replicas = append(replicas, tablet)
+		}
+	}
+	return replicas
+}
+
 // ParseTablets reads from vitess /api/ks_tablets/<keyspace>/[shard] and returns a
 // tablet (mysql_hostname, mysql_port) listing
 func ParseTablets(api string, keyspace string, shard string) (tablets []Tablet, err error) {
@@ -53,15 +63,5 @@ func ParseTablets(api string, keyspace string, shard string) (tablets []Tablet, 
 	}
 
 	err = json.Unmarshal(body, &tablets)
-	return tablets, err
-}
-
-// FilterReplicaTablets parses a list of tablets, returning replica tablets only
-func FilterReplicaTablets(tablets []Tablet) (replicas []Tablet) {
-	for _, tablet := range tablets {
-		if tablet.isReplica() {
-			replicas = append(replicas, tablet)
-		}
-	}
-	return replicas
+	return filterReplicaTablets(tablets), err
 }

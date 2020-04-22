@@ -7,7 +7,7 @@ import (
 )
 
 func TestFilterReplicaTablets(t *testing.T) {
-	replicas := FilterReplicaTablets([]Tablet{
+	replicas := filterReplicaTablets([]Tablet{
 		{
 			MysqlHostname: t.Name() + "1",
 			Type:          topodata.TabletType_MASTER,
