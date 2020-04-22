@@ -57,8 +57,7 @@ func ParseTablets(api string, keyspace string, shard string) (tablets []Tablet, 
 }
 
 // FilterReplicaTablets parses a list of tablets, returning replica tablets only
-func FilterReplicaTablets(tablets []Tablet) []Tablet {
-	replicas := make([]Tablet, 0)
+func FilterReplicaTablets(tablets []Tablet) (replicas []Tablet) {
 	for _, tablet := range tablets {
 		if tablet.isReplica() {
 			replicas = append(replicas, tablet)
