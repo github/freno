@@ -49,17 +49,6 @@ func TestParseTablets(t *testing.T) {
 	}))
 	defer vitessApi.Close()
 
-	t.Run("not-found", func(t *testing.T) {
-		tablets, err := ParseTablets(vitessApi.URL, "not-found", "00")
-		if err != nil {
-			t.Fatalf("Expected no error, got %q", err)
-		}
-
-		if len(tablets) > 0 {
-			t.Fatalf("Expected 0 tablets, got %d", len(tablets))
-		}
-	})
-
 	t.Run("success", func(t *testing.T) {
 		tablets, err := ParseTablets(vitessApi.URL, "test", "00")
 		if err != nil {
@@ -72,6 +61,25 @@ func TestParseTablets(t *testing.T) {
 
 		if tablets[0].MysqlHostname != "replica" {
 			t.Fatalf("Expected hostname %q, got %q", "replica", tablets[0].MysqlHostname)
+		}
+	})
+
+	t.Run("not-found", func(t *testing.T) {
+		tablets, err := ParseTablets(vitessApi.URL, "not-found", "00")
+		if err != nil {
+			t.Fatalf("Expected no error, got %q", err)
+		}
+
+		if len(tablets) > 0 {
+			t.Fatalf("Expected 0 tablets, got %d", len(tablets))
+		}
+	})
+
+	t.Run("failed", func(t *testing.T) {
+		vitessApi.Close() // kill the mock vitess API
+		_, err := ParseTablets(vitessApi.URL, "fail", "00")
+		if err == nil {
+			t.Fatal("Expected error, got nil")
 		}
 	})
 }
