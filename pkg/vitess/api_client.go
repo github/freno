@@ -18,8 +18,8 @@ type Tablet struct {
 	Type          topodata.TabletType `json:"type,omitempty"`
 }
 
-// isReplica returns a bool reflecting if a tablet type is REPLICA
-func (t Tablet) isReplica() bool {
+// IsValidReplica returns a bool reflecting if a tablet type is REPLICA
+func (t Tablet) IsValidReplica() bool {
 	return t.Type == topodata.TabletType_REPLICA
 }
 
@@ -40,7 +40,7 @@ func constructAPIURL(api string, keyspace string, shard string) (url string) {
 // filterReplicaTablets parses a list of tablets, returning replica tablets only
 func filterReplicaTablets(tablets []Tablet) (replicas []Tablet) {
 	for _, tablet := range tablets {
-		if tablet.isReplica() {
+		if tablet.IsValidReplica() {
 			replicas = append(replicas, tablet)
 		}
 	}
@@ -48,7 +48,7 @@ func filterReplicaTablets(tablets []Tablet) (replicas []Tablet) {
 }
 
 // ParseTablets reads from vitess /api/ks_tablets/<keyspace>/[shard] and returns a
-// listing (mysql_hostname, mysql_port) of REPLICA tablets
+// listing (mysql_hostname, mysql_port, type) of REPLICA tablets
 func ParseTablets(api string, keyspace string, shard string) (tablets []Tablet, err error) {
 	url := constructAPIURL(api, keyspace, shard)
 	resp, err := httpClient.Get(url)
