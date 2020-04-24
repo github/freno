@@ -24,7 +24,7 @@ func (t Tablet) IsValidReplica() bool {
 }
 
 var httpClient = http.Client{
-	Timeout: 1 * time.Second,
+	Timeout: 5 * time.Second,
 }
 
 func constructAPIURL(api string, keyspace string, shard string) (url string) {
