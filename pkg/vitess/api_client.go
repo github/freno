@@ -7,12 +7,20 @@ import (
 	"net/http"
 	"strings"
 	"time"
+
+	"vitess.io/vitess/go/vt/proto/topodata"
 )
 
 // Tablet represents information about a running instance of vttablet.
 type Tablet struct {
-	MysqlHostname string `json:"mysql_hostname,omitempty"`
-	MysqlPort     int32  `json:"mysql_port,omitempty"`
+	MysqlHostname string              `json:"mysql_hostname,omitempty"`
+	MysqlPort     int32               `json:"mysql_port,omitempty"`
+	Type          topodata.TabletType `json:"type,omitempty"`
+}
+
+// IsValidReplica returns a bool reflecting if a tablet type is REPLICA
+func (t Tablet) IsValidReplica() bool {
+	return t.Type == topodata.TabletType_REPLICA
 }
 
 // Manager gathers info from Vitess
@@ -21,10 +29,12 @@ type Manager struct {
 }
 
 // NewManager returns a new manager for Vitess
-func NewManager(timeoutSec int) *Manager {
-	return &Manager{httpClient: http.Client{
-		Timeout: time.Duration(timeoutSec) * time.Second,
-	}}
+func NewManager(timeout time.Duration) *Manager {
+	return &Manager{
+		httpClient: http.Client{
+			Timeout: timeout,
+		},
+	}
 }
 
 func constructAPIURL(api string, keyspace string, shard string) (url string) {
@@ -37,8 +47,18 @@ func constructAPIURL(api string, keyspace string, shard string) (url string) {
 	return url
 }
 
+// filterReplicaTablets parses a list of tablets, returning replica tablets only
+func filterReplicaTablets(tablets []Tablet) (replicas []Tablet) {
+	for _, tablet := range tablets {
+		if tablet.IsValidReplica() {
+			replicas = append(replicas, tablet)
+		}
+	}
+	return replicas
+}
+
 // ParseTablets reads from vitess /api/ks_tablets/<keyspace>/[shard] and returns a
-// tblet (mysql_hostname, mysql_port) listing
+// listing (mysql_hostname, mysql_port, type) of REPLICA tablets
 func (m *Manager) ParseTablets(api string, keyspace string, shard string) (tablets []Tablet, err error) {
 	url := constructAPIURL(api, keyspace, shard)
 	resp, err := m.httpClient.Get(url)
@@ -53,5 +73,5 @@ func (m *Manager) ParseTablets(api string, keyspace string, shard string) (table
 	}
 
 	err = json.Unmarshal(body, &tablets)
-	return tablets, err
+	return filterReplicaTablets(tablets), err
 }
