@@ -25,13 +25,13 @@ func (t Tablet) IsValidReplica() bool {
 
 // Manager gathers info from Vitess
 type Manager struct {
-	httpClient http.Client
+	client http.Client
 }
 
 // NewManager returns a new manager for Vitess
 func NewManager(timeout time.Duration) *Manager {
 	return &Manager{
-		httpClient: http.Client{
+		client: http.Client{
 			Timeout: timeout,
 		},
 	}
@@ -61,7 +61,7 @@ func filterReplicaTablets(tablets []Tablet) (replicas []Tablet) {
 // listing (mysql_hostname, mysql_port, type) of REPLICA tablets
 func (m *Manager) ParseTablets(api string, keyspace string, shard string) (tablets []Tablet, err error) {
 	url := constructAPIURL(api, keyspace, shard)
-	resp, err := m.httpClient.Get(url)
+	resp, err := m.client.Get(url)
 	if err != nil {
 		return tablets, err
 	}

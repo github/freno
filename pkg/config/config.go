@@ -92,39 +92,39 @@ func (config *Configuration) Reload() error {
 // Some of the settinges have reasonable default values, and some other
 // (like database credentials) are strictly expected from user.
 type ConfigurationSettings struct {
-	ListenPort           int
-	DataCenter           string
-	Environment          string
-	Domain               string
-	ShareDomain          string
-	RaftBind             string
-	RaftDataDir          string
-	DefaultRaftPort      int      // if a RaftNodes entry does not specify port, use this one
-	RaftNodes            []string // Raft nodes to make initial connection with
-	BackendMySQLHost     string
-	BackendMySQLPort     int
-	BackendMySQLSchema   string
-	BackendMySQLUser     string
-	BackendMySQLPassword string
-	MemcacheServers      []string // if given, freno will report to aggregated values to given memcache
-	MemcachePath         string   // use as prefix to metric path in memcache key, e.g. if `MemcachePath` is "myprefix" the key would be "myprefix/mysql/maincluster". Default: "freno"
-	VitessHTTPTimeoutSec int
-	Stores               StoresSettings
+	ListenPort            int
+	DataCenter            string
+	Environment           string
+	Domain                string
+	ShareDomain           string
+	RaftBind              string
+	RaftDataDir           string
+	DefaultRaftPort       int      // if a RaftNodes entry does not specify port, use this one
+	RaftNodes             []string // Raft nodes to make initial connection with
+	BackendMySQLHost      string
+	BackendMySQLPort      int
+	BackendMySQLSchema    string
+	BackendMySQLUser      string
+	BackendMySQLPassword  string
+	MemcacheServers       []string // if given, freno will report to aggregated values to given memcache
+	MemcachePath          string   // use as prefix to metric path in memcache key, e.g. if `MemcachePath` is "myprefix" the key would be "myprefix/mysql/maincluster". Default: "freno"
+	VitessHTTPTimeoutSecs int      // timeout for Vitess vtctld HTTP API
+	Stores                StoresSettings
 }
 
 func newConfigurationSettings() *ConfigurationSettings {
 	return &ConfigurationSettings{
-		ListenPort:           8087,
-		RaftBind:             "127.0.0.1:10008",
-		RaftDataDir:          "",
-		DefaultRaftPort:      0,
-		RaftNodes:            []string{},
-		BackendMySQLHost:     "",
-		BackendMySQLSchema:   "",
-		BackendMySQLPort:     3306,
-		MemcacheServers:      []string{},
-		MemcachePath:         "freno",
-		VitessHTTPTimeoutSec: 5,
+		ListenPort:            8087,
+		RaftBind:              "127.0.0.1:10008",
+		RaftDataDir:           "",
+		DefaultRaftPort:       0,
+		RaftNodes:             []string{},
+		BackendMySQLHost:      "",
+		BackendMySQLSchema:    "",
+		BackendMySQLPort:      3306,
+		MemcacheServers:       []string{},
+		MemcachePath:          "freno",
+		VitessHTTPTimeoutSecs: 5,
 		//Debug:                                        false,
 		//ListenSocket:                                 "",
 		//AnExampleListOfStrings:                       []string{"*"},
