@@ -324,8 +324,7 @@ func (throttler *Throttler) refreshMySQLInventory() error {
 				keyspace := clusterSettings.VitessSettings.Keyspace
 				shard := clusterSettings.VitessSettings.Shard
 				timeout := time.Duration(config.Settings().VitessHTTPTimeoutSec) * time.Second
-				vtManager := vitess.NewManager(timeout)
-				tablets, err := vtManager.ParseTablets(clusterSettings.VitessSettings.API, keyspace, shard)
+				tablets, err := vitess.NewManager(timeout).ParseTablets(clusterSettings.VitessSettings.API, keyspace, shard)
 				if err != nil {
 					return log.Errorf("Unable to get vitess hosts from %s, %s/%s: %+v", clusterSettings.VitessSettings.API, keyspace, shard, err)
 				}
