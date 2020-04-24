@@ -15,8 +15,16 @@ type Tablet struct {
 	MysqlPort     int32  `json:"mysql_port,omitempty"`
 }
 
-var httpClient = http.Client{
-	Timeout: 1 * time.Second,
+// Manager gathers info from Vitess
+type Manager struct {
+	httpClient http.Client
+}
+
+// NewManager returns a new manager for Vitess
+func NewManager(timeoutSec int) *Manager {
+	return &Manager{httpClient: http.Client{
+		Timeout: time.Duration(timeoutSec) * time.Second,
+	}}
 }
 
 func constructAPIURL(api string, keyspace string, shard string) (url string) {
@@ -31,9 +39,9 @@ func constructAPIURL(api string, keyspace string, shard string) (url string) {
 
 // ParseTablets reads from vitess /api/ks_tablets/<keyspace>/[shard] and returns a
 // tblet (mysql_hostname, mysql_port) listing
-func ParseTablets(api string, keyspace string, shard string) (tablets []Tablet, err error) {
+func (m *Manager) ParseTablets(api string, keyspace string, shard string) (tablets []Tablet, err error) {
 	url := constructAPIURL(api, keyspace, shard)
-	resp, err := httpClient.Get(url)
+	resp, err := m.httpClient.Get(url)
 	if err != nil {
 		return tablets, err
 	}
