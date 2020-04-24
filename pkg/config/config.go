@@ -124,7 +124,7 @@ func newConfigurationSettings() *ConfigurationSettings {
 		BackendMySQLPort:     3306,
 		MemcacheServers:      []string{},
 		MemcachePath:         "freno",
-		VitessHTTPTimeoutSec: 3,
+		VitessHTTPTimeoutSec: 5,
 		//Debug:                                        false,
 		//ListenSocket:                                 "",
 		//AnExampleListOfStrings:                       []string{"*"},

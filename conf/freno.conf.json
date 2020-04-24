@@ -3,5 +3,5 @@
   "RaftBind": "127.0.0.1:10008",
   "RaftDataDir": "/tmp",
   "RaftNodes": [],
-  "VitessHTTPTimeoutSec": 3
+  "VitessHTTPTimeoutSec": 5
 }
