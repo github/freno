@@ -29,10 +29,10 @@ type Manager struct {
 }
 
 // NewManager returns a new manager for Vitess
-func NewManager(timeout time.Duration) *Manager {
+func NewManager(apiTimeout time.Duration) *Manager {
 	return &Manager{
 		client: http.Client{
-			Timeout: timeout,
+			Timeout: apiTimeout,
 		},
 	}
 }
