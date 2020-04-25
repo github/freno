@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/github/freno/pkg/base"
 	"vitess.io/vitess/go/vt/proto/topodata"
 )
 
@@ -25,15 +26,13 @@ func (t Tablet) IsValidReplica() bool {
 
 // Manager gathers info from Vitess
 type Manager struct {
-	client http.Client
+	client *http.Client
 }
 
 // NewManager returns a new manager for Vitess
 func NewManager(apiTimeout time.Duration) *Manager {
 	return &Manager{
-		client: http.Client{
-			Timeout: apiTimeout,
-		},
+		client: base.SetupHttpClient(apiTimeout),
 	}
 }
 
