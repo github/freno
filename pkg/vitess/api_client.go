@@ -24,12 +24,12 @@ func (t Tablet) IsValidReplica() bool {
 	return t.Type == topodata.TabletType_REPLICA
 }
 
-// Client gathers info from Vitess
+// Client gathers info from the Vitess API
 type Client struct {
 	client *http.Client
 }
 
-// New returns a new handler for Vitess
+// New returns a new Client
 func New(apiTimeout time.Duration) *Client {
 	return &Client{
 		client: base.SetupHttpClient(apiTimeout),

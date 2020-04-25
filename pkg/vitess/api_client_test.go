@@ -50,7 +50,7 @@ func TestParseTablets(t *testing.T) {
 	}))
 	defer vitessApi.Close()
 
-	vt := New(time.Duration(1) * time.Second)
+	vt := New(time.Second)
 
 	t.Run("success", func(t *testing.T) {
 		tablets, err := vt.ParseTablets(vitessApi.URL, "test", "00")
