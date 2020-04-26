@@ -24,18 +24,6 @@ func (t Tablet) IsValidReplica() bool {
 	return t.Type == topodata.TabletType_REPLICA
 }
 
-// Client gathers info from the Vitess API
-type Client struct {
-	client *http.Client
-}
-
-// New returns a new Client
-func New(apiTimeout time.Duration) *Client {
-	return &Client{
-		client: base.SetupHttpClient(apiTimeout),
-	}
-}
-
 func constructAPIURL(api string, keyspace string, shard string) (url string) {
 	api = strings.TrimRight(api, "/")
 	if !strings.HasSuffix(api, "/api") {
@@ -56,9 +44,21 @@ func filterReplicaTablets(tablets []Tablet) (replicas []Tablet) {
 	return replicas
 }
 
+// Client gathers info from the Vitess API
+type Client struct {
+	client *http.Client
+}
+
+// New returns a new Client
+func New(timeout time.Duration) *Client {
+	return &Client{
+		client: base.SetupHttpClient(timeout),
+	}
+}
+
 // ParseTablets reads from vitess /api/ks_tablets/<keyspace>/[shard] and returns a
 // listing (mysql_hostname, mysql_port, type) of REPLICA tablets
-func (c *Client) ParseTablets(api string, keyspace string, shard string) (tablets []Tablet, err error) {
+func (c *Client) ParseTablets(api, keyspace, shard string) (tablets []Tablet, err error) {
 	url := constructAPIURL(api, keyspace, shard)
 	resp, err := c.client.Get(url)
 	if err != nil {

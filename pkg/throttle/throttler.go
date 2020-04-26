@@ -322,8 +322,9 @@ func (throttler *Throttler) refreshMySQLInventory() error {
 
 			if !clusterSettings.VitessSettings.IsEmpty() {
 				if throttler.vitessClient == nil {
-					apiTimeout := time.Duration(config.Settings().VitessAPITimeoutSecs) * time.Second
-					throttler.vitessClient = vitess.New(apiTimeout)
+					throttler.vitessClient = vitess.New(
+						time.Duration(config.Settings().VitessAPITimeoutSecs) * time.Second,
+					)
 				}
 				log.Debugf("getting vitess data from %s", clusterSettings.VitessSettings.API)
 				keyspace := clusterSettings.VitessSettings.Keyspace

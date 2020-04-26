@@ -50,10 +50,10 @@ func TestParseTablets(t *testing.T) {
 	}))
 	defer vitessApi.Close()
 
-	vt := New(time.Second)
+	vtClient := New(time.Second)
 
 	t.Run("success", func(t *testing.T) {
-		tablets, err := vt.ParseTablets(vitessApi.URL, "test", "00")
+		tablets, err := vtClient.ParseTablets(vitessApi.URL, "test", "00")
 		if err != nil {
 			t.Fatalf("Expected no error, got %q", err)
 		}
@@ -68,7 +68,7 @@ func TestParseTablets(t *testing.T) {
 	})
 
 	t.Run("not-found", func(t *testing.T) {
-		tablets, err := vt.ParseTablets(vitessApi.URL, "not-found", "00")
+		tablets, err := vtClient.ParseTablets(vitessApi.URL, "not-found", "00")
 		if err != nil {
 			t.Fatalf("Expected no error, got %q", err)
 		}
@@ -80,7 +80,7 @@ func TestParseTablets(t *testing.T) {
 
 	t.Run("failed", func(t *testing.T) {
 		vitessApi.Close() // kill the mock vitess API
-		_, err := vt.ParseTablets(vitessApi.URL, "fail", "00")
+		_, err := vtClient.ParseTablets(vitessApi.URL, "fail", "00")
 		if err == nil {
 			t.Fatal("Expected error, got nil")
 		}
