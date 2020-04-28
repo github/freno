@@ -322,14 +322,12 @@ func (throttler *Throttler) refreshMySQLInventory() error {
 
 			if !clusterSettings.VitessSettings.IsEmpty() {
 				if throttler.vitessClient == nil {
-					throttler.vitessClient = vitess.New(
-						time.Duration(config.Settings().VitessAPITimeoutSecs) * time.Second,
-					)
+					throttler.vitessClient = vitess.New(throttler.httpClient)
 				}
 				log.Debugf("getting vitess data from %s", clusterSettings.VitessSettings.API)
 				keyspace := clusterSettings.VitessSettings.Keyspace
 				shard := clusterSettings.VitessSettings.Shard
-				tablets, err := throttler.vitessClient.ParseTablets(clusterSettings.VitessSettings.API, keyspace, shard)
+				tablets, err := throttler.vitessClient.ParseTablets(clusterSettings.VitessSettings.API, keyspace, shard, clusterSettings.VitessSettings.TimeoutSecs)
 				if err != nil {
 					return log.Errorf("Unable to get vitess hosts from %s, %s/%s: %+v", clusterSettings.VitessSettings.API, keyspace, shard, err)
 				}

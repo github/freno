@@ -2,6 +2,5 @@
   "ListenPort": 8088,
   "RaftBind": "127.0.0.1:10008",
   "RaftDataDir": "/tmp",
-  "RaftNodes": [],
-  "VitessAPITimeoutSecs": 5
+  "RaftNodes": []
 }
