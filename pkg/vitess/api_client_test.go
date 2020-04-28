@@ -82,7 +82,7 @@ func TestParseTablets(t *testing.T) {
 		}
 
 		if vtClient.client.Timeout != defaultTimeout {
-			t.Fatalf("Expected vitess client timeout of %v, got %v", time.Second, defaultTimeout)
+			t.Fatalf("Expected vitess client timeout of %v, got %v", defaultTimeout, vtClient.client.Timeout)
 		}
 	})
 
