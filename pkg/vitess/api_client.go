@@ -25,7 +25,7 @@ func (t Tablet) IsValidReplica() bool {
 	return t.Type == topodata.TabletType_REPLICA
 }
 
-func constructAPIURL(api, keyspace, shard string) (url string) {
+func constructAPIURL(api string, keyspace string, shard string) (url string) {
 	api = strings.TrimRight(api, "/")
 	if !strings.HasSuffix(api, "/api") {
 		api = fmt.Sprintf("%s/api", api)
