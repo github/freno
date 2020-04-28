@@ -11,7 +11,7 @@ import (
 	"vitess.io/vitess/go/vt/proto/topodata"
 )
 
-const defaultTimeout = 5 * time.Second
+const defaultTimeout = time.Duration(5.0) * time.Second
 
 // Tablet represents information about a running instance of vttablet.
 type Tablet struct {
