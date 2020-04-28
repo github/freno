@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"vitess.io/vitess/go/vt/proto/topodata"
 )
@@ -52,7 +53,7 @@ func TestParseTablets(t *testing.T) {
 	vtClient := New(&http.Client{})
 
 	t.Run("success", func(t *testing.T) {
-		tablets, err := vtClient.ParseTablets(vitessApi.URL, "test", "00", 0)
+		tablets, err := vtClient.ParseTablets(vitessApi.URL, "test", "00", 1)
 		if err != nil {
 			t.Fatalf("Expected no error, got %q", err)
 		}
@@ -64,6 +65,10 @@ func TestParseTablets(t *testing.T) {
 		if tablets[0].MysqlHostname != "replica" {
 			t.Fatalf("Expected hostname %q, got %q", "replica", tablets[0].MysqlHostname)
 		}
+
+		if vtClient.client.Timeout != time.Second {
+			t.Fatalf("Expected vitess client timeout of %v, got %v", time.Second, vtClient.client.Timeout)
+		}
 	})
 
 	t.Run("not-found", func(t *testing.T) {
@@ -74,6 +79,10 @@ func TestParseTablets(t *testing.T) {
 
 		if len(tablets) > 0 {
 			t.Fatalf("Expected 0 tablets, got %d", len(tablets))
+		}
+
+		if vtClient.client.Timeout != defaultTimeout {
+			t.Fatalf("Expected vitess client timeout of %v, got %v", time.Second, defaultTimeout)
 		}
 	})
 
