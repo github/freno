@@ -50,7 +50,7 @@ func TestParseTablets(t *testing.T) {
 	}))
 	defer vitessApi.Close()
 
-	vtClient := New(&http.Client{})
+	vtClient := New()
 
 	t.Run("success", func(t *testing.T) {
 		tablets, err := vtClient.ParseTablets(vitessApi.URL, "test", "00", 1)

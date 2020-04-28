@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/github/freno/pkg/base"
 	"vitess.io/vitess/go/vt/proto/topodata"
 )
 
@@ -51,8 +52,8 @@ type Client struct {
 }
 
 // New returns a new Client
-func New(client *http.Client) *Client {
-	return &Client{client: client}
+func New() *Client {
+	return &Client{client: base.SetupHttpClient(0)}
 }
 
 // ParseTablets reads from vitess /api/ks_tablets/<keyspace>/[shard] and returns a
