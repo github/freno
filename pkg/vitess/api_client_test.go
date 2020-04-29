@@ -56,7 +56,7 @@ func TestParseTablets(t *testing.T) {
 			API:         vitessApi.URL,
 			Keyspace:    "test",
 			Shard:       "00",
-			TimeoutSecs: 1.0,
+			TimeoutSecs: 1,
 		})
 		if err != nil {
 			t.Fatalf("Expected no error, got %q", err)
@@ -77,10 +77,9 @@ func TestParseTablets(t *testing.T) {
 
 	t.Run("not-found", func(t *testing.T) {
 		tablets, err := ParseTablets(config.VitessConfigurationSettings{
-			API:         vitessApi.URL,
-			Keyspace:    "not-found",
-			Shard:       "40-80",
-			TimeoutSecs: 0.0,
+			API:      vitessApi.URL,
+			Keyspace: "not-found",
+			Shard:    "40-80",
 		})
 		if err != nil {
 			t.Fatalf("Expected no error, got %q", err)
@@ -98,10 +97,9 @@ func TestParseTablets(t *testing.T) {
 	t.Run("failed", func(t *testing.T) {
 		vitessApi.Close() // kill the mock vitess API
 		_, err := ParseTablets(config.VitessConfigurationSettings{
-			API:         vitessApi.URL,
-			Keyspace:    "fail",
-			Shard:       "00",
-			TimeoutSecs: 0.0,
+			API:      vitessApi.URL,
+			Keyspace: "fail",
+			Shard:    "00",
 		})
 		if err == nil {
 			t.Fatal("Expected error, got nil")

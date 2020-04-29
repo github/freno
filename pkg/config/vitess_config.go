@@ -8,7 +8,7 @@ type VitessConfigurationSettings struct {
 	API         string
 	Keyspace    string
 	Shard       string
-	TimeoutSecs float64
+	TimeoutSecs uint
 }
 
 func (settings *VitessConfigurationSettings) IsEmpty() bool {
