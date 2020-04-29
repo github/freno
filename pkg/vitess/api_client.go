@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/github/freno/pkg/base"
+	"github.com/github/freno/pkg/config"
 	"vitess.io/vitess/go/vt/proto/topodata"
 )
 
@@ -26,12 +26,16 @@ func (t Tablet) IsValidReplica() bool {
 	return t.Type == topodata.TabletType_REPLICA
 }
 
-func constructAPIURL(api string, keyspace string, shard string) (url string) {
-	api = strings.TrimRight(api, "/")
+var httpClient = http.Client{
+	Timeout: defaultTimeout,
+}
+
+func constructAPIURL(settings config.VitessConfigurationSettings) (url string) {
+	api := strings.TrimRight(settings.API, "/")
 	if !strings.HasSuffix(api, "/api") {
 		api = fmt.Sprintf("%s/api", api)
 	}
-	url = fmt.Sprintf("%s/keyspace/%s/tablets/%s", api, keyspace, shard)
+	url = fmt.Sprintf("%s/keyspace/%s/tablets/%s", api, settings.Keyspace, settings.Shard)
 
 	return url
 }
@@ -46,27 +50,17 @@ func filterReplicaTablets(tablets []Tablet) (replicas []Tablet) {
 	return replicas
 }
 
-// Client gathers info from the Vitess API
-type Client struct {
-	client *http.Client
-}
-
-// New returns a new Client
-func New() *Client {
-	return &Client{client: base.SetupHttpClient(0)}
-}
-
 // ParseTablets reads from vitess /api/ks_tablets/<keyspace>/[shard] and returns a
 // listing (mysql_hostname, mysql_port, type) of REPLICA tablets
-func (c *Client) ParseTablets(api, keyspace, shard string, timeoutSecs float64) (tablets []Tablet, err error) {
-	if timeoutSecs == 0 {
-		c.client.Timeout = defaultTimeout
+func ParseTablets(settings config.VitessConfigurationSettings) (tablets []Tablet, err error) {
+	if settings.TimeoutSecs == 0 {
+		httpClient.Timeout = defaultTimeout
 	} else {
-		c.client.Timeout = time.Duration(timeoutSecs) * time.Second
+		httpClient.Timeout = time.Duration(settings.TimeoutSecs) * time.Second
 	}
 
-	url := constructAPIURL(api, keyspace, shard)
-	resp, err := c.client.Get(url)
+	url := constructAPIURL(settings)
+	resp, err := httpClient.Get(url)
 	if err != nil {
 		return tablets, err
 	}

@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/github/freno/pkg/config"
 	"vitess.io/vitess/go/vt/proto/topodata"
 )
 
@@ -50,10 +51,13 @@ func TestParseTablets(t *testing.T) {
 	}))
 	defer vitessApi.Close()
 
-	vtClient := New()
-
 	t.Run("success", func(t *testing.T) {
-		tablets, err := vtClient.ParseTablets(vitessApi.URL, "test", "00", 1)
+		tablets, err := ParseTablets(config.VitessConfigurationSettings{
+			API:         vitessApi.URL,
+			Keyspace:    "test",
+			Shard:       "00",
+			TimeoutSecs: 1.0,
+		})
 		if err != nil {
 			t.Fatalf("Expected no error, got %q", err)
 		}
@@ -66,13 +70,18 @@ func TestParseTablets(t *testing.T) {
 			t.Fatalf("Expected hostname %q, got %q", "replica", tablets[0].MysqlHostname)
 		}
 
-		if vtClient.client.Timeout != time.Second {
-			t.Fatalf("Expected vitess client timeout of %v, got %v", time.Second, vtClient.client.Timeout)
+		if httpClient.Timeout != time.Second {
+			t.Fatalf("Expected vitess client timeout of %v, got %v", time.Second, httpClient.Timeout)
 		}
 	})
 
 	t.Run("not-found", func(t *testing.T) {
-		tablets, err := vtClient.ParseTablets(vitessApi.URL, "not-found", "00", 0)
+		tablets, err := ParseTablets(config.VitessConfigurationSettings{
+			API:         vitessApi.URL,
+			Keyspace:    "not-found",
+			Shard:       "40-80",
+			TimeoutSecs: 0.0,
+		})
 		if err != nil {
 			t.Fatalf("Expected no error, got %q", err)
 		}
@@ -81,14 +90,19 @@ func TestParseTablets(t *testing.T) {
 			t.Fatalf("Expected 0 tablets, got %d", len(tablets))
 		}
 
-		if vtClient.client.Timeout != defaultTimeout {
-			t.Fatalf("Expected vitess client timeout of %v, got %v", defaultTimeout, vtClient.client.Timeout)
+		if httpClient.Timeout != defaultTimeout {
+			t.Fatalf("Expected vitess client timeout of %v, got %v", defaultTimeout, httpClient.Timeout)
 		}
 	})
 
 	t.Run("failed", func(t *testing.T) {
 		vitessApi.Close() // kill the mock vitess API
-		_, err := vtClient.ParseTablets(vitessApi.URL, "fail", "00", 0)
+		_, err := ParseTablets(config.VitessConfigurationSettings{
+			API:         vitessApi.URL,
+			Keyspace:    "fail",
+			Shard:       "00",
+			TimeoutSecs: 0.0,
+		})
 		if err == nil {
 			t.Fatal("Expected error, got nil")
 		}
