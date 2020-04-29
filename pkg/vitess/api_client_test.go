@@ -6,7 +6,9 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
+	"github.com/github/freno/pkg/config"
 	"vitess.io/vitess/go/vt/proto/topodata"
 )
 
@@ -50,7 +52,12 @@ func TestParseTablets(t *testing.T) {
 	defer vitessApi.Close()
 
 	t.Run("success", func(t *testing.T) {
-		tablets, err := ParseTablets(vitessApi.URL, "test", "00")
+		tablets, err := ParseTablets(config.VitessConfigurationSettings{
+			API:         vitessApi.URL,
+			Keyspace:    "test",
+			Shard:       "00",
+			TimeoutSecs: 1,
+		})
 		if err != nil {
 			t.Fatalf("Expected no error, got %q", err)
 		}
@@ -62,10 +69,18 @@ func TestParseTablets(t *testing.T) {
 		if tablets[0].MysqlHostname != "replica" {
 			t.Fatalf("Expected hostname %q, got %q", "replica", tablets[0].MysqlHostname)
 		}
+
+		if httpClient.Timeout != time.Second {
+			t.Fatalf("Expected vitess client timeout of %v, got %v", time.Second, httpClient.Timeout)
+		}
 	})
 
 	t.Run("not-found", func(t *testing.T) {
-		tablets, err := ParseTablets(vitessApi.URL, "not-found", "00")
+		tablets, err := ParseTablets(config.VitessConfigurationSettings{
+			API:      vitessApi.URL,
+			Keyspace: "not-found",
+			Shard:    "40-80",
+		})
 		if err != nil {
 			t.Fatalf("Expected no error, got %q", err)
 		}
@@ -73,11 +88,19 @@ func TestParseTablets(t *testing.T) {
 		if len(tablets) > 0 {
 			t.Fatalf("Expected 0 tablets, got %d", len(tablets))
 		}
+
+		if httpClient.Timeout != defaultTimeout {
+			t.Fatalf("Expected vitess client timeout of %v, got %v", defaultTimeout, httpClient.Timeout)
+		}
 	})
 
 	t.Run("failed", func(t *testing.T) {
 		vitessApi.Close() // kill the mock vitess API
-		_, err := ParseTablets(vitessApi.URL, "fail", "00")
+		_, err := ParseTablets(config.VitessConfigurationSettings{
+			API:      vitessApi.URL,
+			Keyspace: "fail",
+			Shard:    "00",
+		})
 		if err == nil {
 			t.Fatal("Expected error, got nil")
 		}
