@@ -63,6 +63,7 @@ type Throttler struct {
 	throttledApps           *cache.Cache
 	recentApps              *cache.Cache
 	metricsHealth           *cache.Cache
+	storesHealth            *cache.Cache
 	shareDomainMetricHealth *cache.Cache
 
 	memcacheClient *memcache.Client
@@ -90,6 +91,7 @@ func NewThrottler() *Throttler {
 		aggregatedMetrics:       cache.New(aggregatedMetricsExpiration, aggregatedMetricsCleanup),
 		recentApps:              cache.New(recentAppsExpiration, time.Minute),
 		metricsHealth:           cache.New(cache.NoExpiration, 0),
+		storesHealth:            cache.New(cache.NoExpiration, 0),
 		shareDomainMetricHealth: cache.New(5*sharedDomainCollectInterval, sharedDomainCollectInterval),
 
 		nonLowPriorityAppRequestsThrottled: cache.New(nonDeprioritizedAppMapExpiration, nonDeprioritizedAppMapInterval),
@@ -291,6 +293,7 @@ func (throttler *Throttler) refreshMySQLInventory() error {
 					log.Debugf("getting haproxy data from %s", u.String())
 					csv, err := haproxy.Read(u)
 					if err != nil {
+						throttler.incrementStoreErrors(clusterName)
 						return log.Errorf("Unable to get HAproxy data from %s: %+v", u.String(), err)
 					}
 					if backendHosts, err := haproxy.ParseCsvHosts(csv, poolName); err == nil {
@@ -298,6 +301,7 @@ func (throttler *Throttler) refreshMySQLInventory() error {
 						totalHosts = append(totalHosts, hosts...)
 						log.Debugf("Read %+v hosts from haproxy %s/#%s", len(hosts), u.String(), poolName)
 					} else {
+						throttler.incrementStoreErrors(clusterName)
 						log.Errorf("Unable to get HAproxy hosts from %s/#%s: %+v", u.String(), poolName, err)
 					}
 				}
@@ -315,6 +319,7 @@ func (throttler *Throttler) refreshMySQLInventory() error {
 					key := mysql.InstanceKey{Hostname: host, Port: clusterSettings.Port}
 					addInstanceKey(&key, clusterName, clusterSettings, clusterProbes.InstanceProbes)
 				}
+				throttler.markStoreHealthy(clusterName)
 				throttler.mysqlClusterProbesChan <- clusterProbes
 				return nil
 			}
@@ -325,6 +330,7 @@ func (throttler *Throttler) refreshMySQLInventory() error {
 				shard := clusterSettings.VitessSettings.Shard
 				tablets, err := vitess.ParseTablets(clusterSettings.VitessSettings)
 				if err != nil {
+					throttler.incrementStoreErrors(clusterName)
 					return log.Errorf("Unable to get vitess hosts from %s, %s/%s: %+v", clusterSettings.VitessSettings.API, keyspace, shard, err)
 				}
 				log.Debugf("Read %+v hosts from vitess %s, %s/%s", len(tablets), clusterSettings.VitessSettings.API, keyspace, shard)
@@ -337,6 +343,7 @@ func (throttler *Throttler) refreshMySQLInventory() error {
 					key := mysql.InstanceKey{Hostname: tablet.MysqlHostname, Port: int(tablet.MysqlPort)}
 					addInstanceKey(&key, clusterName, clusterSettings, clusterProbes.InstanceProbes)
 				}
+				throttler.markStoreHealthy(clusterName)
 				throttler.mysqlClusterProbesChan <- clusterProbes
 				return nil
 			}
@@ -349,10 +356,12 @@ func (throttler *Throttler) refreshMySQLInventory() error {
 				for _, host := range clusterSettings.StaticHostsSettings.Hosts {
 					key, err := mysql.ParseInstanceKey(host, clusterSettings.Port)
 					if err != nil {
+						throttler.incrementStoreErrors(clusterName)
 						return log.Errore(err)
 					}
 					addInstanceKey(key, clusterName, clusterSettings, clusterProbes.InstanceProbes)
 				}
+				throttler.markStoreHealthy(clusterName)
 				throttler.mysqlClusterProbesChan <- clusterProbes
 				return nil
 			}
@@ -526,6 +535,19 @@ func (throttler *Throttler) markMetricHealthy(metricName string) {
 	throttler.metricsHealth.Set(metricName, time.Now(), cache.DefaultExpiration)
 }
 
+// incrementStoreErrors will increment the count of errors fetching data from a given store
+func (throttler *Throttler) incrementStoreErrors(storeName string) {
+	cnt, err := throttler.storesHealth.IncrementInt64(storeName, 1)
+	if err != nil && cnt == 0 {
+		throttler.storesHealth.Set(storeName, int64(1), cache.DefaultExpiration) // set to 1 if increment fails
+	}
+}
+
+// markStoreHealthy will mark the time "now" as the last time a given store was checked to be "OK"
+func (throttler *Throttler) markStoreHealthy(storeName string) {
+	throttler.storesHealth.Set(storeName, time.Now(), cache.DefaultExpiration)
+}
+
 // timeSinceMetricHealthy returns time elapsed since the last time a metric checked "OK"
 func (throttler *Throttler) timeSinceMetricHealthy(metricName string) (timeSinceHealthy time.Duration, found bool) {
 	if lastOKTime, found := throttler.metricsHealth.Get(metricName); found {
@@ -539,6 +561,15 @@ func (throttler *Throttler) metricsHealthSnapshot() base.MetricHealthMap {
 	for key, value := range throttler.metricsHealth.Items() {
 		lastHealthyAt, _ := value.Object.(time.Time)
 		snapshot[key] = base.NewMetricHealth(lastHealthyAt)
+	}
+	return snapshot
+}
+
+func (throttler *Throttler) storesHealthSnapshot() base.StoreHealthMap {
+	snapshot := make(base.StoreHealthMap)
+	for key, value := range throttler.storesHealth.Items() {
+		lastHealthyAt, _ := value.Object.(time.Time)
+		snapshot[key] = base.NewStoreHealth(lastHealthyAt)
 	}
 	return snapshot
 }

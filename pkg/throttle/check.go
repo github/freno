@@ -182,6 +182,11 @@ func (check *ThrottlerCheck) MetricsHealth() map[string](*base.MetricHealth) {
 	return check.throttler.metricsHealthSnapshot()
 }
 
+// StoresHealth is a convenience acces method into throttler's `storesHealthSnapshot`
+func (check *ThrottlerCheck) StoresHealth() map[string](*base.StoreHealth) {
+	return check.throttler.storesHealthSnapshot()
+}
+
 func (check *ThrottlerCheck) SelfChecks() {
 	selfCheckTick := time.Tick(selfCheckInterval)
 	go func() {
