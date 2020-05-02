@@ -535,25 +535,34 @@ func (throttler *Throttler) markMetricHealthy(metricName string) {
 	throttler.metricsHealth.Set(metricName, time.Now(), cache.DefaultExpiration)
 }
 
-// incrementStoreErrors will increment the count of errors fetching data from a given store
-func (throttler *Throttler) incrementStoreErrors(storeName string) {
-	cnt, err := throttler.storesHealth.IncrementInt64(storeName, 1)
-	if err != nil && cnt == 0 {
-		throttler.storesHealth.Set(storeName, int64(1), cache.DefaultExpiration) // set to 1 if increment fails
-	}
-}
-
-// markStoreHealthy will mark the time "now" as the last time a given store was checked to be "OK"
-func (throttler *Throttler) markStoreHealthy(storeName string) {
-	throttler.storesHealth.Set(storeName, time.Now(), cache.DefaultExpiration)
-}
-
 // timeSinceMetricHealthy returns time elapsed since the last time a metric checked "OK"
 func (throttler *Throttler) timeSinceMetricHealthy(metricName string) (timeSinceHealthy time.Duration, found bool) {
 	if lastOKTime, found := throttler.metricsHealth.Get(metricName); found {
 		return time.Since(lastOKTime.(time.Time)), true
 	}
 	return 0, false
+}
+
+// getStoreHealth will get the health state for a given store name or return a new state
+func (throttler *Throttler) getStoreHealth(storeName string) base.StoreHealth {
+	if value, found := throttler.storesHealth.Get(storeName); found {
+		return value.(base.StoreHealth)
+	}
+	return base.StoreHealth{}
+}
+
+// incrementStoreErrors will increment the count of errors fetching data from a given store
+func (throttler *Throttler) incrementStoreErrors(storeName string) {
+	storeHealth := throttler.getStoreHealth(storeName)
+	storeHealth.Errors += 1
+	throttler.storesHealth.Set(storeName, storeHealth, cache.DefaultExpiration)
+}
+
+// markStoreHealthy will mark the time "now" as the last time a given store was checked to be "OK"
+func (throttler *Throttler) markStoreHealthy(storeName string) {
+	storeHealth := throttler.getStoreHealth(storeName)
+	storeHealth.LastHealthyAt = time.Now()
+	throttler.storesHealth.Set(storeName, storeHealth, cache.DefaultExpiration)
 }
 
 func (throttler *Throttler) metricsHealthSnapshot() base.MetricHealthMap {
@@ -568,8 +577,9 @@ func (throttler *Throttler) metricsHealthSnapshot() base.MetricHealthMap {
 func (throttler *Throttler) storesHealthSnapshot() base.StoreHealthMap {
 	snapshot := make(base.StoreHealthMap)
 	for key, value := range throttler.storesHealth.Items() {
-		lastHealthyAt, _ := value.Object.(time.Time)
-		snapshot[key] = base.NewStoreHealth(lastHealthyAt)
+		if storeHealth, found := value.Object.(base.StoreHealth); found {
+			snapshot[key] = &storeHealth
+		}
 	}
 	return snapshot
 }
