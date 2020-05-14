@@ -301,6 +301,8 @@ func (throttler *Throttler) refreshMySQLInventory() error {
 			if !clusterSettings.HAProxySettings.IsEmpty() {
 				poolName := clusterSettings.HAProxySettings.PoolName
 				totalHosts := []string{}
+				startTime := time.Now()
+				defer throttler.updateStoreTimeMs(mysqlInventoryType, haproxyStoreType, poolName, "", startTime)
 				throttler.handleStoreAttempt(mysqlInventoryType, haproxyStoreType, poolName, "")
 				addresses, _ := clusterSettings.HAProxySettings.GetProxyAddresses()
 				for _, u := range addresses {
@@ -342,6 +344,8 @@ func (throttler *Throttler) refreshMySQLInventory() error {
 				log.Debugf("getting vitess data from %s", clusterSettings.VitessSettings.API)
 				keyspace := clusterSettings.VitessSettings.Keyspace
 				shard := clusterSettings.VitessSettings.Shard
+				startTime := time.Now()
+				defer throttler.updateStoreTimeMs(mysqlInventoryType, vitessStoreType, keyspace, shard, startTime)
 				throttler.handleStoreAttempt(mysqlInventoryType, vitessStoreType, keyspace, shard)
 				tablets, err := vitess.ParseTablets(clusterSettings.VitessSettings)
 				if err != nil {
@@ -556,8 +560,8 @@ func (throttler *Throttler) timeSinceMetricHealthy(metricName string) (timeSince
 	return 0, false
 }
 
-func (throttler *Throttler) getStoreHealth(storeKey string) base.StoreHealth {
-	if value, found := throttler.storesHealth.Get(storeKey); found {
+func (throttler *Throttler) getStoreHealth(storeHealthKey string) base.StoreHealth {
+	if value, found := throttler.storesHealth.Get(storeHealthKey); found {
 		return value.(base.StoreHealth)
 	}
 	return base.StoreHealth{}
@@ -576,7 +580,7 @@ func (throttler *Throttler) handleStoreAttempt(inventoryType inventoryType, stor
 	metrics.GetOrRegisterCounter(fmt.Sprintf("store.%s.%s.total", inventoryType, storeType), nil).Inc(1)
 	metrics.GetOrRegisterCounter(fmt.Sprintf("store.%s.%s.%s.total", inventoryType, storeType, storeName), nil).Inc(1)
 	if storeShardName != "" {
-		metrics.GetOrRegisterCounter(fmt.Sprintf("store.%s.%s.%s.total", inventoryType, storeType, storeName, storeShardName), nil).Inc(1)
+		metrics.GetOrRegisterCounter(fmt.Sprintf("store.%s.%s.%s.%s.total", inventoryType, storeType, storeName, storeShardName), nil).Inc(1)
 	}
 }
 
@@ -586,7 +590,7 @@ func (throttler *Throttler) handleStoreFailure(inventoryType inventoryType, stor
 	metrics.GetOrRegisterCounter(fmt.Sprintf("store.%s.%s.error", inventoryType, storeType), nil).Inc(1)
 	metrics.GetOrRegisterCounter(fmt.Sprintf("store.%s.%s.%s.error", inventoryType, storeType, storeName), nil).Inc(1)
 	if storeShardName != "" {
-		metrics.GetOrRegisterCounter(fmt.Sprintf("store.%s.%s.%s.error", inventoryType, storeType, storeName, storeShardName), nil).Inc(1)
+		metrics.GetOrRegisterCounter(fmt.Sprintf("store.%s.%s.%s.%s.error", inventoryType, storeType, storeName, storeShardName), nil).Inc(1)
 	}
 }
 
@@ -597,12 +601,22 @@ func (throttler *Throttler) handleStoreHealthy(inventoryType inventoryType, stor
 	throttler.storesHealth.Set(storeHealthKey, storeHealth, cache.DefaultExpiration)
 }
 
+func (throttler *Throttler) updateStoreTimeMs(inventoryType inventoryType, storeType storeType, storeName, storeShardName string, startTime time.Time) {
+	ms := time.Since(startTime).Milliseconds()
+	metrics.GetOrRegisterCounter("store.time_ms", nil).Inc(ms)
+	metrics.GetOrRegisterCounter(fmt.Sprintf("store.%s.time_ms", inventoryType), nil).Inc(ms)
+	metrics.GetOrRegisterCounter(fmt.Sprintf("store.%s.%s.time_ms", inventoryType, storeType), nil).Inc(ms)
+	metrics.GetOrRegisterCounter(fmt.Sprintf("store.%s.%s.%s.time_ms", inventoryType, storeType, storeName), nil).Inc(ms)
+	if storeShardName != "" {
+		metrics.GetOrRegisterCounter(fmt.Sprintf("store.%s.%s.%s.%s.time_ms", inventoryType, storeType, storeName, storeShardName), nil).Inc(ms)
+	}
+}
+
 func (throttler *Throttler) metricsHealthSnapshot() base.MetricHealthMap {
 	snapshot := make(base.MetricHealthMap)
 	for key, value := range throttler.metricsHealth.Items() {
 		lastHealthyAt, _ := value.Object.(time.Time)
-		storeHealth := throttler.getStoreHealth(key)
-		snapshot[key] = base.NewMetricHealth(lastHealthyAt, storeHealth)
+		snapshot[key] = base.NewMetricHealth(lastHealthyAt, throttler.getStoreHealth(key))
 	}
 	return snapshot
 }
