@@ -563,35 +563,35 @@ func (throttler *Throttler) getStoreHealth(storeKey string) base.StoreHealth {
 	return base.StoreHealth{}
 }
 
-func getStoreHealthKey(inventoryType inventoryType, storeType storeType, storePoolName, poolShardName string) string {
-	if poolShardName != "" {
-		return fmt.Sprintf("%s/%s/%s/%s", inventoryType, storeType, storePoolName, poolShardName)
+func getStoreHealthKey(inventoryType inventoryType, storeType storeType, storeName, storeShardName string) string {
+	if storeShardName != "" {
+		return fmt.Sprintf("%s/%s/%s/%s", inventoryType, storeType, storeName, storeShardName)
 	}
-	return fmt.Sprintf("%s/%s/%s", inventoryType, storeType, storePoolName)
+	return fmt.Sprintf("%s/%s/%s", inventoryType, storeType, storeName)
 }
 
-func (throttler *Throttler) handleStoreAttempt(inventoryType inventoryType, storeType storeType, storePoolName, poolShardName string) {
+func (throttler *Throttler) handleStoreAttempt(inventoryType inventoryType, storeType storeType, storeName, storeShardName string) {
 	metrics.GetOrRegisterCounter("store.total", nil).Inc(1)
 	metrics.GetOrRegisterCounter(fmt.Sprintf("store.%s.total", inventoryType), nil).Inc(1)
 	metrics.GetOrRegisterCounter(fmt.Sprintf("store.%s.%s.total", inventoryType, storeType), nil).Inc(1)
-	metrics.GetOrRegisterCounter(fmt.Sprintf("store.%s.%s.%s.total", inventoryType, storeType, storePoolName), nil).Inc(1)
-	if poolShardName != "" {
-		metrics.GetOrRegisterCounter(fmt.Sprintf("store.%s.%s.%s.total", inventoryType, storeType, storePoolName, poolShardName), nil).Inc(1)
+	metrics.GetOrRegisterCounter(fmt.Sprintf("store.%s.%s.%s.total", inventoryType, storeType, storeName), nil).Inc(1)
+	if storeShardName != "" {
+		metrics.GetOrRegisterCounter(fmt.Sprintf("store.%s.%s.%s.total", inventoryType, storeType, storeName, storeShardName), nil).Inc(1)
 	}
 }
 
-func (throttler *Throttler) handleStoreFailure(inventoryType inventoryType, storeType storeType, storePoolName, poolShardName string) {
+func (throttler *Throttler) handleStoreFailure(inventoryType inventoryType, storeType storeType, storeName, storeShardName string) {
 	metrics.GetOrRegisterCounter("store.error", nil).Inc(1)
 	metrics.GetOrRegisterCounter(fmt.Sprintf("store.%s.error", inventoryType), nil).Inc(1)
 	metrics.GetOrRegisterCounter(fmt.Sprintf("store.%s.%s.error", inventoryType, storeType), nil).Inc(1)
-	metrics.GetOrRegisterCounter(fmt.Sprintf("store.%s.%s.%s.error", inventoryType, storeType, storePoolName), nil).Inc(1)
-	if poolShardName != "" {
-		metrics.GetOrRegisterCounter(fmt.Sprintf("store.%s.%s.%s.error", inventoryType, storeType, storePoolName, poolShardName), nil).Inc(1)
+	metrics.GetOrRegisterCounter(fmt.Sprintf("store.%s.%s.%s.error", inventoryType, storeType, storeName), nil).Inc(1)
+	if storeShardName != "" {
+		metrics.GetOrRegisterCounter(fmt.Sprintf("store.%s.%s.%s.error", inventoryType, storeType, storeName, storeShardName), nil).Inc(1)
 	}
 }
 
-func (throttler *Throttler) handleStoreHealthy(inventoryType inventoryType, storeType storeType, storePoolName, poolShardName string) {
-	storeHealthKey := getStoreHealthKey(inventoryType, storeType, storePoolName, poolShardName)
+func (throttler *Throttler) handleStoreHealthy(inventoryType inventoryType, storeType storeType, storeName, storeShardName string) {
+	storeHealthKey := getStoreHealthKey(inventoryType, storeType, storeName, storeShardName)
 	storeHealth := throttler.getStoreHealth(storeHealthKey)
 	storeHealth.LastHealthyAt = time.Now()
 	throttler.storesHealth.Set(storeHealthKey, storeHealth, cache.DefaultExpiration)
