@@ -9,12 +9,14 @@ import (
 type MetricHealth struct {
 	LastHealthyAt           time.Time
 	SecondsSinceLastHealthy int64
+	StoreHealth             StoreHealth
 }
 
-func NewMetricHealth(lastHealthyAt time.Time) *MetricHealth {
+func NewMetricHealth(lastHealthyAt time.Time, storeHealth StoreHealth) *MetricHealth {
 	result := &MetricHealth{
 		LastHealthyAt:           lastHealthyAt,
 		SecondsSinceLastHealthy: int64(time.Since(lastHealthyAt).Seconds()),
+		StoreHealth:             storeHealth,
 	}
 	return result
 }
