@@ -301,13 +301,13 @@ func (throttler *Throttler) refreshMySQLInventory() error {
 			if !clusterSettings.HAProxySettings.IsEmpty() {
 				poolName := clusterSettings.HAProxySettings.PoolName
 				totalHosts := []string{}
-				throttler.handleStoreAttempt(mysqlInventoryType, haproxyStoreType, poolName)
+				throttler.handleStoreAttempt(mysqlInventoryType, haproxyStoreType, poolName, "")
 				addresses, _ := clusterSettings.HAProxySettings.GetProxyAddresses()
 				for _, u := range addresses {
 					log.Debugf("getting haproxy data from %s", u.String())
 					csv, err := haproxy.Read(u)
 					if err != nil {
-						throttler.handleStoreFailure(mysqlInventoryType, haproxyStoreType, poolName)
+						throttler.handleStoreFailure(mysqlInventoryType, haproxyStoreType, poolName, "")
 						return log.Errorf("Unable to get HAproxy data from %s: %+v", u.String(), err)
 					}
 					if backendHosts, err := haproxy.ParseCsvHosts(csv, poolName); err == nil {
@@ -315,7 +315,7 @@ func (throttler *Throttler) refreshMySQLInventory() error {
 						totalHosts = append(totalHosts, hosts...)
 						log.Debugf("Read %+v hosts from haproxy %s/#%s", len(hosts), u.String(), poolName)
 					} else {
-						throttler.handleStoreFailure(mysqlInventoryType, haproxyStoreType, poolName)
+						throttler.handleStoreFailure(mysqlInventoryType, haproxyStoreType, poolName, "")
 						log.Errorf("Unable to get HAproxy hosts from %s/#%s: %+v", u.String(), poolName, err)
 					}
 				}
@@ -333,7 +333,7 @@ func (throttler *Throttler) refreshMySQLInventory() error {
 					key := mysql.InstanceKey{Hostname: host, Port: clusterSettings.Port}
 					addInstanceKey(&key, clusterName, clusterSettings, clusterProbes.InstanceProbes)
 				}
-				throttler.handleStoreHealthy(mysqlInventoryType, haproxyStoreType, poolName)
+				throttler.handleStoreHealthy(mysqlInventoryType, haproxyStoreType, poolName, "")
 				throttler.mysqlClusterProbesChan <- clusterProbes
 				return nil
 			}
@@ -342,11 +342,10 @@ func (throttler *Throttler) refreshMySQLInventory() error {
 				log.Debugf("getting vitess data from %s", clusterSettings.VitessSettings.API)
 				keyspace := clusterSettings.VitessSettings.Keyspace
 				shard := clusterSettings.VitessSettings.Shard
-				poolName := fmt.Sprintf("%s/%s", keyspace, shard)
-				throttler.handleStoreAttempt(mysqlInventoryType, vitessStoreType, poolName)
+				throttler.handleStoreAttempt(mysqlInventoryType, vitessStoreType, keyspace, shard)
 				tablets, err := vitess.ParseTablets(clusterSettings.VitessSettings)
 				if err != nil {
-					throttler.handleStoreFailure(mysqlInventoryType, vitessStoreType, poolName)
+					throttler.handleStoreFailure(mysqlInventoryType, vitessStoreType, keyspace, shard)
 					return log.Errorf("Unable to get vitess hosts from %s, %s/%s: %+v", clusterSettings.VitessSettings.API, keyspace, shard, err)
 				}
 				log.Debugf("Read %+v hosts from vitess %s, %s/%s", len(tablets), clusterSettings.VitessSettings.API, keyspace, shard)
@@ -359,7 +358,7 @@ func (throttler *Throttler) refreshMySQLInventory() error {
 					key := mysql.InstanceKey{Hostname: tablet.MysqlHostname, Port: int(tablet.MysqlPort)}
 					addInstanceKey(&key, clusterName, clusterSettings, clusterProbes.InstanceProbes)
 				}
-				throttler.handleStoreHealthy(mysqlInventoryType, vitessStoreType, poolName)
+				throttler.handleStoreHealthy(mysqlInventoryType, vitessStoreType, keyspace, shard)
 				throttler.mysqlClusterProbesChan <- clusterProbes
 				return nil
 			}
@@ -557,10 +556,6 @@ func (throttler *Throttler) timeSinceMetricHealthy(metricName string) (timeSince
 	return 0, false
 }
 
-func getStoreHealthKey(inventoryType inventoryType, storeType storeType, storePoolName string) string {
-	return fmt.Sprintf("%s/%s/%s", inventoryType, storeType, storePoolName)
-}
-
 func (throttler *Throttler) getStoreHealth(storeKey string) base.StoreHealth {
 	if value, found := throttler.storesHealth.Get(storeKey); found {
 		return value.(base.StoreHealth)
@@ -568,22 +563,35 @@ func (throttler *Throttler) getStoreHealth(storeKey string) base.StoreHealth {
 	return base.StoreHealth{}
 }
 
-func (throttler *Throttler) handleStoreAttempt(inventoryType inventoryType, storeType storeType, storePoolName string) {
+func getStoreHealthKey(inventoryType inventoryType, storeType storeType, storePoolName, poolShardName string) string {
+	if poolShardName != "" {
+		return fmt.Sprintf("%s/%s/%s/%s", inventoryType, storeType, storePoolName, poolShardName)
+	}
+	return fmt.Sprintf("%s/%s/%s", inventoryType, storeType, storePoolName)
+}
+
+func (throttler *Throttler) handleStoreAttempt(inventoryType inventoryType, storeType storeType, storePoolName, poolShardName string) {
 	metrics.GetOrRegisterCounter("store.total", nil).Inc(1)
 	metrics.GetOrRegisterCounter(fmt.Sprintf("store.%s.total", inventoryType), nil).Inc(1)
 	metrics.GetOrRegisterCounter(fmt.Sprintf("store.%s.%s.total", inventoryType, storeType), nil).Inc(1)
 	metrics.GetOrRegisterCounter(fmt.Sprintf("store.%s.%s.%s.total", inventoryType, storeType, storePoolName), nil).Inc(1)
+	if poolShardName != "" {
+		metrics.GetOrRegisterCounter(fmt.Sprintf("store.%s.%s.%s.total", inventoryType, storeType, storePoolName, poolShardName), nil).Inc(1)
+	}
 }
 
-func (throttler *Throttler) handleStoreFailure(inventoryType inventoryType, storeType storeType, storePoolName string) {
+func (throttler *Throttler) handleStoreFailure(inventoryType inventoryType, storeType storeType, storePoolName, poolShardName string) {
 	metrics.GetOrRegisterCounter("store.error", nil).Inc(1)
 	metrics.GetOrRegisterCounter(fmt.Sprintf("store.%s.error", inventoryType), nil).Inc(1)
 	metrics.GetOrRegisterCounter(fmt.Sprintf("store.%s.%s.error", inventoryType, storeType), nil).Inc(1)
 	metrics.GetOrRegisterCounter(fmt.Sprintf("store.%s.%s.%s.error", inventoryType, storeType, storePoolName), nil).Inc(1)
+	if poolShardName != "" {
+		metrics.GetOrRegisterCounter(fmt.Sprintf("store.%s.%s.%s.error", inventoryType, storeType, storePoolName, poolShardName), nil).Inc(1)
+	}
 }
 
-func (throttler *Throttler) handleStoreHealthy(inventoryType inventoryType, storeType storeType, storePoolName string) {
-	storeHealthKey := getStoreHealthKey(inventoryType, storeType, storePoolName)
+func (throttler *Throttler) handleStoreHealthy(inventoryType inventoryType, storeType storeType, storePoolName, poolShardName string) {
+	storeHealthKey := getStoreHealthKey(inventoryType, storeType, storePoolName, poolShardName)
 	storeHealth := throttler.getStoreHealth(storeHealthKey)
 	storeHealth.LastHealthyAt = time.Now()
 	throttler.storesHealth.Set(storeHealthKey, storeHealth, cache.DefaultExpiration)
