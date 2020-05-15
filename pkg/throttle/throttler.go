@@ -42,19 +42,6 @@ const nonDeprioritizedAppMapInterval = 100 * time.Millisecond
 const DefaultThrottleTTLMinutes = 60
 const DefaultThrottleRatio = 1.0
 
-type inventoryType string
-
-var (
-	mysqlInventoryType inventoryType = "mysql"
-)
-
-type storeType string
-
-var (
-	haproxyStoreType storeType = "haproxy"
-	vitessStoreType  storeType = "vitess"
-)
-
 func init() {
 	rand.Seed(time.Now().UnixNano())
 }
@@ -298,18 +285,18 @@ func (throttler *Throttler) refreshMySQLInventory() error {
 		// is immutable and can only be _replaced_. Hence, it's safe to read in a goroutine:
 		go func() error {
 			throttler.mysqlClusterThresholds.Set(clusterName, clusterSettings.ThrottleThreshold, cache.DefaultExpiration)
+			startTime := time.Now()
 			if !clusterSettings.HAProxySettings.IsEmpty() {
 				poolName := clusterSettings.HAProxySettings.PoolName
 				totalHosts := []string{}
-				startTime := time.Now()
-				defer throttler.updateStoreTimeMs(mysqlInventoryType, haproxyStoreType, poolName, "", startTime)
-				throttler.handleStoreAttempt(mysqlInventoryType, haproxyStoreType, poolName, "")
+				defer throttler.updateStoreLatency(MySQLInventoryType, HAProxyStoreType, poolName, "", startTime)
+				throttler.handleStoreAttempt(MySQLInventoryType, HAProxyStoreType, poolName, "")
 				addresses, _ := clusterSettings.HAProxySettings.GetProxyAddresses()
 				for _, u := range addresses {
 					log.Debugf("getting haproxy data from %s", u.String())
 					csv, err := haproxy.Read(u)
 					if err != nil {
-						throttler.handleStoreFailure(mysqlInventoryType, haproxyStoreType, poolName, "")
+						throttler.handleStoreFailure(MySQLInventoryType, HAProxyStoreType, poolName, "")
 						return log.Errorf("Unable to get HAproxy data from %s: %+v", u.String(), err)
 					}
 					if backendHosts, err := haproxy.ParseCsvHosts(csv, poolName); err == nil {
@@ -317,7 +304,7 @@ func (throttler *Throttler) refreshMySQLInventory() error {
 						totalHosts = append(totalHosts, hosts...)
 						log.Debugf("Read %+v hosts from haproxy %s/#%s", len(hosts), u.String(), poolName)
 					} else {
-						throttler.handleStoreFailure(mysqlInventoryType, haproxyStoreType, poolName, "")
+						throttler.handleStoreFailure(MySQLInventoryType, HAProxyStoreType, poolName, "")
 						log.Errorf("Unable to get HAproxy hosts from %s/#%s: %+v", u.String(), poolName, err)
 					}
 				}
@@ -335,7 +322,7 @@ func (throttler *Throttler) refreshMySQLInventory() error {
 					key := mysql.InstanceKey{Hostname: host, Port: clusterSettings.Port}
 					addInstanceKey(&key, clusterName, clusterSettings, clusterProbes.InstanceProbes)
 				}
-				throttler.handleStoreHealthy(mysqlInventoryType, haproxyStoreType, poolName, "")
+				throttler.handleStoreHealthy(MySQLInventoryType, HAProxyStoreType, poolName, "")
 				throttler.mysqlClusterProbesChan <- clusterProbes
 				return nil
 			}
@@ -344,12 +331,11 @@ func (throttler *Throttler) refreshMySQLInventory() error {
 				log.Debugf("getting vitess data from %s", clusterSettings.VitessSettings.API)
 				keyspace := clusterSettings.VitessSettings.Keyspace
 				shard := clusterSettings.VitessSettings.Shard
-				startTime := time.Now()
-				defer throttler.updateStoreTimeMs(mysqlInventoryType, vitessStoreType, keyspace, shard, startTime)
-				throttler.handleStoreAttempt(mysqlInventoryType, vitessStoreType, keyspace, shard)
+				defer throttler.updateStoreLatency(MySQLInventoryType, VitessStoreType, keyspace, shard, startTime)
+				throttler.handleStoreAttempt(MySQLInventoryType, VitessStoreType, keyspace, shard)
 				tablets, err := vitess.ParseTablets(clusterSettings.VitessSettings)
 				if err != nil {
-					throttler.handleStoreFailure(mysqlInventoryType, vitessStoreType, keyspace, shard)
+					throttler.handleStoreFailure(MySQLInventoryType, VitessStoreType, keyspace, shard)
 					return log.Errorf("Unable to get vitess hosts from %s, %s/%s: %+v", clusterSettings.VitessSettings.API, keyspace, shard, err)
 				}
 				log.Debugf("Read %+v hosts from vitess %s, %s/%s", len(tablets), clusterSettings.VitessSettings.API, keyspace, shard)
@@ -362,7 +348,7 @@ func (throttler *Throttler) refreshMySQLInventory() error {
 					key := mysql.InstanceKey{Hostname: tablet.MysqlHostname, Port: int(tablet.MysqlPort)}
 					addInstanceKey(&key, clusterName, clusterSettings, clusterProbes.InstanceProbes)
 				}
-				throttler.handleStoreHealthy(mysqlInventoryType, vitessStoreType, keyspace, shard)
+				throttler.handleStoreHealthy(MySQLInventoryType, VitessStoreType, keyspace, shard)
 				throttler.mysqlClusterProbesChan <- clusterProbes
 				return nil
 			}
@@ -558,58 +544,6 @@ func (throttler *Throttler) timeSinceMetricHealthy(metricName string) (timeSince
 		return time.Since(lastOKTime.(time.Time)), true
 	}
 	return 0, false
-}
-
-func (throttler *Throttler) getStoreHealth(storeHealthKey string) base.StoreHealth {
-	if value, found := throttler.storesHealth.Get(storeHealthKey); found {
-		return value.(base.StoreHealth)
-	}
-	return base.StoreHealth{}
-}
-
-func getStoreHealthKey(inventoryType inventoryType, storeType storeType, storeName, storeShardName string) string {
-	if storeShardName != "" {
-		return fmt.Sprintf("%s/%s/%s/%s", inventoryType, storeType, storeName, storeShardName)
-	}
-	return fmt.Sprintf("%s/%s/%s", inventoryType, storeType, storeName)
-}
-
-func (throttler *Throttler) handleStoreAttempt(inventoryType inventoryType, storeType storeType, storeName, storeShardName string) {
-	metrics.GetOrRegisterCounter("store.total", nil).Inc(1)
-	metrics.GetOrRegisterCounter(fmt.Sprintf("store.%s.total", inventoryType), nil).Inc(1)
-	metrics.GetOrRegisterCounter(fmt.Sprintf("store.%s.%s.total", inventoryType, storeType), nil).Inc(1)
-	metrics.GetOrRegisterCounter(fmt.Sprintf("store.%s.%s.%s.total", inventoryType, storeType, storeName), nil).Inc(1)
-	if storeShardName != "" {
-		metrics.GetOrRegisterCounter(fmt.Sprintf("store.%s.%s.%s.%s.total", inventoryType, storeType, storeName, storeShardName), nil).Inc(1)
-	}
-}
-
-func (throttler *Throttler) handleStoreFailure(inventoryType inventoryType, storeType storeType, storeName, storeShardName string) {
-	metrics.GetOrRegisterCounter("store.error", nil).Inc(1)
-	metrics.GetOrRegisterCounter(fmt.Sprintf("store.%s.error", inventoryType), nil).Inc(1)
-	metrics.GetOrRegisterCounter(fmt.Sprintf("store.%s.%s.error", inventoryType, storeType), nil).Inc(1)
-	metrics.GetOrRegisterCounter(fmt.Sprintf("store.%s.%s.%s.error", inventoryType, storeType, storeName), nil).Inc(1)
-	if storeShardName != "" {
-		metrics.GetOrRegisterCounter(fmt.Sprintf("store.%s.%s.%s.%s.error", inventoryType, storeType, storeName, storeShardName), nil).Inc(1)
-	}
-}
-
-func (throttler *Throttler) handleStoreHealthy(inventoryType inventoryType, storeType storeType, storeName, storeShardName string) {
-	storeHealthKey := getStoreHealthKey(inventoryType, storeType, storeName, storeShardName)
-	storeHealth := throttler.getStoreHealth(storeHealthKey)
-	storeHealth.LastHealthyAt = time.Now()
-	throttler.storesHealth.Set(storeHealthKey, storeHealth, cache.DefaultExpiration)
-}
-
-func (throttler *Throttler) updateStoreTimeMs(inventoryType inventoryType, storeType storeType, storeName, storeShardName string, startTime time.Time) {
-	ms := time.Since(startTime).Milliseconds()
-	metrics.GetOrRegisterCounter("store.time_ms", nil).Inc(ms)
-	metrics.GetOrRegisterCounter(fmt.Sprintf("store.%s.time_ms", inventoryType), nil).Inc(ms)
-	metrics.GetOrRegisterCounter(fmt.Sprintf("store.%s.%s.time_ms", inventoryType, storeType), nil).Inc(ms)
-	metrics.GetOrRegisterCounter(fmt.Sprintf("store.%s.%s.%s.time_ms", inventoryType, storeType, storeName), nil).Inc(ms)
-	if storeShardName != "" {
-		metrics.GetOrRegisterCounter(fmt.Sprintf("store.%s.%s.%s.%s.time_ms", inventoryType, storeType, storeName, storeShardName), nil).Inc(ms)
-	}
 }
 
 func (throttler *Throttler) metricsHealthSnapshot() base.MetricHealthMap {
