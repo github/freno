@@ -4,11 +4,23 @@ package config
 // ProxySQL-specific configuration
 //
 
+import (
+	"sort"
+	"strings"
+)
+
 type ProxySQLConfigurationSettings struct {
-	Addresses        []string
-	User             string
-	Password         string
-	HostgroupComment string
+	Addresses           []string
+	User                string
+	Password            string
+	HostgroupComment    string
+	IgnoreServerTTLSecs int
+}
+
+func (settings *ProxySQLConfigurationSettings) URL() string {
+	addrs := settings.Addresses
+	sort.Strings(addrs)
+	return strings.Join(addrs, ",")
 }
 
 func (settings *ProxySQLConfigurationSettings) IsEmpty() bool {

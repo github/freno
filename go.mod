@@ -3,6 +3,7 @@ module github.com/github/freno
 go 1.14
 
 require (
+	github.com/DATA-DOG/go-sqlmock v1.4.1
 	github.com/armon/go-metrics v0.0.0-20190430140413-ec5e00d3c878
 	github.com/boltdb/bolt v1.3.1
 	github.com/bradfitz/gomemcache v0.0.0-20190913173617-a41fca850d0b

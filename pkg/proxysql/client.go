@@ -5,6 +5,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/github/freno/pkg/config"
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/jmoiron/sqlx"
 	"github.com/patrickmn/go-cache"
@@ -32,62 +33,53 @@ func (ms *MySQLServer) Addr() string {
 
 type Client struct {
 	sync.Mutex
-	addrs             []string
-	currentAddr       string
 	user              string
 	password          string
-	db                *sqlx.DB
+	dbs               map[string]*sqlx.DB
 	ignoreServerCache *cache.Cache
 }
 
-func New(addrs []string, user, password string, ignoreServerTTL time.Duration) (*Client, error) {
-	c := &Client{
-		addrs:             addrs,
-		user:              user,
-		password:          password,
+func NewClient() *Client {
+	ignoreServerTTL := time.Duration(30) * time.Second // TODO: fix this
+	return &Client{
+		dbs:               make(map[string]*sqlx.DB, 0),
 		ignoreServerCache: cache.New(ignoreServerTTL, time.Second),
 	}
-	return c, c.Reconnect()
 }
 
-func (c *Client) Close() {
-	c.Lock()
-	defer c.Unlock()
-
-	if c.db != nil {
-		c.db.Close()
+func (c *Client) getDB(settings config.ProxySQLConfigurationSettings) (*sqlx.DB, error) {
+	key := settings.URL()
+	if db, found := c.dbs[key]; found {
+		return db, nil
 	}
-}
 
-func (c *Client) Reconnect() (err error) {
-	c.Lock()
-	defer c.Unlock()
-
-	for _, addr := range c.addrs {
-		if addr == c.currentAddr {
-			continue
-		}
-		db, err := sqlx.Connect("mysql", fmt.Sprintf("%s:%s@tcp(%s)/main", c.user, c.password, addr))
+	var err error
+	for _, addr := range settings.Addresses {
+		db, err := sqlx.Connect("mysql", fmt.Sprintf("%s:%s@tcp(%s)/main", settings.User, settings.Password, addr))
 		if err == nil {
-			c.currentAddr = addr
-			c.db = db
-			return nil
+			c.dbs[key] = db
+			return c.dbs[key], nil
 		}
 
 	}
-	return err
+	return nil, err
 }
 
-func (c *Client) GetRHGServers(rhgComment string) (servers []*MySQLServer, err error) {
+func (c *Client) GetRHGServers(settings config.ProxySQLConfigurationSettings) (servers []*MySQLServer, err error) {
 	c.Lock()
 	defer c.Unlock()
+
+	db, err := c.getDB(settings)
+	if err != nil {
+		return servers, err
+	}
 
 	allServers := make([]*MySQLServer, 0)
-	err = c.db.Select(&allServers, fmt.Sprintf(`SELECT ms.hostname, ms.port, ms.status, smg.variable_value AS table_version
+	err = db.Select(&allServers, fmt.Sprintf(`SELECT ms.hostname, ms.port, ms.status, smg.variable_value AS table_version
 		FROM main.runtime_mysql_replication_hostgroups rhg
 		JOIN main.runtime_mysql_servers ms ON rhg.reader_hostgroup=ms.hostgroup_id
 		JOIN stats.stats_mysql_global smg ON smg.variable_name='Servers_table_version'
-		WHERE rhg.comment='%s'`, rhgComment))
+		WHERE rhg.comment='%s'`, settings.HostgroupComment))
 	if err != nil {
 		return servers, err
 	}
@@ -99,7 +91,7 @@ func (c *Client) GetRHGServers(rhgComment string) (servers []*MySQLServer, err e
 				servers = append(servers, server)
 			}
 		default:
-			c.ignoreServerCache.Set(server.Addr(), 1, cache.DefaultExpiration)
+			c.ignoreServerCache.Set(server.Addr(), true, cache.DefaultExpiration)
 		}
 	}
 

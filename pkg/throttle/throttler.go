@@ -15,6 +15,7 @@ import (
 	"github.com/github/freno/pkg/config"
 	"github.com/github/freno/pkg/haproxy"
 	"github.com/github/freno/pkg/mysql"
+	"github.com/github/freno/pkg/proxysql"
 	"github.com/github/freno/pkg/vitess"
 
 	"github.com/outbrain/golib/log"
@@ -67,6 +68,8 @@ type Throttler struct {
 
 	memcacheClient *memcache.Client
 	memcachePath   string
+
+	proxysqlClient *proxysql.Client
 
 	throttledAppsMutex sync.Mutex
 
@@ -313,6 +316,30 @@ func (throttler *Throttler) refreshMySQLInventory() error {
 				}
 				for _, host := range totalHosts {
 					key := mysql.InstanceKey{Hostname: host, Port: clusterSettings.Port}
+					addInstanceKey(&key, clusterName, clusterSettings, clusterProbes.InstanceProbes)
+				}
+				throttler.mysqlClusterProbesChan <- clusterProbes
+				return nil
+			}
+
+			if !clusterSettings.ProxySQLSettings.IsEmpty() {
+				if throttler.proxysqlClient == nil {
+					throttler.proxysqlClient = proxysql.NewClient()
+				}
+
+				log.Debugf("getting proxysql data from %s, hostgroup comment: %q", clusterSettings.ProxySQLSettings.Addresses, clusterSettings.ProxySQLSettings.HostgroupComment)
+				servers, err := throttler.proxysqlClient.GetRHGServers(clusterSettings.ProxySQLSettings)
+				if err != nil {
+					return log.Errorf("Unable to get proxysql hosts from %s: %+v", clusterSettings.ProxySQLSettings.Addresses, err)
+				}
+				log.Debugf("Read %+v hosts from proxysql %s, hostgroup comment: %q", len(servers), clusterSettings.ProxySQLSettings.Addresses, clusterSettings.ProxySQLSettings.HostgroupComment)
+				clusterProbes := &mysql.ClusterProbes{
+					ClusterName:      clusterName,
+					IgnoreHostsCount: clusterSettings.IgnoreHostsCount,
+					InstanceProbes:   mysql.NewProbes(),
+				}
+				for _, server := range servers {
+					key := mysql.InstanceKey{Hostname: server.Hostname, Port: int(server.Port)}
 					addInstanceKey(&key, clusterName, clusterSettings, clusterProbes.InstanceProbes)
 				}
 				throttler.mysqlClusterProbesChan <- clusterProbes
