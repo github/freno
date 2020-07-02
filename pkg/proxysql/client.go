@@ -8,6 +8,7 @@ import (
 	"github.com/github/freno/pkg/config"
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/jmoiron/sqlx"
+	"github.com/outbrain/golib/log"
 	"github.com/patrickmn/go-cache"
 )
 
@@ -37,13 +38,14 @@ type Client struct {
 	password          string
 	dbs               map[string]*sqlx.DB
 	ignoreServerCache *cache.Cache
+	ignoreServerTTL   time.Duration
 }
 
-func NewClient() *Client {
-	ignoreServerTTL := time.Duration(30) * time.Second // TODO: fix this
+func NewClient(ignoreServerTTL time.Duration) *Client {
 	return &Client{
 		dbs:               make(map[string]*sqlx.DB, 0),
 		ignoreServerCache: cache.New(ignoreServerTTL, time.Second),
+		ignoreServerTTL:   ignoreServerTTL,
 	}
 }
 
@@ -89,6 +91,8 @@ func (c *Client) GetRHGServers(settings config.ProxySQLConfigurationSettings) (s
 		case MySQLServerOnline:
 			if _, ignore := c.ignoreServerCache.Get(server.Addr()); !ignore {
 				servers = append(servers, server)
+			} else {
+				log.Debugf("host %q is in the proxysql ignore-server cache, ignoring for %s", server.Addr(), c.ignoreServerTTL)
 			}
 		default:
 			c.ignoreServerCache.Set(server.Addr(), true, cache.DefaultExpiration)

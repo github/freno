@@ -60,6 +60,7 @@ func TestGetRHGServers(t *testing.T) {
 		c := &Client{
 			dbs:               map[string]*sqlx.DB{"127.0.0.1:3306": sqlx.NewDb(db, "")},
 			ignoreServerCache: cache.New(cache.NoExpiration, time.Second),
+			ignoreServerTTL:   time.Second,
 		}
 		c.ignoreServerCache.Set("replica1:3306", true, cache.DefaultExpiration) // this host should be ignored
 
