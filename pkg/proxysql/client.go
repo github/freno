@@ -2,7 +2,6 @@ package proxysql
 
 import (
 	"fmt"
-	"sync"
 	"time"
 
 	"github.com/github/freno/pkg/config"
@@ -33,7 +32,6 @@ func (ms *MySQLServer) Addr() string {
 }
 
 type Client struct {
-	sync.Mutex
 	user              string
 	password          string
 	dbs               map[string]*sqlx.DB
@@ -68,9 +66,6 @@ func (c *Client) getDB(settings config.ProxySQLConfigurationSettings) (*sqlx.DB,
 }
 
 func (c *Client) GetRHGServers(settings config.ProxySQLConfigurationSettings) (servers []*MySQLServer, err error) {
-	c.Lock()
-	defer c.Unlock()
-
 	db, err := c.getDB(settings)
 	if err != nil {
 		return servers, err

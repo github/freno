@@ -10,11 +10,10 @@ import (
 )
 
 type ProxySQLConfigurationSettings struct {
-	Addresses           []string
-	User                string
-	Password            string
-	HostgroupComment    string
-	IgnoreServerTTLSecs int
+	Addresses        []string
+	User             string
+	Password         string
+	HostgroupComment string
 }
 
 func (settings *ProxySQLConfigurationSettings) URL() string {
