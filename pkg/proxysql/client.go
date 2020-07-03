@@ -55,7 +55,9 @@ func (c *Client) GetDB(settings config.ProxySQLConfigurationSettings) (*sqlx.DB,
 		if db, found := c.dbs[addr]; found {
 			return db, addr, nil
 		}
-		db, err := sqlx.Connect("mysql", fmt.Sprintf("%s:%s@tcp(%s)/main", settings.User, settings.Password, addr))
+		db, err := sqlx.Connect("mysql", fmt.Sprintf("%s:%s@tcp(%s)/?interpolateParams=true&timeout=500ms",
+			settings.User, settings.Password, addr,
+		))
 		if err != nil {
 			lastErr = err
 			continue

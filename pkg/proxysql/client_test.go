@@ -21,24 +21,39 @@ func TestProxySQLNewClient(t *testing.T) {
 }
 
 func TestProxySQLGetDB(t *testing.T) {
-	mockDb, _, _ := sqlmock.New()
-	c := &Client{
-		dbs: map[string]*sqlx.DB{
-			"127.0.0.1:3306": sqlx.NewDb(mockDb, ""),
-		},
-	}
-	db, addr, err := c.GetDB(config.ProxySQLConfigurationSettings{
-		Addresses: []string{"127.0.0.1:3306"},
+	t.Run("success", func(t *testing.T) {
+		mockDb, _, _ := sqlmock.New()
+		c := &Client{
+			dbs: map[string]*sqlx.DB{
+				"127.0.0.1:3306": sqlx.NewDb(mockDb, ""),
+			},
+		}
+		db, addr, err := c.GetDB(config.ProxySQLConfigurationSettings{
+			Addresses: []string{"127.0.0.1:3306"},
+		})
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if addr != "127.0.0.1:3306" {
+			t.Fatalf("expected %q, got %q", "127.0.0.1:3306", addr)
+		}
+		if db == nil {
+			t.Fatal("expected non-nil db")
+		}
 	})
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if addr != "127.0.0.1:3306" {
-		t.Fatalf("expected %q, got %q", "127.0.0.1:3306", addr)
-	}
-	if db == nil {
-		t.Fatal("expected non-nil db")
-	}
+
+	t.Run("failure", func(t *testing.T) {
+		c := &Client{}
+		_, _, err := c.GetDB(config.ProxySQLConfigurationSettings{
+			Addresses: []string{"this.should.fail:3306"},
+		})
+		if err == nil {
+			t.Fatal("expected error for failed connection")
+		}
+		if err.Error() != "dial tcp: lookup this.should.fail: no such host" {
+			t.Fatalf("expected a 'no such host' error, got %v", err)
+		}
+	})
 }
 
 func TestProxySQLCloseDB(t *testing.T) {
