@@ -21,17 +21,23 @@ func TestProxySQLNewClient(t *testing.T) {
 }
 
 func TestProxySQLGetDB(t *testing.T) {
-	db, _, _ := sqlmock.New()
+	mockDb, _, _ := sqlmock.New()
 	c := &Client{
 		dbs: map[string]*sqlx.DB{
-			"test": sqlx.NewDb(db, ""),
+			"127.0.0.1:3306": sqlx.NewDb(mockDb, ""),
 		},
 	}
-	_, _, err := c.GetDB(config.ProxySQLConfigurationSettings{
-		HostgroupComment: "test",
+	db, addr, err := c.GetDB(config.ProxySQLConfigurationSettings{
+		Addresses: []string{"127.0.0.1:3306"},
 	})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
+	}
+	if addr != "127.0.0.1:3306" {
+		t.Fatalf("expected %q, got %q", "127.0.0.1:3306", addr)
+	}
+	if db == nil {
+		t.Fatal("expected non-nil db")
 	}
 }
 
