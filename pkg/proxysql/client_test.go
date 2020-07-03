@@ -10,26 +10,22 @@ import (
 	"github.com/patrickmn/go-cache"
 )
 
-func TestGetRHGServers(t *testing.T) {
+func TestGetReplicationHostgroupServers(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
 		db, mock, _ := sqlmock.New()
-		rows := sqlmock.NewRows([]string{"hostname", "port", "status", "table_version"}).
-			AddRow("replica1", 3306, "ONLINE", 1).
-			AddRow("replica2", 3306, "SHUNNED", 1)
-		mock.ExpectQuery(`SELECT ms.hostname, ms.port, ms.status, smg.variable_value AS table_version
-	        FROM main.runtime_mysql_replication_hostgroups rhg
-	        JOIN main.runtime_mysql_servers ms ON rhg.reader_hostgroup=ms.hostgroup_id
-	        JOIN stats.stats_mysql_global smg ON smg.variable_name='Servers_table_version'
-		WHERE rhg.comment='success'`).WillReturnRows(rows)
+		rows := sqlmock.NewRows([]string{"hostname", "port", "status"}).
+			AddRow("replica1", 3306, "ONLINE").
+			AddRow("replica2", 3306, "SHUNNED")
+		mock.ExpectQuery(`SELECT ms.hostname, ms.port, ms.status
+		        FROM main.runtime_mysql_replication_hostgroups rhg
+		        JOIN main.runtime_mysql_servers ms ON rhg.reader_hostgroup=ms.hostgroup_id
+			WHERE rhg.comment='success'`).WillReturnRows(rows)
 
 		c := &Client{
-			dbs: map[string]*sqlx.DB{
-				"127.0.0.1:3306": sqlx.NewDb(db, ""),
-			},
 			ignoreServerCache: cache.New(cache.NoExpiration, time.Second),
 		}
 
-		servers, err := c.GetRHGServers(config.ProxySQLConfigurationSettings{
+		servers, err := c.GetReplicationHostgroupServers(sqlx.NewDb(db, ""), config.ProxySQLConfigurationSettings{
 			Addresses:        []string{"127.0.0.1:3306"},
 			HostgroupComment: "success",
 		})
@@ -48,23 +44,21 @@ func TestGetRHGServers(t *testing.T) {
 
 	t.Run("ignored", func(t *testing.T) {
 		db, mock, _ := sqlmock.New()
-		rows := sqlmock.NewRows([]string{"hostname", "port", "status", "table_version"}).
-			AddRow("replica1", 3306, "ONLINE", 1).
-			AddRow("replica2", 3306, "ONLINE", 1)
-		mock.ExpectQuery(`SELECT ms.hostname, ms.port, ms.status, smg.variable_value AS table_version
-	        FROM main.runtime_mysql_replication_hostgroups rhg
-	        JOIN main.runtime_mysql_servers ms ON rhg.reader_hostgroup=ms.hostgroup_id
-	        JOIN stats.stats_mysql_global smg ON smg.variable_name='Servers_table_version'
-		WHERE rhg.comment='ignored'`).WillReturnRows(rows)
+		rows := sqlmock.NewRows([]string{"hostname", "port", "status"}).
+			AddRow("replica1", 3306, "ONLINE").
+			AddRow("replica2", 3306, "ONLINE")
+		mock.ExpectQuery(`SELECT ms.hostname, ms.port, ms.status
+		        FROM main.runtime_mysql_replication_hostgroups rhg
+		        JOIN main.runtime_mysql_servers ms ON rhg.reader_hostgroup=ms.hostgroup_id
+			WHERE rhg.comment='ignored'`).WillReturnRows(rows)
 
 		c := &Client{
-			dbs:               map[string]*sqlx.DB{"127.0.0.1:3306": sqlx.NewDb(db, "")},
-			ignoreServerCache: cache.New(cache.NoExpiration, time.Second),
-			ignoreServerTTL:   time.Second,
+			ignoreServerCache:      cache.New(cache.NoExpiration, time.Second),
+			defaultIgnoreServerTTL: time.Second,
 		}
-		c.ignoreServerCache.Set("replica1:3306", true, cache.DefaultExpiration) // this host should be ignored
+		c.ignoreServerCache.Set("replica1:3306", true, cache.NoExpiration) // this host should be ignored
 
-		servers, err := c.GetRHGServers(config.ProxySQLConfigurationSettings{
+		servers, err := c.GetReplicationHostgroupServers(sqlx.NewDb(db, ""), config.ProxySQLConfigurationSettings{
 			Addresses:        []string{"127.0.0.1:3306"},
 			HostgroupComment: "ignored",
 		})

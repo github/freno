@@ -105,6 +105,10 @@ func NewThrottler() *Throttler {
 	}
 	throttler.memcachePath = config.Settings().MemcachePath
 
+	if throttler.hasProxySQLStore() {
+		throttler.proxysqlClient = proxysql.NewClient(mysqlRefreshInterval)
+	}
+
 	return throttler
 }
 
@@ -186,6 +190,15 @@ func (throttler *Throttler) Operate() {
 			time.Sleep(1 * time.Second)
 		}
 	}
+}
+
+func (throttler *Throttler) hasProxySQLStore() bool {
+	for _, clusterSettings := range config.Settings().Stores.MySQL.Clusters {
+		if !clusterSettings.ProxySQLSettings.IsEmpty() {
+			return true
+		}
+	}
+	return false
 }
 
 func (throttler *Throttler) collectMySQLMetrics() error {
@@ -323,16 +336,18 @@ func (throttler *Throttler) refreshMySQLInventory() error {
 			}
 
 			if !clusterSettings.ProxySQLSettings.IsEmpty() {
-				if throttler.proxysqlClient == nil {
-					throttler.proxysqlClient = proxysql.NewClient(mysqlRefreshInterval)
+				db, addr, err := throttler.proxysqlClient.GetDB(clusterSettings.ProxySQLSettings)
+				if err != nil {
+					return err
 				}
 
-				log.Debugf("getting proxysql data from %s, replication hostgroup: %q", clusterSettings.ProxySQLSettings.Addresses, clusterSettings.ProxySQLSettings.HostgroupComment)
-				servers, err := throttler.proxysqlClient.GetRHGServers(clusterSettings.ProxySQLSettings)
+				log.Debugf("getting ProxySQL data from %s, replication hostgroup: %q", addr, clusterSettings.ProxySQLSettings.HostgroupComment)
+				servers, err := throttler.proxysqlClient.GetReplicationHostgroupServers(db, clusterSettings.ProxySQLSettings)
 				if err != nil {
-					return log.Errorf("Unable to get proxysql hosts from %s: %+v", clusterSettings.ProxySQLSettings.Addresses, err)
+					defer throttler.proxysqlClient.CloseDB(addr)
+					return log.Errorf("Unable to get proxysql hosts from %s: %+v", addr, err)
 				}
-				log.Debugf("Read %+v hosts from proxysql %s, replication hostgroup: %q", len(servers), clusterSettings.ProxySQLSettings.Addresses, clusterSettings.ProxySQLSettings.HostgroupComment)
+				log.Debugf("Read %+v hosts from ProxySQL %s, replication hostgroup: %q", len(servers), addr, clusterSettings.ProxySQLSettings.HostgroupComment)
 				clusterProbes := &mysql.ClusterProbes{
 					ClusterName:      clusterName,
 					IgnoreHostsCount: clusterSettings.IgnoreHostsCount,
