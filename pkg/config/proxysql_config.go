@@ -1,7 +1,5 @@
 package config
 
-import "strings"
-
 //
 // ProxySQL-specific configuration
 //
@@ -11,18 +9,18 @@ type ProxySQLConfigurationSettings struct {
 	User                string
 	Password            string
 	HostgroupComment    string
+	HostgroupID         uint
 	IgnoreServerTTLSecs uint
-}
-
-func (settings *ProxySQLConfigurationSettings) String() string {
-	return strings.Join(settings.Addresses, ",")
 }
 
 func (settings *ProxySQLConfigurationSettings) IsEmpty() bool {
 	if len(settings.Addresses) == 0 {
 		return true
 	}
-	if settings.User == "" || settings.Password == "" || settings.HostgroupComment == "" {
+	if settings.User == "" || settings.Password == "" {
+		return true
+	}
+	if settings.HostgroupComment == "" && settings.HostgroupID > 0 {
 		return true
 	}
 	return false

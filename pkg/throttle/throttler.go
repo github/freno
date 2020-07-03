@@ -105,7 +105,7 @@ func NewThrottler() *Throttler {
 	}
 	throttler.memcachePath = config.Settings().MemcachePath
 
-	if throttler.hasProxySQLStore() {
+	if throttler.hasProxySQLStores() {
 		throttler.proxysqlClient = proxysql.NewClient(mysqlRefreshInterval)
 	}
 
@@ -192,7 +192,7 @@ func (throttler *Throttler) Operate() {
 	}
 }
 
-func (throttler *Throttler) hasProxySQLStore() bool {
+func (throttler *Throttler) hasProxySQLStores() bool {
 	for _, clusterSettings := range config.Settings().Stores.MySQL.Clusters {
 		if !clusterSettings.ProxySQLSettings.IsEmpty() {
 			return true

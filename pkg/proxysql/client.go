@@ -21,8 +21,8 @@ type MySQLServer struct {
 	Status   string `db:"status"`
 }
 
-// Addr returns a string of the hostname/port of a server
-func (ms *MySQLServer) Addr() string {
+// Address returns a string of the hostname/port of a server
+func (ms *MySQLServer) Address() string {
 	return fmt.Sprintf("%s:%d", ms.Hostname, ms.Port)
 }
 
@@ -74,10 +74,16 @@ func (c *Client) CloseDB(addr string) {
 // GetReplicationHostgroupServers returns a list of MySQLServers for a replication hostgroup, based on the 'comment' field
 func (c *Client) GetReplicationHostgroupServers(db *sqlx.DB, settings config.ProxySQLConfigurationSettings) (servers []*MySQLServer, err error) {
 	allServers := make([]*MySQLServer, 0)
-	err = db.Select(&allServers, fmt.Sprintf(`SELECT ms.hostname, ms.port, ms.status
-		FROM main.runtime_mysql_replication_hostgroups rhg
-		JOIN main.runtime_mysql_servers ms ON rhg.reader_hostgroup=ms.hostgroup_id
-		WHERE rhg.comment='%s'`, settings.HostgroupComment))
+	if settings.HostgroupID == 0 {
+		err = db.Select(&allServers, fmt.Sprintf(`SELECT ms.hostname, ms.port, ms.status
+			FROM main.runtime_mysql_replication_hostgroups rhg
+			JOIN main.runtime_mysql_servers ms ON rhg.reader_hostgroup=ms.hostgroup_id
+			WHERE rhg.comment='%s'`, settings.HostgroupComment))
+	} else {
+		err = db.Select(&allServers, fmt.Sprintf(`SELECT ms.hostname, ms.port, ms.status
+			FROM main.runtime_mysql_servers ms
+			WHERE ms.hostgroup_id=%d`, settings.HostgroupID))
+	}
 	if err != nil {
 		return servers, err
 	}
@@ -90,13 +96,13 @@ func (c *Client) GetReplicationHostgroupServers(db *sqlx.DB, settings config.Pro
 	for _, server := range allServers {
 		switch server.Status {
 		case "ONLINE":
-			if _, ignore := c.ignoreServerCache.Get(server.Addr()); !ignore {
+			if _, ignore := c.ignoreServerCache.Get(server.Address()); !ignore {
 				servers = append(servers, server)
 			} else {
-				log.Debugf("found host %q in the proxysql ignore-server cache, ignoring for %s", server.Addr(), ignoreServerTTL)
+				log.Debugf("found %q in the proxysql ignore-server cache, ignoring for %s", server.Address(), ignoreServerTTL)
 			}
 		default:
-			c.ignoreServerCache.Set(server.Addr(), true, ignoreServerTTL)
+			c.ignoreServerCache.Set(server.Address(), true, ignoreServerTTL)
 		}
 	}
 
