@@ -44,6 +44,7 @@ func NewClient(defaultIgnoreServerTTL time.Duration) *Client {
 	}
 }
 
+// GetDB returns a configured ProxySQL Admin connection
 func (c *Client) GetDB(settings config.ProxySQLConfigurationSettings) (*sqlx.DB, string, error) {
 	addrs := settings.Addresses
 	sort.Strings(addrs)
@@ -53,8 +54,7 @@ func (c *Client) GetDB(settings config.ProxySQLConfigurationSettings) (*sqlx.DB,
 		if db, found := c.dbs[addr]; found {
 			return db, addr, nil
 		}
-		db, err := sqlx.Connect("mysql", fmt.Sprintf("%s:%s@tcp(%s)/main", settings.User, settings.Password, addr))
-		if err == nil {
+		if db, err := sqlx.Connect("mysql", fmt.Sprintf("%s:%s@tcp(%s)/main", settings.User, settings.Password, addr)); err == nil {
 			c.dbs[addr] = db
 			return c.dbs[addr], addr, nil
 		}
@@ -63,6 +63,7 @@ func (c *Client) GetDB(settings config.ProxySQLConfigurationSettings) (*sqlx.DB,
 	return nil, "", err
 }
 
+// CloseDB closes a ProxySQL Admin connection based on an address string
 func (c *Client) CloseDB(addr string) {
 	if db, found := c.dbs[addr]; found {
 		db.Close()
