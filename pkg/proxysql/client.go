@@ -1,6 +1,7 @@
 package proxysql
 
 import (
+	"errors"
 	"fmt"
 	"sort"
 	"time"
@@ -49,18 +50,23 @@ func (c *Client) GetDB(settings config.ProxySQLConfigurationSettings) (*sqlx.DB,
 	addrs := settings.Addresses
 	sort.Strings(addrs)
 
-	var err error
+	var lastErr error
 	for _, addr := range addrs {
 		if db, found := c.dbs[addr]; found {
 			return db, addr, nil
 		}
-		if db, err := sqlx.Connect("mysql", fmt.Sprintf("%s:%s@tcp(%s)/main", settings.User, settings.Password, addr)); err == nil {
-			c.dbs[addr] = db
-			return c.dbs[addr], addr, nil
+		db, err := sqlx.Connect("mysql", fmt.Sprintf("%s:%s@tcp(%s)/main", settings.User, settings.Password, addr))
+		if err != nil {
+			lastErr = err
+			continue
 		}
-
+		c.dbs[addr] = db
+		return c.dbs[addr], addr, nil
 	}
-	return nil, "", err
+	if lastErr != nil {
+		return nil, "", lastErr
+	}
+	return nil, "", errors.New("failed to get connection")
 }
 
 // CloseDB closes a ProxySQL Admin connection based on an address string
