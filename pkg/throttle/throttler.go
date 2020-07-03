@@ -341,13 +341,13 @@ func (throttler *Throttler) refreshMySQLInventory() error {
 					return err
 				}
 
-				log.Debugf("getting ProxySQL data from %s, replication hostgroup: %q", addr, clusterSettings.ProxySQLSettings.HostgroupComment)
+				log.Debugf("getting ProxySQL data from %q, replication hostgroup: %q", addr, clusterSettings.ProxySQLSettings.HostgroupComment)
 				servers, err := throttler.proxysqlClient.GetReplicationHostgroupServers(db, clusterSettings.ProxySQLSettings)
 				if err != nil {
-					defer throttler.proxysqlClient.CloseDB(addr)
-					return log.Errorf("Unable to get proxysql hosts from %s: %+v", addr, err)
+					throttler.proxysqlClient.CloseDB(addr)
+					return log.Errorf("Unable to get proxysql hosts from %q: %+v", addr, err)
 				}
-				log.Debugf("Read %+v hosts from ProxySQL %s, replication hostgroup: %q", len(servers), addr, clusterSettings.ProxySQLSettings.HostgroupComment)
+				log.Debugf("Read %+v hosts from ProxySQL %q, replication hostgroup: %q", len(servers), addr, clusterSettings.ProxySQLSettings.HostgroupComment)
 				clusterProbes := &mysql.ClusterProbes{
 					ClusterName:      clusterName,
 					IgnoreHostsCount: clusterSettings.IgnoreHostsCount,
