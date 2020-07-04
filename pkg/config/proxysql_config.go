@@ -8,7 +8,6 @@ type ProxySQLConfigurationSettings struct {
 	Addresses           []string
 	User                string
 	Password            string
-	HostgroupComment    string
 	HostgroupID         uint
 	IgnoreServerTTLSecs uint
 }
@@ -20,7 +19,7 @@ func (settings *ProxySQLConfigurationSettings) IsEmpty() bool {
 	if settings.User == "" || settings.Password == "" {
 		return true
 	}
-	if settings.HostgroupComment == "" && settings.HostgroupID > 0 {
+	if settings.HostgroupID < 1 {
 		return true
 	}
 	return false

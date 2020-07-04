@@ -69,54 +69,21 @@ func TestProxySQLCloseDB(t *testing.T) {
 	}
 }
 
-func TestProxySQLGetReplicationHostgroupServers(t *testing.T) {
-	t.Run("hostgroup-comment", func(t *testing.T) {
+func TestProxySQLGetConnectionPoolServers(t *testing.T) {
+	t.Run("success", func(t *testing.T) {
 		db, mock, _ := sqlmock.New()
-		rows := sqlmock.NewRows([]string{"hostname", "port", "status"}).
-			AddRow("replica1", 3306, "ONLINE").
-			AddRow("replica2", 3306, "SHUNNED")
-		mock.ExpectQuery(`SELECT ms.hostname, ms.port, ms.status
-		        FROM main.runtime_mysql_replication_hostgroups rhg
-		        JOIN main.runtime_mysql_servers ms ON rhg.reader_hostgroup=ms.hostgroup_id
-			WHERE rhg.comment='success'`).WillReturnRows(rows)
-
-		c := &Client{
-			ignoreServerCache: cache.New(cache.NoExpiration, time.Second),
-		}
-
-		servers, err := c.GetReplicationHostgroupServers(sqlx.NewDb(db, ""), config.ProxySQLConfigurationSettings{
-			Addresses:        []string{"127.0.0.1:3306"},
-			HostgroupComment: "success",
-		})
-		if err != nil {
-			t.Fatalf("got unexpected error: %v", err)
-		}
-
-		if len(servers) != 1 {
-			t.Fatalf("expected only 1 server, got %d", len(servers))
-		}
-		replica := servers[0]
-		if replica.Hostname != "replica1" {
-			t.Fatalf("expected host to have hostname %q, got %q", replica.Hostname, "replica1")
-		}
-	})
-
-	t.Run("hostgroup-id", func(t *testing.T) {
-		db, mock, _ := sqlmock.New()
-		rows := sqlmock.NewRows([]string{"hostname", "port", "status"}).
+		rows := sqlmock.NewRows([]string{"srv_host", "srv_port", "status"}).
 			AddRow("replica1", 3306, "ONLINE").
 			AddRow("replica2", 3306, "ONLINE")
-		mock.ExpectQuery(`SELECT ms.hostname, ms.port, ms.status
-		        FROM main.runtime_mysql_servers ms
-			WHERE ms.hostgroup_id=1`).WillReturnRows(rows)
+		mock.ExpectQuery(`SELECT srv_host, srv_port, status FROM stats_mysql_connection_pool WHERE hostgroup=123`).WillReturnRows(rows)
 
 		c := &Client{
 			ignoreServerCache: cache.New(cache.NoExpiration, time.Second),
 		}
 
-		servers, err := c.GetReplicationHostgroupServers(sqlx.NewDb(db, ""), config.ProxySQLConfigurationSettings{
+		servers, err := c.GetConnectionPoolServers(sqlx.NewDb(db, ""), config.ProxySQLConfigurationSettings{
 			Addresses:   []string{"127.0.0.1:3306"},
-			HostgroupID: 1,
+			HostgroupID: 123,
 		})
 		if err != nil {
 			t.Fatalf("got unexpected error: %v", err)
@@ -129,13 +96,10 @@ func TestProxySQLGetReplicationHostgroupServers(t *testing.T) {
 
 	t.Run("ignored", func(t *testing.T) {
 		db, mock, _ := sqlmock.New()
-		rows := sqlmock.NewRows([]string{"hostname", "port", "status"}).
+		rows := sqlmock.NewRows([]string{"srv_host", "srv_port", "status"}).
 			AddRow("replica1", 3306, "ONLINE").
 			AddRow("replica2", 3306, "ONLINE")
-		mock.ExpectQuery(`SELECT ms.hostname, ms.port, ms.status
-		        FROM main.runtime_mysql_replication_hostgroups rhg
-		        JOIN main.runtime_mysql_servers ms ON rhg.reader_hostgroup=ms.hostgroup_id
-			WHERE rhg.comment='ignored'`).WillReturnRows(rows)
+		mock.ExpectQuery(`SELECT srv_host, srv_port, status FROM stats_mysql_connection_pool WHERE hostgroup=321`).WillReturnRows(rows)
 
 		c := &Client{
 			ignoreServerCache:      cache.New(cache.NoExpiration, time.Second),
@@ -143,9 +107,9 @@ func TestProxySQLGetReplicationHostgroupServers(t *testing.T) {
 		}
 		c.ignoreServerCache.Set("replica1:3306", true, cache.NoExpiration) // this host should be ignored
 
-		servers, err := c.GetReplicationHostgroupServers(sqlx.NewDb(db, ""), config.ProxySQLConfigurationSettings{
-			Addresses:        []string{"127.0.0.1:3306"},
-			HostgroupComment: "ignored",
+		servers, err := c.GetConnectionPoolServers(sqlx.NewDb(db, ""), config.ProxySQLConfigurationSettings{
+			Addresses:   []string{"127.0.0.1:3306"},
+			HostgroupID: 321,
 		})
 		if err != nil {
 			t.Fatalf("got unexpected error: %v", err)
@@ -156,8 +120,8 @@ func TestProxySQLGetReplicationHostgroupServers(t *testing.T) {
 		}
 
 		replica := servers[0]
-		if replica.Hostname != "replica2" {
-			t.Fatalf("expected host to have hostname %q, got %q", replica.Hostname, "replica2")
+		if replica.Host != "replica2" {
+			t.Fatalf("expected host to have hostname %q, got %q", replica.Host, "replica2")
 		}
 	})
 }

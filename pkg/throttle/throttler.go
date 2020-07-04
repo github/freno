@@ -342,26 +342,21 @@ func (throttler *Throttler) refreshMySQLInventory() error {
 					return err
 				}
 
-				hostgroup := clusterSettings.ProxySQLSettings.HostgroupComment
-				if clusterSettings.ProxySQLSettings.HostgroupID > 0 {
-					hostgroup = fmt.Sprintf("%d", clusterSettings.ProxySQLSettings.HostgroupID)
-				}
-
-				dsn := fmt.Sprintf("mysql://%s/", addr)
-				log.Debugf("getting ProxySQL data from %s, replication hostgroup: %s", dsn, hostgroup)
-				servers, err := throttler.proxysqlClient.GetReplicationHostgroupServers(db, clusterSettings.ProxySQLSettings)
+				dsn := fmt.Sprintf("mysql://%s/stats", addr)
+				log.Debugf("getting ProxySQL data from %s, hostgroup id: %d", dsn, clusterSettings.ProxySQLSettings.HostgroupID)
+				servers, err := throttler.proxysqlClient.GetConnectionPoolServers(db, clusterSettings.ProxySQLSettings)
 				if err != nil {
 					throttler.proxysqlClient.CloseDB(addr)
 					return log.Errorf("Unable to get hosts from ProxySQL %s: %+v", dsn, err)
 				}
-				log.Debugf("Read %+v hosts from ProxySQL %s, replication hostgroup: %s", len(servers), dsn, hostgroup)
+				log.Debugf("Read %+v hosts from ProxySQL %s, hostgroup id: %d", len(servers), dsn, clusterSettings.ProxySQLSettings.HostgroupID)
 				clusterProbes := &mysql.ClusterProbes{
 					ClusterName:      clusterName,
 					IgnoreHostsCount: clusterSettings.IgnoreHostsCount,
 					InstanceProbes:   mysql.NewProbes(),
 				}
 				for _, server := range servers {
-					key := mysql.InstanceKey{Hostname: server.Hostname, Port: int(server.Port)}
+					key := mysql.InstanceKey{Hostname: server.Host, Port: int(server.Port)}
 					addInstanceKey(&key, clusterName, clusterSettings, clusterProbes.InstanceProbes)
 				}
 				throttler.mysqlClusterProbesChan <- clusterProbes

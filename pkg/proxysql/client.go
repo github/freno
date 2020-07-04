@@ -15,16 +15,16 @@ import (
 
 const ignoreServerCacheCleanupTTL = time.Duration(500) * time.Millisecond
 
-// MySQLServer represents a row in the main.runtime_mysql_servers table
-type MySQLServer struct {
-	Hostname string `db:"hostname"`
-	Port     uint32 `db:"port"`
-	Status   string `db:"status"`
+// MySQLConnectionPoolServer represents a row in the stats_mysql_connection_pool table
+type MySQLConnectionPoolServer struct {
+	Host   string `db:"srv_host"`
+	Port   int32  `db:"srv_port"`
+	Status string `db:"status"`
 }
 
 // Address returns a string of the hostname/port of a server
-func (ms *MySQLServer) Address() string {
-	return fmt.Sprintf("%s:%d", ms.Hostname, ms.Port)
+func (ms *MySQLConnectionPoolServer) Address() string {
+	return fmt.Sprintf("%s:%d", ms.Host, ms.Port)
 }
 
 // Client is the ProxySQL Admin client
@@ -55,13 +55,14 @@ func (c *Client) GetDB(settings config.ProxySQLConfigurationSettings) (*sqlx.DB,
 		if db, found := c.dbs[addr]; found {
 			return db, addr, nil
 		}
-		db, err := sqlx.Connect("mysql", fmt.Sprintf("%s:%s@tcp(%s)/?interpolateParams=true&timeout=500ms",
+		db, err := sqlx.Connect("mysql", fmt.Sprintf("%s:%s@tcp(%s)/stats?interpolateParams=true&timeout=500ms",
 			settings.User, settings.Password, addr,
 		))
 		if err != nil {
 			lastErr = err
 			continue
 		}
+		log.Debugf("connected to ProxySQL at mysql://%s/stats", addr)
 		c.dbs[addr] = db
 		return c.dbs[addr], addr, nil
 	}
@@ -79,19 +80,11 @@ func (c *Client) CloseDB(addr string) {
 	}
 }
 
-// GetReplicationHostgroupServers returns a list of MySQLServers for a replication hostgroup, based on the 'comment' field
-func (c *Client) GetReplicationHostgroupServers(db *sqlx.DB, settings config.ProxySQLConfigurationSettings) (servers []*MySQLServer, err error) {
-	allServers := make([]*MySQLServer, 0)
-	if settings.HostgroupID == 0 {
-		err = db.Select(&allServers, fmt.Sprintf(`SELECT ms.hostname, ms.port, ms.status
-			FROM main.runtime_mysql_replication_hostgroups rhg
-			JOIN main.runtime_mysql_servers ms ON rhg.reader_hostgroup=ms.hostgroup_id
-			WHERE rhg.comment='%s'`, settings.HostgroupComment))
-	} else {
-		err = db.Select(&allServers, fmt.Sprintf(`SELECT ms.hostname, ms.port, ms.status
-			FROM main.runtime_mysql_servers ms
-			WHERE ms.hostgroup_id=%d`, settings.HostgroupID))
-	}
+// GetConnectionPoolServers returns a list of MySQLConnectionPoolServers based on a hostgroup ID
+func (c *Client) GetConnectionPoolServers(db *sqlx.DB, settings config.ProxySQLConfigurationSettings) (servers []*MySQLConnectionPoolServer, err error) {
+	allServers := make([]*MySQLConnectionPoolServer, 0)
+
+	err = db.Select(&allServers, fmt.Sprintf(`SELECT srv_host, srv_port, status FROM stats_mysql_connection_pool WHERE hostgroup=%d`, settings.HostgroupID))
 	if err != nil {
 		return servers, err
 	}
