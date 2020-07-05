@@ -17,9 +17,9 @@ const ignoreServerCacheCleanupTTL = time.Duration(500) * time.Millisecond
 
 // MySQLConnectionPoolServer represents a row in the stats_mysql_connection_pool table
 type MySQLConnectionPoolServer struct {
-	Host   string `db:"srv_host"`
-	Port   int32  `db:"srv_port"`
-	Status string `db:"status"`
+	Host   string
+	Port   int32
+	Status string
 }
 
 // Address returns a string of the hostname/port of a server
@@ -60,11 +60,13 @@ func (c *Client) GetDB(settings config.ProxySQLConfigurationSettings) (*sql.DB, 
 			lastErr = err
 			continue
 		}
-		if db.Ping() == nil {
-			log.Debugf("connected to ProxySQL at mysql://%s/stats", addr)
-			c.dbs[addr] = db
-			return c.dbs[addr], addr, nil
+		if err = db.Ping(); err != nil {
+			lastErr = err
+			continue
 		}
+		log.Debugf("connected to ProxySQL at mysql://%s/stats", addr)
+		c.dbs[addr] = db
+		return c.dbs[addr], addr, nil
 	}
 	if lastErr != nil {
 		return nil, "", lastErr

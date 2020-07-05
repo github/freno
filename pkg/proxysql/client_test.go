@@ -50,8 +50,8 @@ func TestProxySQLGetDB(t *testing.T) {
 		if err == nil {
 			t.Fatal("expected error for failed connection")
 		}
-		if err.Error() != "failed to get connection" {
-			t.Fatalf("expected a 'failed to get connection' error, got %v", err)
+		if err.Error() != "dial tcp: lookup this.should.fail: no such host" {
+			t.Fatalf("expected a 'no such host' error, got %v", err)
 		}
 	})
 }
