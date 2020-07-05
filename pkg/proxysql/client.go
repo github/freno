@@ -1,6 +1,7 @@
 package proxysql
 
 import (
+	"database/sql"
 	"errors"
 	"fmt"
 	"sort"
@@ -8,7 +9,6 @@ import (
 
 	"github.com/github/freno/pkg/config"
 	_ "github.com/go-sql-driver/mysql"
-	"github.com/jmoiron/sqlx"
 	"github.com/outbrain/golib/log"
 	"github.com/patrickmn/go-cache"
 )
@@ -29,9 +29,7 @@ func (ms *MySQLConnectionPoolServer) Address() string {
 
 // Client is the ProxySQL Admin client
 type Client struct {
-	user                   string
-	password               string
-	dbs                    map[string]*sqlx.DB
+	dbs                    map[string]*sql.DB
 	defaultIgnoreServerTTL time.Duration
 	ignoreServerCache      *cache.Cache
 }
@@ -39,14 +37,14 @@ type Client struct {
 // NewClient returns a ProxySQL Admin client
 func NewClient(defaultIgnoreServerTTL time.Duration) *Client {
 	return &Client{
-		dbs:                    make(map[string]*sqlx.DB, 0),
+		dbs:                    make(map[string]*sql.DB, 0),
 		defaultIgnoreServerTTL: defaultIgnoreServerTTL,
 		ignoreServerCache:      cache.New(cache.NoExpiration, ignoreServerCacheCleanupTTL),
 	}
 }
 
 // GetDB returns a configured ProxySQL Admin connection
-func (c *Client) GetDB(settings config.ProxySQLConfigurationSettings) (*sqlx.DB, string, error) {
+func (c *Client) GetDB(settings config.ProxySQLConfigurationSettings) (*sql.DB, string, error) {
 	addrs := settings.Addresses
 	sort.Strings(addrs)
 
@@ -55,16 +53,18 @@ func (c *Client) GetDB(settings config.ProxySQLConfigurationSettings) (*sqlx.DB,
 		if db, found := c.dbs[addr]; found {
 			return db, addr, nil
 		}
-		db, err := sqlx.Connect("mysql", fmt.Sprintf("%s:%s@tcp(%s)/stats?interpolateParams=true&timeout=500ms",
+		db, err := sql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s)/stats?interpolateParams=true&timeout=500ms",
 			settings.User, settings.Password, addr,
 		))
 		if err != nil {
 			lastErr = err
 			continue
 		}
-		log.Debugf("connected to ProxySQL at mysql://%s/stats", addr)
-		c.dbs[addr] = db
-		return c.dbs[addr], addr, nil
+		if db.Ping() == nil {
+			log.Debugf("connected to ProxySQL at mysql://%s/stats", addr)
+			c.dbs[addr] = db
+			return c.dbs[addr], addr, nil
+		}
 	}
 	if lastErr != nil {
 		return nil, "", lastErr
@@ -81,17 +81,24 @@ func (c *Client) CloseDB(addr string) {
 }
 
 // GetConnectionPoolServers returns a list of MySQLConnectionPoolServers based on a hostgroup ID
-func (c *Client) GetConnectionPoolServers(db *sqlx.DB, settings config.ProxySQLConfigurationSettings) (servers []*MySQLConnectionPoolServer, err error) {
-	allServers := make([]*MySQLConnectionPoolServer, 0)
-
-	err = db.Select(&allServers, fmt.Sprintf(`SELECT srv_host, srv_port, status FROM stats_mysql_connection_pool WHERE hostgroup=%d`, settings.HostgroupID))
-	if err != nil {
-		return servers, err
-	}
-
+func (c *Client) GetConnectionPoolServers(db *sql.DB, settings config.ProxySQLConfigurationSettings) (servers []*MySQLConnectionPoolServer, err error) {
 	ignoreServerTTL := c.defaultIgnoreServerTTL
 	if settings.IgnoreServerTTLSecs > 0 {
 		ignoreServerTTL = time.Duration(settings.IgnoreServerTTLSecs) * time.Second
+	}
+
+	rows, err := db.Query(fmt.Sprintf(`SELECT srv_host, srv_port, status FROM stats_mysql_connection_pool WHERE hostgroup=%d`, settings.HostgroupID))
+	if err != nil {
+		return servers, err
+	}
+	defer rows.Close()
+	allServers := make([]*MySQLConnectionPoolServer, 0)
+	for rows.Next() {
+		server := &MySQLConnectionPoolServer{}
+		if err = rows.Scan(&server.Host, &server.Port, &server.Status); err != nil {
+			return nil, err
+		}
+		allServers = append(allServers, server)
 	}
 
 	for _, server := range allServers {

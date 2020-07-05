@@ -1,5 +1,7 @@
 package config
 
+import "strings"
+
 //
 // ProxySQL-specific configuration
 //
@@ -15,6 +17,13 @@ type ProxySQLConfigurationSettings struct {
 func (settings *ProxySQLConfigurationSettings) IsEmpty() bool {
 	if len(settings.Addresses) == 0 {
 		return true
+	} else {
+		// address must contain host:port
+		for _, addr := range settings.Addresses {
+			if !strings.Contains(addr, ":") {
+				return true
+			}
+		}
 	}
 	if settings.User == "" || settings.Password == "" {
 		return true

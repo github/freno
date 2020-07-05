@@ -1,12 +1,12 @@
 package proxysql
 
 import (
+	"database/sql"
 	"testing"
 	"time"
 
 	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/github/freno/pkg/config"
-	"github.com/jmoiron/sqlx"
 	"github.com/patrickmn/go-cache"
 )
 
@@ -24,8 +24,8 @@ func TestProxySQLGetDB(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
 		mockDb, _, _ := sqlmock.New()
 		c := &Client{
-			dbs: map[string]*sqlx.DB{
-				"127.0.0.1:3306": sqlx.NewDb(mockDb, ""),
+			dbs: map[string]*sql.DB{
+				"127.0.0.1:3306": mockDb,
 			},
 		}
 		db, addr, err := c.GetDB(config.ProxySQLConfigurationSettings{
@@ -50,8 +50,8 @@ func TestProxySQLGetDB(t *testing.T) {
 		if err == nil {
 			t.Fatal("expected error for failed connection")
 		}
-		if err.Error() != "dial tcp: lookup this.should.fail: no such host" {
-			t.Fatalf("expected a 'no such host' error, got %v", err)
+		if err.Error() != "failed to get connection" {
+			t.Fatalf("expected a 'failed to get connection' error, got %v", err)
 		}
 	})
 }
@@ -59,8 +59,8 @@ func TestProxySQLGetDB(t *testing.T) {
 func TestProxySQLCloseDB(t *testing.T) {
 	db, _, _ := sqlmock.New()
 	c := &Client{
-		dbs: map[string]*sqlx.DB{
-			"test": sqlx.NewDb(db, ""),
+		dbs: map[string]*sql.DB{
+			"test": db,
 		},
 	}
 	c.CloseDB("test")
@@ -81,7 +81,7 @@ func TestProxySQLGetConnectionPoolServers(t *testing.T) {
 			ignoreServerCache: cache.New(cache.NoExpiration, time.Second),
 		}
 
-		servers, err := c.GetConnectionPoolServers(sqlx.NewDb(db, ""), config.ProxySQLConfigurationSettings{
+		servers, err := c.GetConnectionPoolServers(db, config.ProxySQLConfigurationSettings{
 			Addresses:   []string{"127.0.0.1:3306"},
 			HostgroupID: 123,
 		})
@@ -107,7 +107,7 @@ func TestProxySQLGetConnectionPoolServers(t *testing.T) {
 		}
 		c.ignoreServerCache.Set("replica1:3306", true, cache.NoExpiration) // this host should be ignored
 
-		servers, err := c.GetConnectionPoolServers(sqlx.NewDb(db, ""), config.ProxySQLConfigurationSettings{
+		servers, err := c.GetConnectionPoolServers(db, config.ProxySQLConfigurationSettings{
 			Addresses:   []string{"127.0.0.1:3306"},
 			HostgroupID: 321,
 		})
