@@ -94,16 +94,12 @@ func (c *Client) GetConnectionPoolServers(db *sql.DB, settings config.ProxySQLCo
 		return servers, err
 	}
 	defer rows.Close()
-	allServers := make([]*MySQLConnectionPoolServer, 0)
+
 	for rows.Next() {
 		server := &MySQLConnectionPoolServer{}
 		if err = rows.Scan(&server.Host, &server.Port, &server.Status); err != nil {
 			return nil, err
 		}
-		allServers = append(allServers, server)
-	}
-
-	for _, server := range allServers {
 		switch server.Status {
 		case "ONLINE":
 			if _, ignore := c.ignoreServerCache.Get(server.Address()); !ignore {
