@@ -69,19 +69,22 @@ func TestProxySQLCloseDB(t *testing.T) {
 	}
 }
 
-func TestProxySQLGetConnectionPoolServers(t *testing.T) {
+func TestProxySQLGetOnlineServers(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
 		db, mock, _ := sqlmock.New()
 		rows := sqlmock.NewRows([]string{"srv_host", "srv_port", "status"}).
-			AddRow("replica1", 3306, "ONLINE").
-			AddRow("replica2", 3306, "ONLINE")
+			AddRow("replica1", 3306, "OFFLINE_SOFT").
+			AddRow("replica2", 3306, "ONLINE").
+			AddRow("replica3", 3306, "SHUNNED").
+			AddRow("replica4", 3306, "ONLINE").
+			AddRow("replica5", 3306, "SHUNNED_REPLICATION_LAG")
 		mock.ExpectQuery(`SELECT srv_host, srv_port, status FROM stats_mysql_connection_pool WHERE hostgroup=123`).WillReturnRows(rows)
 
 		c := &Client{
 			ignoreServerCache: cache.New(cache.NoExpiration, time.Second),
 		}
 
-		servers, err := c.GetConnectionPoolServers(db, config.ProxySQLConfigurationSettings{
+		servers, err := c.GetOnlineServers(db, config.ProxySQLConfigurationSettings{
 			Addresses:   []string{"127.0.0.1:3306"},
 			HostgroupID: 123,
 		})
@@ -91,6 +94,11 @@ func TestProxySQLGetConnectionPoolServers(t *testing.T) {
 
 		if len(servers) != 2 {
 			t.Fatalf("expected 2 servers, got %d", len(servers))
+		}
+		for _, server := range servers {
+			if server.Status != "ONLINE" {
+				t.Fatalf("expected servers to have status ONLINE, got %q", server.Status)
+			}
 		}
 	})
 
@@ -107,7 +115,7 @@ func TestProxySQLGetConnectionPoolServers(t *testing.T) {
 		}
 		c.ignoreServerCache.Set("replica1:3306", true, cache.NoExpiration) // this host should be ignored
 
-		servers, err := c.GetConnectionPoolServers(db, config.ProxySQLConfigurationSettings{
+		servers, err := c.GetOnlineServers(db, config.ProxySQLConfigurationSettings{
 			Addresses:   []string{"127.0.0.1:3306"},
 			HostgroupID: 321,
 		})
@@ -122,6 +130,9 @@ func TestProxySQLGetConnectionPoolServers(t *testing.T) {
 		replica := servers[0]
 		if replica.Host != "replica2" {
 			t.Fatalf("expected host to have hostname %q, got %q", replica.Host, "replica2")
+		}
+		if replica.Status != "ONLINE" {
+			t.Fatalf("expected host to have status ONLINE, got %q", replica.Status)
 		}
 	})
 }

@@ -27,14 +27,14 @@ func (ms *MySQLConnectionPoolServer) Address() string {
 	return fmt.Sprintf("%s:%d", ms.Host, ms.Port)
 }
 
-// Client is the ProxySQL Admin client
+// Client is the ProxySQL admin client
 type Client struct {
 	dbs                    map[string]*sql.DB
 	defaultIgnoreServerTTL time.Duration
 	ignoreServerCache      *cache.Cache
 }
 
-// NewClient returns a ProxySQL Admin client
+// NewClient returns a new ProxySQL admin client
 func NewClient(defaultIgnoreServerTTL time.Duration) *Client {
 	return &Client{
 		dbs:                    make(map[string]*sql.DB, 0),
@@ -43,7 +43,7 @@ func NewClient(defaultIgnoreServerTTL time.Duration) *Client {
 	}
 }
 
-// GetDB returns a configured ProxySQL Admin connection
+// GetDB returns a configured ProxySQL admin connection
 func (c *Client) GetDB(settings config.ProxySQLConfigurationSettings) (*sql.DB, string, error) {
 	addrs := settings.Addresses
 	sort.Strings(addrs)
@@ -74,7 +74,7 @@ func (c *Client) GetDB(settings config.ProxySQLConfigurationSettings) (*sql.DB, 
 	return nil, "", errors.New("failed to get connection")
 }
 
-// CloseDB closes a ProxySQL Admin connection based on an address string
+// CloseDB closes a ProxySQL admin connection based on an address string
 func (c *Client) CloseDB(addr string) {
 	if db, found := c.dbs[addr]; found {
 		db.Close()
@@ -82,8 +82,8 @@ func (c *Client) CloseDB(addr string) {
 	}
 }
 
-// GetConnectionPoolServers returns a list of MySQLConnectionPoolServers based on a hostgroup ID
-func (c *Client) GetConnectionPoolServers(db *sql.DB, settings config.ProxySQLConfigurationSettings) (servers []*MySQLConnectionPoolServer, err error) {
+// GetOnlineServers returns a list of MySQLConnectionPoolServers with 'ONLINE' status based on hostgroup ID
+func (c *Client) GetOnlineServers(db *sql.DB, settings config.ProxySQLConfigurationSettings) (servers []*MySQLConnectionPoolServer, err error) {
 	ignoreServerTTL := c.defaultIgnoreServerTTL
 	if settings.IgnoreServerTTLSecs > 0 {
 		ignoreServerTTL = time.Duration(settings.IgnoreServerTTLSecs) * time.Second
@@ -112,5 +112,5 @@ func (c *Client) GetConnectionPoolServers(db *sql.DB, settings config.ProxySQLCo
 		}
 	}
 
-	return servers, nil
+	return servers, rows.Err()
 }
