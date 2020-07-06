@@ -18,8 +18,8 @@ import (
 	"github.com/github/freno/pkg/base"
 	"github.com/github/freno/pkg/throttle"
 
-	"github.com/github/freno/internal/raft"
-	"github.com/github/freno/internal/raft-boltdb"
+	"github.com/hashicorp/raft"
+	"github.com/hashicorp/raft-boltdb"
 	"github.com/outbrain/golib/log"
 	metrics "github.com/rcrowley/go-metrics"
 )
@@ -111,7 +111,7 @@ func (store *Store) Open(peerNodes []string) error {
 	log.Infof("bolt store created")
 
 	// Instantiate the Raft systems.
-	if store.raft, err = raft.NewRaft(config, (*fsm)(store), logStore, logStore, snapshots, peerStore, transport); err != nil {
+	if store.raft, err = raft.NewRaft(config, (*fsm)(store), logStore, logStore, snapshots, transport); err != nil {
 		return fmt.Errorf("error creating new raft: %s", err)
 	}
 	log.Infof("new raft created")

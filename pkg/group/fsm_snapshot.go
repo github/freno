@@ -5,7 +5,7 @@ import (
 
 	"github.com/github/freno/pkg/base"
 
-	"github.com/github/freno/internal/raft"
+	"github.com/hashicorp/raft"
 )
 
 // snapshotData holds whatever data we wish to persist as part of raft snapshotting
