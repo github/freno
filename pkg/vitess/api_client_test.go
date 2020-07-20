@@ -99,7 +99,7 @@ func TestParseTablets(t *testing.T) {
 			t.Fatalf("Expected no error, got %q", err)
 		}
 
-		if len(tablets) > 1 {
+		if len(tablets) != 1 {
 			t.Fatalf("Expected 1 tablet, got %d", len(tablets))
 		}
 
