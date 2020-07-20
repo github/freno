@@ -44,7 +44,8 @@ func constructAPIURL(settings config.VitessConfigurationSettings) (url string) {
 // filterReplicaTablets parses a list of tablets, returning replica tablets only
 func filterReplicaTablets(settings config.VitessConfigurationSettings, tablets []Tablet) (replicas []Tablet) {
 	for _, tablet := range tablets {
-		if settings.Cell != "" && tablet.Alias.Cell != settings.Cell {
+		expectedCell := strings.TrimSpace(settings.Cell)
+		if expectedCell != "" && tablet.Alias.GetCell() != expectedCell {
 			continue
 		}
 		if tablet.IsValidReplica() {
