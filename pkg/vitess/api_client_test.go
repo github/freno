@@ -18,37 +18,37 @@ func TestParseTablets(t *testing.T) {
 		case "/api/keyspace/test/tablets/00":
 			data, _ := json.Marshal([]Tablet{
 				{
-					Alias:         &topodata.TabletAlias{Cell: "ash1"},
+					Alias:         &topodata.TabletAlias{Cell: "cell1"},
 					MysqlHostname: "master",
 					Type:          topodata.TabletType_MASTER,
 				},
 				{
-					Alias:         &topodata.TabletAlias{Cell: "ac4"},
+					Alias:         &topodata.TabletAlias{Cell: "cell2"},
 					MysqlHostname: "replica1",
 					Type:          topodata.TabletType_REPLICA,
 				},
 				{
-					Alias:         &topodata.TabletAlias{Cell: "va3"},
+					Alias:         &topodata.TabletAlias{Cell: "cell3"},
 					MysqlHostname: "replica2",
 					Type:          topodata.TabletType_REPLICA,
 				},
 				{
-					Alias:         &topodata.TabletAlias{Cell: "ac4"},
+					Alias:         &topodata.TabletAlias{Cell: "cell2"},
 					MysqlHostname: "spare",
 					Type:          topodata.TabletType_SPARE,
 				},
 				{
-					Alias:         &topodata.TabletAlias{Cell: "va3"},
+					Alias:         &topodata.TabletAlias{Cell: "cell3"},
 					MysqlHostname: "batch",
 					Type:          topodata.TabletType_BATCH,
 				},
 				{
-					Alias:         &topodata.TabletAlias{Cell: "ac4"},
+					Alias:         &topodata.TabletAlias{Cell: "cell2"},
 					MysqlHostname: "backup",
 					Type:          topodata.TabletType_BACKUP,
 				},
 				{
-					Alias:         &topodata.TabletAlias{Cell: "ash1"},
+					Alias:         &topodata.TabletAlias{Cell: "cell1"},
 					MysqlHostname: "restore",
 					Type:          topodata.TabletType_RESTORE,
 				},
@@ -91,7 +91,7 @@ func TestParseTablets(t *testing.T) {
 	t.Run("with-cell", func(t *testing.T) {
 		tablets, err := ParseTablets(config.VitessConfigurationSettings{
 			API:      vitessApi.URL,
-			Cell:     "ac4",
+			Cell:     "cell2",
 			Keyspace: "test",
 			Shard:    "00",
 		})
@@ -106,8 +106,8 @@ func TestParseTablets(t *testing.T) {
 		if tablets[0].MysqlHostname != "replica1" {
 			t.Fatalf("Expected hostname %q, got %q", "replica1", tablets[0].MysqlHostname)
 		}
-		if tablets[0].Alias.Cell != "ac4" {
-			t.Fatalf("Expected vitess cell %s, got %s", "ac4", tablets[0].Alias.Cell)
+		if tablets[0].Alias.Cell != "cell2" {
+			t.Fatalf("Expected vitess cell %s, got %s", "cell2", tablets[0].Alias.Cell)
 		}
 
 	})
