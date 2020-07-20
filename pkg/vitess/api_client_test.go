@@ -24,12 +24,12 @@ func TestParseTablets(t *testing.T) {
 				},
 				{
 					Alias:         &topodata.TabletAlias{Cell: "ac4"},
-					MysqlHostname: "replica",
+					MysqlHostname: "replica1",
 					Type:          topodata.TabletType_REPLICA,
 				},
 				{
 					Alias:         &topodata.TabletAlias{Cell: "va3"},
-					MysqlHostname: "replica",
+					MysqlHostname: "replica2",
 					Type:          topodata.TabletType_REPLICA,
 				},
 				{
@@ -76,8 +76,11 @@ func TestParseTablets(t *testing.T) {
 			t.Fatalf("Expected 2 tablets, got %d", len(tablets))
 		}
 
-		if tablets[0].MysqlHostname != "replica" {
-			t.Fatalf("Expected hostname %q, got %q", "replica", tablets[0].MysqlHostname)
+		if tablets[0].MysqlHostname != "replica1" {
+			t.Fatalf("Expected hostname %q, got %q", "replica1", tablets[0].MysqlHostname)
+		}
+		if tablets[1].MysqlHostname != "replica2" {
+			t.Fatalf("Expected hostname %q, got %q", "replica2", tablets[1].MysqlHostname)
 		}
 
 		if httpClient.Timeout != time.Second {
@@ -100,9 +103,13 @@ func TestParseTablets(t *testing.T) {
 			t.Fatalf("Expected 1 tablet, got %d", len(tablets))
 		}
 
+		if tablets[0].MysqlHostname != "replica1" {
+			t.Fatalf("Expected hostname %q, got %q", "replica1", tablets[0].MysqlHostname)
+		}
 		if tablets[0].Alias.Cell != "ac4" {
 			t.Fatalf("Expected vitess cell %s, got %s", "ac4", tablets[0].Alias.Cell)
 		}
+
 	})
 
 	t.Run("not-found", func(t *testing.T) {
