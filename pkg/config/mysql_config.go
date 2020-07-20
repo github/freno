@@ -58,6 +58,7 @@ type MySQLConfigurationSettings struct {
 	HttpCheckPort        int      // port for HTTP check. -1 to disable.
 	HttpCheckPath        string   // If non-empty, requires HttpCheckPort
 	IgnoreHosts          []string // If non empty, substrings to indicate hosts to be ignored/skipped
+	VitessCell           string   // Name of the Vitess cell for polling tablet hosts
 
 	Clusters map[string](*MySQLClusterConfigurationSettings) // cluster name -> cluster config
 }
@@ -113,6 +114,9 @@ func (settings *MySQLConfigurationSettings) postReadAdjustments() error {
 		}
 		if len(clusterSettings.IgnoreHosts) == 0 {
 			clusterSettings.IgnoreHosts = settings.IgnoreHosts
+		}
+		if !clusterSettings.VitessSettings.IsEmpty() && clusterSettings.VitessSettings.Cell == "" {
+			clusterSettings.VitessSettings.Cell = settings.VitessCell
 		}
 	}
 	return nil

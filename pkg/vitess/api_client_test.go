@@ -18,27 +18,37 @@ func TestParseTablets(t *testing.T) {
 		case "/api/keyspace/test/tablets/00":
 			data, _ := json.Marshal([]Tablet{
 				{
+					Alias:         &topodata.TabletAlias{Cell: "ash1"},
 					MysqlHostname: "master",
 					Type:          topodata.TabletType_MASTER,
 				},
 				{
+					Alias:         &topodata.TabletAlias{Cell: "ac4"},
 					MysqlHostname: "replica",
 					Type:          topodata.TabletType_REPLICA,
 				},
 				{
+					Alias:         &topodata.TabletAlias{Cell: "va3"},
+					MysqlHostname: "replica",
+					Type:          topodata.TabletType_REPLICA,
+				},
+				{
+					Alias:         &topodata.TabletAlias{Cell: "ac4"},
 					MysqlHostname: "spare",
 					Type:          topodata.TabletType_SPARE,
 				},
 				{
+					Alias:         &topodata.TabletAlias{Cell: "va3"},
 					MysqlHostname: "batch",
 					Type:          topodata.TabletType_BATCH,
 				},
 				{
+					Alias:         &topodata.TabletAlias{Cell: "ac4"},
 					MysqlHostname: "backup",
 					Type:          topodata.TabletType_BACKUP,
 				},
 				{
-
+					Alias:         &topodata.TabletAlias{Cell: "ash1"},
 					MysqlHostname: "restore",
 					Type:          topodata.TabletType_RESTORE,
 				},
@@ -62,8 +72,8 @@ func TestParseTablets(t *testing.T) {
 			t.Fatalf("Expected no error, got %q", err)
 		}
 
-		if len(tablets) != 1 {
-			t.Fatalf("Expected 1 tablet, got %d", len(tablets))
+		if len(tablets) != 2 {
+			t.Fatalf("Expected 2 tablets, got %d", len(tablets))
 		}
 
 		if tablets[0].MysqlHostname != "replica" {
@@ -72,6 +82,26 @@ func TestParseTablets(t *testing.T) {
 
 		if httpClient.Timeout != time.Second {
 			t.Fatalf("Expected vitess client timeout of %v, got %v", time.Second, httpClient.Timeout)
+		}
+	})
+
+	t.Run("with-cell", func(t *testing.T) {
+		tablets, err := ParseTablets(config.VitessConfigurationSettings{
+			API:      vitessApi.URL,
+			Cell:     "ac4",
+			Keyspace: "test",
+			Shard:    "00",
+		})
+		if err != nil {
+			t.Fatalf("Expected no error, got %q", err)
+		}
+
+		if len(tablets) > 1 {
+			t.Fatalf("Expected 1 tablet, got %d", len(tablets))
+		}
+
+		if tablets[0].Alias.Cell != "ac4" {
+			t.Fatalf("Expected vitess cell %s, got %s", "ac4", tablets[0].Alias.Cell)
 		}
 	})
 

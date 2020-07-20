@@ -16,9 +16,10 @@ const defaultTimeout = time.Duration(5) * time.Second
 
 // Tablet represents information about a running instance of vttablet.
 type Tablet struct {
-	MysqlHostname string              `json:"mysql_hostname,omitempty"`
-	MysqlPort     int32               `json:"mysql_port,omitempty"`
-	Type          topodata.TabletType `json:"type,omitempty"`
+	Alias         *topodata.TabletAlias `json:"alias,omitempty"`
+	MysqlHostname string                `json:"mysql_hostname,omitempty"`
+	MysqlPort     int32                 `json:"mysql_port,omitempty"`
+	Type          topodata.TabletType   `json:"type,omitempty"`
 }
 
 // IsValidReplica returns a bool reflecting if a tablet type is REPLICA
@@ -41,8 +42,11 @@ func constructAPIURL(settings config.VitessConfigurationSettings) (url string) {
 }
 
 // filterReplicaTablets parses a list of tablets, returning replica tablets only
-func filterReplicaTablets(tablets []Tablet) (replicas []Tablet) {
+func filterReplicaTablets(settings config.VitessConfigurationSettings, tablets []Tablet) (replicas []Tablet) {
 	for _, tablet := range tablets {
+		if settings.Cell != "" && tablet.Alias.Cell != settings.Cell {
+			continue
+		}
 		if tablet.IsValidReplica() {
 			replicas = append(replicas, tablet)
 		}
@@ -72,5 +76,5 @@ func ParseTablets(settings config.VitessConfigurationSettings) (tablets []Tablet
 	}
 
 	err = json.Unmarshal(body, &tablets)
-	return filterReplicaTablets(tablets), err
+	return filterReplicaTablets(settings, tablets), err
 }
