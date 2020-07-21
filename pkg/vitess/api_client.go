@@ -22,6 +22,19 @@ type Tablet struct {
 	Type          topodata.TabletType   `json:"type,omitempty"`
 }
 
+// IsValidCell returns a bool reflecting if a tablet type is in a valid cell
+func (t Tablet) HasValidCell(validCells []string) bool {
+	if len(validCells) == 0 {
+		return true
+	}
+	for _, cell := range validCells {
+		if t.Alias.GetCell() == strings.TrimSpace(cell) {
+			return true
+		}
+	}
+	return false
+}
+
 // IsValidReplica returns a bool reflecting if a tablet type is REPLICA
 func (t Tablet) IsValidReplica() bool {
 	return t.Type == topodata.TabletType_REPLICA
@@ -44,11 +57,7 @@ func constructAPIURL(settings config.VitessConfigurationSettings) (url string) {
 // filterReplicaTablets parses a list of tablets, returning replica tablets only
 func filterReplicaTablets(settings config.VitessConfigurationSettings, tablets []Tablet) (replicas []Tablet) {
 	for _, tablet := range tablets {
-		expectedCell := strings.TrimSpace(settings.Cell)
-		if expectedCell != "" && tablet.Alias.GetCell() != expectedCell {
-			continue
-		}
-		if tablet.IsValidReplica() {
+		if tablet.HasValidCell(settings.Cells) && tablet.IsValidReplica() {
 			replicas = append(replicas, tablet)
 		}
 	}

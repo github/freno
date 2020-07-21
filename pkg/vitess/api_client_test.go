@@ -91,7 +91,7 @@ func TestParseTablets(t *testing.T) {
 	t.Run("with-cell", func(t *testing.T) {
 		tablets, err := ParseTablets(config.VitessConfigurationSettings{
 			API:      vitessApi.URL,
-			Cell:     "cell2",
+			Cells:    []string{"cell2"},
 			Keyspace: "test",
 			Shard:    "00",
 		})
@@ -109,7 +109,6 @@ func TestParseTablets(t *testing.T) {
 		if tablets[0].Alias.Cell != "cell2" {
 			t.Fatalf("Expected vitess cell %s, got %s", "cell2", tablets[0].Alias.Cell)
 		}
-
 	})
 
 	t.Run("not-found", func(t *testing.T) {
