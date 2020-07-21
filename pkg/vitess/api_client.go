@@ -24,11 +24,18 @@ type Tablet struct {
 
 // HasValidCell returns a bool reflecting if a tablet type is in a valid cell
 func (t Tablet) HasValidCell(validCells []string) bool {
-	if len(validCells) == 0 {
+	cells := make([]string, 0)
+	for _, cell := range validCells {
+		cell = strings.TrimSpace(cell)
+		if cell != "" {
+			cells = append(cells, cell)
+		}
+	}
+	if len(cells) == 0 {
 		return true
 	}
-	for _, cell := range validCells {
-		if t.Alias.GetCell() == strings.TrimSpace(cell) {
+	for _, cell := range cells {
+		if cell == "" || t.Alias.GetCell() == cell {
 			return true
 		}
 	}

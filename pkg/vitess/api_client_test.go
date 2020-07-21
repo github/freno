@@ -89,12 +89,13 @@ func TestParseTablets(t *testing.T) {
 	})
 
 	t.Run("with-cell", func(t *testing.T) {
-		tablets, err := ParseTablets(config.VitessConfigurationSettings{
+		settings := config.VitessConfigurationSettings{
 			API:      vitessApi.URL,
 			Cells:    []string{"cell2"},
 			Keyspace: "test",
 			Shard:    "00",
-		})
+		}
+		tablets, err := ParseTablets(settings)
 		if err != nil {
 			t.Fatalf("Expected no error, got %q", err)
 		}
@@ -106,8 +107,15 @@ func TestParseTablets(t *testing.T) {
 		if tablets[0].MysqlHostname != "replica1" {
 			t.Fatalf("Expected hostname %q, got %q", "replica1", tablets[0].MysqlHostname)
 		}
-		if tablets[0].Alias.Cell != "cell2" {
-			t.Fatalf("Expected vitess cell %s, got %s", "cell2", tablets[0].Alias.Cell)
+		if tablets[0].Alias.GetCell() != "cell2" {
+			t.Fatalf("Expected vitess cell %s, got %s", "cell2", tablets[0].Alias.GetCell())
+		}
+
+		// empty cell names should cause no filtering
+		settings.Cells = []string{"", ""}
+		tablets, _ = ParseTablets(settings)
+		if len(tablets) != 2 {
+			t.Fatalf("Expected 2 tablet, got %d", len(tablets))
 		}
 	})
 
