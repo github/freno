@@ -22,7 +22,7 @@ type Tablet struct {
 	Type          topodata.TabletType   `json:"type,omitempty"`
 }
 
-// HasValidCell returns a bool reflecting if a tablet type is in a valid cell
+// HasValidCell returns a bool reflecting if a tablet is in a valid Vitess cell
 func (t Tablet) HasValidCell(validCells []string) bool {
 	cells := make([]string, 0)
 	for _, cell := range validCells {
