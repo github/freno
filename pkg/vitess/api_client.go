@@ -35,7 +35,7 @@ func (t Tablet) HasValidCell(validCells []string) bool {
 		return true
 	}
 	for _, cell := range cells {
-		if cell == "" || t.Alias.GetCell() == cell {
+		if t.Alias.GetCell() == cell {
 			return true
 		}
 	}
