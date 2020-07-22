@@ -56,7 +56,6 @@ func TestParseTablets(t *testing.T) {
 			fmt.Fprint(w, string(data))
 		default:
 			w.WriteHeader(http.StatusNotFound)
-			fmt.Fprint(w, "[]")
 		}
 	}))
 	defer vitessApi.Close()
@@ -125,11 +124,11 @@ func TestParseTablets(t *testing.T) {
 			Keyspace: "not-found",
 			Shard:    "40-80",
 		})
-		if err != nil {
-			t.Fatalf("Expected no error, got %q", err)
+		if err == nil || err.Error() != "404 Not Found" {
+			t.Fatalf("Expected %q error, got %q", "404 Not Found", err)
 		}
 
-		if len(tablets) > 0 {
+		if len(tablets) != 0 {
 			t.Fatalf("Expected 0 tablets, got %d", len(tablets))
 		}
 
