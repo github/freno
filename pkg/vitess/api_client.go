@@ -24,17 +24,10 @@ type Tablet struct {
 
 // HasValidCell returns a bool reflecting if a tablet is in a valid Vitess cell
 func (t Tablet) HasValidCell(validCells []string) bool {
-	cells := make([]string, 0)
-	for _, cell := range validCells {
-		cell = strings.TrimSpace(cell)
-		if cell != "" {
-			cells = append(cells, cell)
-		}
-	}
-	if len(cells) == 0 {
+	if len(validCells) == 0 {
 		return true
 	}
-	for _, cell := range cells {
+	for _, cell := range validCells {
 		if t.Alias.GetCell() == cell {
 			return true
 		}
@@ -61,10 +54,22 @@ func constructAPIURL(settings config.VitessConfigurationSettings) (url string) {
 	return url
 }
 
+// ParseCells returns a slice of non-empty Vitess cell names
+func ParseCells(settings config.VitessConfigurationSettings) (cells []string) {
+	for _, cell := range settings.Cells {
+		cell = strings.TrimSpace(cell)
+		if cell != "" {
+			cells = append(cells, cell)
+		}
+	}
+	return cells
+}
+
 // filterReplicaTablets parses a list of tablets, returning replica tablets only
 func filterReplicaTablets(settings config.VitessConfigurationSettings, tablets []Tablet) (replicas []Tablet) {
+	validCells := ParseCells(settings)
 	for _, tablet := range tablets {
-		if tablet.HasValidCell(settings.Cells) && tablet.IsValidReplica() {
+		if tablet.HasValidCell(validCells) && tablet.IsValidReplica() {
 			replicas = append(replicas, tablet)
 		}
 	}

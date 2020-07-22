@@ -328,7 +328,7 @@ func (throttler *Throttler) refreshMySQLInventory() error {
 					return log.Errorf("Unable to get vitess hosts from %s, %s/%s: %+v", clusterSettings.VitessSettings.API, keyspace, shard, err)
 				}
 				log.Debugf("Read %+v hosts from vitess %s, %s/%s, cells=%s", len(tablets), clusterSettings.VitessSettings.API,
-					keyspace, shard, strings.Join(clusterSettings.VitessSettings.Cells, ","),
+					keyspace, shard, strings.Join(vitess.ParseCells(clusterSettings.VitessSettings), ","),
 				)
 				clusterProbes := &mysql.ClusterProbes{
 					ClusterName:      clusterName,
