@@ -76,7 +76,7 @@ func filterReplicaTablets(settings config.VitessConfigurationSettings, tablets [
 	return replicas
 }
 
-// ParseTablets reads from vitess /api/ks_tablets/<keyspace>/[shard] and returns a
+// ParseTablets reads from vitess /api/keyspace/<keyspace>/tablets/[shard] and returns a
 // listing (mysql_hostname, mysql_port, type) of REPLICA tablets
 func ParseTablets(settings config.VitessConfigurationSettings) (tablets []Tablet, err error) {
 	if settings.TimeoutSecs == 0 {
@@ -90,13 +90,16 @@ func ParseTablets(settings config.VitessConfigurationSettings) (tablets []Tablet
 	if err != nil {
 		return tablets, err
 	}
-
 	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return tablets, fmt.Errorf("%v", resp.Status)
+	}
+
 	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
 		return tablets, err
 	}
-
 	err = json.Unmarshal(body, &tablets)
 	return filterReplicaTablets(settings, tablets), err
 }
