@@ -15,7 +15,7 @@ import (
 	"github.com/github/freno/pkg/throttle"
 	"github.com/outbrain/golib/log"
 
-	"github.com/github/freno/internal/raft"
+	"github.com/hashicorp/raft"
 )
 
 const RaftDBFile = "freno-raft.db"
