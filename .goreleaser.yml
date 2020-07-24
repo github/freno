@@ -33,5 +33,5 @@ nfpms:
       - rpm
 release:
   github:
-    owner: github
+    owner: timvaillancourt
     name: freno
