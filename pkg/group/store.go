@@ -61,6 +61,15 @@ func NewStore(raftDir string, raftBind string, throttler *throttle.Throttler) *S
 	}
 }
 
+func hasPeer(peers []string, peer string) bool {
+	for _, p := range peers {
+		if p == peer {
+			return true
+		}
+	}
+	return false
+}
+
 // Open opens the store. If enableSingle is set, and there are no existing peers,
 // then this node becomes the first node, and therefore leader, of the cluster.
 func (store *Store) Open(peerNodes []string) error {
@@ -80,22 +89,18 @@ func (store *Store) Open(peerNodes []string) error {
 	peers := make([]string, 0, 10)
 	for _, peerNode := range peerNodes {
 		peerNode = strings.TrimSpace(peerNode)
-		peers = raft.AddUniquePeer(peers, peerNode)
-	}
-
-	// Create peer storage.
-	peerStore := &raft.StaticPeers{}
-	if err := peerStore.SetPeers(peers); err != nil {
-		return err
+		if !hasPeer(peers, peerNode) {
+			peers = append(peers, peerNode)
+		}
 	}
 
 	// Allow the node to enter single-mode, potentially electing itself, if
 	// explicitly enabled and there is only 1 node in the cluster already.
-	if len(peerNodes) == 0 && len(peers) <= 1 {
-		log.Infof("enabling single-node mode")
-		config.EnableSingleNode = true
-		config.DisableBootstrapAfterElect = false
-	}
+	//if len(peerNodes) == 0 && len(peers) <= 1 {
+	//	log.Infof("enabling single-node mode")
+	//	//config.EnableSingleNode = true
+	//	//config.DisableBootstrapAfterElect = false
+	//}
 
 	// Create the snapshot store. This allows the Raft to truncate the log.
 	snapshots, err := raft.NewFileSnapshotStore(store.raftDir, retainSnapshotCount, os.Stderr)
@@ -169,7 +174,8 @@ func (store *Store) RecentAppsMap() (result map[string](*base.RecentApp)) {
 func (store *Store) Join(addr string) error {
 	log.Infof("received join request for remote node as %s", addr)
 
-	f := store.raft.AddPeer(addr)
+	peer := raft.ServerAddress(addr)
+	f := store.raft.AddVoter(raft.ServerID(peer), peer, 0, 0)
 	if f.Error() != nil {
 		return f.Error()
 	}
@@ -198,7 +204,7 @@ func (store *Store) IsLeader() bool {
 
 // GetLeader returns identity of raft leader
 func (store *Store) GetLeader() string {
-	return getRaft().Leader()
+	return string(getRaft().Leader())
 }
 
 // GetState returns current raft state
