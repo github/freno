@@ -1,6 +1,7 @@
 package http
 
 import (
+	"compress/gzip"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -72,12 +73,22 @@ func NewAPIImpl(throttlerCheck *throttle.ThrottlerCheck, consensusService group.
 	return api
 }
 
+// writeJsonResponse handles writing an API response
+func (api *APIImpl) writeJsonResponse(w http.ResponseWriter, r *http.Request, data interface{}) {
+	//w.Header().Set("Content-Type", "application/json")
+	if strings.Contains(r.Header.Get("Accept-Encoding"), "gzip") {
+		w.Header().Set("Content-Encoding", "gzip")
+		gz := gzip.NewWriter(w)
+		defer gz.Close()
+		json.NewEncoder(gz).Encode(data)
+	} else {
+		json.NewEncoder(w).Encode(data)
+	}
+}
+
 // respondGeneric will generate a generic response in the form of {status, message}
 // It will set response based on whether request is HEAD/GET and based on given error
 func (api *APIImpl) respondGeneric(w http.ResponseWriter, r *http.Request, e error) {
-	if r.Method == http.MethodGet {
-		w.Header().Set("Content-Type", "application/json")
-	}
 	var generalRespnse *GeneralResponse
 	if e == nil {
 		generalRespnse = NewGeneralResponse(http.StatusOK, "OK")
@@ -86,7 +97,7 @@ func (api *APIImpl) respondGeneric(w http.ResponseWriter, r *http.Request, e err
 	}
 	w.WriteHeader(generalRespnse.StatusCode)
 	if r.Method == http.MethodGet {
-		json.NewEncoder(w).Encode(generalRespnse)
+		api.writeJsonResponse(w, r, generalRespnse)
 	}
 }
 
@@ -104,7 +115,7 @@ func (api *APIImpl) LeaderCheck(w http.ResponseWriter, r *http.Request, _ httpro
 	}
 	w.WriteHeader(statusCode)
 	if r.Method == http.MethodGet {
-		json.NewEncoder(w).Encode(fmt.Sprintf("HTTP %d", statusCode))
+		api.writeJsonResponse(w, r, fmt.Sprintf("HTTP %d", statusCode))
 	}
 }
 
@@ -112,7 +123,7 @@ func (api *APIImpl) LeaderCheck(w http.ResponseWriter, r *http.Request, _ httpro
 func (api *APIImpl) ConsensusLeader(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
 	if leader := api.consensusService.GetLeader(); leader != "" {
 		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(leader)
+		api.writeJsonResponse(w, r, leader)
 	} else {
 		w.WriteHeader(http.StatusInternalServerError)
 	}
@@ -120,32 +131,27 @@ func (api *APIImpl) ConsensusLeader(w http.ResponseWriter, r *http.Request, _ ht
 
 // ConsensusLeader returns the consensus state of this node
 func (api *APIImpl) ConsensusState(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
-	json.NewEncoder(w).Encode(api.consensusService.GetStateDescription())
+	api.writeJsonResponse(w, r, api.consensusService.GetStateDescription())
 }
 
 // ConsensusLeader returns the consensus state of this node
 func (api *APIImpl) ConsensusStatus(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(api.consensusService.GetStatus())
+	api.writeJsonResponse(w, r, api.consensusService.GetStatus())
 }
 
 // Hostname returns the hostname this process executes on
 func (api *APIImpl) Hostname(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
 	if api.hostname != "" {
-		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(api.hostname)
+		api.writeJsonResponse(w, r, api.hostname)
 	} else {
 		w.WriteHeader(http.StatusInternalServerError)
 	}
 }
 
 func (api *APIImpl) respondToCheckRequest(w http.ResponseWriter, r *http.Request, checkResult *throttle.CheckResult) {
-	if r.Method == http.MethodGet {
-		w.Header().Set("Content-Type", "application/json")
-	}
 	w.WriteHeader(checkResult.StatusCode)
 	if r.Method == http.MethodGet {
-		json.NewEncoder(w).Encode(checkResult)
+		api.writeJsonResponse(w, r, checkResult)
 	}
 }
 
@@ -205,7 +211,6 @@ func (api *APIImpl) ReadCheckIfExists(w http.ResponseWriter, r *http.Request, ps
 func (api *APIImpl) AggregatedMetrics(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 	brief := (r.URL.Query().Get("brief") == "true")
 
-	w.Header().Set("Content-Type", "application/json")
 	aggregatedMetrics := api.throttlerCheck.AggregatedMetrics()
 	responseMap := map[string]string{}
 	for metricName, metric := range aggregatedMetrics {
@@ -222,14 +227,13 @@ func (api *APIImpl) AggregatedMetrics(w http.ResponseWriter, r *http.Request, ps
 		}
 		responseMap[metricName] = description
 	}
-	json.NewEncoder(w).Encode(responseMap)
+	api.writeJsonResponse(w, r, responseMap)
 }
 
 // MetricsHealth returns the time since last "OK" check per-metric
 func (api *APIImpl) MetricsHealth(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
-	w.Header().Set("Content-Type", "application/json")
 	metricsHealth := api.throttlerCheck.MetricsHealth()
-	json.NewEncoder(w).Encode(metricsHealth)
+	api.writeJsonResponse(w, r, metricsHealth)
 }
 
 // ThrottleApp forcibly marks given app as throttled. Future requests by this app may be denied.
@@ -272,9 +276,8 @@ func (api *APIImpl) UnthrottleApp(w http.ResponseWriter, r *http.Request, ps htt
 
 // ThrottledApps returns a snapshot of all currently throttled apps
 func (api *APIImpl) ThrottledApps(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
-	w.Header().Set("Content-Type", "application/json")
 	throttledApps := api.consensusService.ThrottledAppsMap()
-	json.NewEncoder(w).Encode(throttledApps)
+	api.writeJsonResponse(w, r, throttledApps)
 }
 
 // ThrottledApps returns a snapshot of all currently throttled apps
@@ -288,7 +291,6 @@ func (api *APIImpl) RecentApps(w http.ResponseWriter, r *http.Request, ps httpro
 		}
 	}
 
-	w.Header().Set("Content-Type", "application/json")
 	recentApps := api.consensusService.RecentAppsMap()
 	if lastMinutes > 0 {
 		for key, recentApp := range recentApps {
@@ -297,13 +299,12 @@ func (api *APIImpl) RecentApps(w http.ResponseWriter, r *http.Request, ps httpro
 			}
 		}
 	}
-	json.NewEncoder(w).Encode(recentApps)
+	api.writeJsonResponse(w, r, recentApps)
 }
 
 // ThrottledApps returns a snapshot of all currently throttled apps
 func (api *APIImpl) Help(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(endpoints)
+	api.writeJsonResponse(w, r, endpoints)
 }
 
 // MemcacheConfig outputs the memcache configuration being used, so clients can
@@ -316,9 +317,7 @@ func (api *APIImpl) MemcacheConfig(w http.ResponseWriter, r *http.Request, ps ht
 		config.Settings().MemcacheServers,
 		config.Settings().MemcachePath,
 	}
-
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(memcacheConfig)
+	api.writeJsonResponse(w, r, memcacheConfig)
 }
 
 // register is a wrapper function for accepting both GET and HEAD requests
