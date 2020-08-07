@@ -327,7 +327,9 @@ func (throttler *Throttler) refreshMySQLInventory() error {
 				if err != nil {
 					return log.Errorf("Unable to get vitess hosts from %s, %s/%s: %+v", clusterSettings.VitessSettings.API, keyspace, shard, err)
 				}
-				log.Debugf("Read %+v hosts from vitess %s, %s/%s", len(tablets), clusterSettings.VitessSettings.API, keyspace, shard)
+				log.Debugf("Read %+v hosts from vitess %s, %s/%s, cells=%s", len(tablets), clusterSettings.VitessSettings.API,
+					keyspace, shard, strings.Join(vitess.ParseCells(clusterSettings.VitessSettings), ","),
+				)
 				clusterProbes := &mysql.ClusterProbes{
 					ClusterName:      clusterName,
 					IgnoreHostsCount: clusterSettings.IgnoreHostsCount,
@@ -364,7 +366,7 @@ func (throttler *Throttler) refreshMySQLInventory() error {
 
 // synchronous update of inventory
 func (throttler *Throttler) updateMySQLClusterProbes(clusterProbes *mysql.ClusterProbes) error {
-	log.Debugf("onMySQLClusterProbes: %s", clusterProbes.ClusterName)
+	log.Debugf("updating MySQLClusterProbes: %s", clusterProbes.ClusterName)
 	throttler.mysqlInventory.ClustersProbes[clusterProbes.ClusterName] = clusterProbes.InstanceProbes
 	throttler.mysqlInventory.IgnoreHostsCount[clusterProbes.ClusterName] = clusterProbes.IgnoreHostsCount
 	throttler.mysqlInventory.IgnoreHostsThreshold[clusterProbes.ClusterName] = clusterProbes.IgnoreHostsThreshold
