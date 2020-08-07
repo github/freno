@@ -16,9 +16,15 @@ import (
 // AppVersion has to be filled by ldflags:
 var AppVersion string
 
+// GitCommit represents the git commit of Freno
+var GitCommit string
+
 func main() {
 	if AppVersion == "" {
 		AppVersion = "local-build"
+	}
+	if GitCommit == "" {
+		GitCommit = "unknown"
 	}
 
 	configFile := flag.String("config", "", "config file name")
@@ -34,6 +40,7 @@ func main() {
 	forceLeadership := flag.Bool("force-leadership", false, "Make this node consider itself a leader no matter what consensus logic says")
 
 	quiet := flag.Bool("quiet", false, "quiet")
+	version := flag.Bool("version", false, "print version")
 	verbose := flag.Bool("verbose", false, "verbose")
 	debug := flag.Bool("debug", false, "debug mode (very verbose)")
 	stack := flag.Bool("stack", false, "add stack trace upon error")
@@ -44,6 +51,10 @@ func main() {
 
 	if *help {
 		printUsage()
+		return
+	}
+	if *version {
+		fmt.Printf("freno version %s, git commit %s\n", AppVersion, GitCommit)
 		return
 	}
 
@@ -61,7 +72,7 @@ func main() {
 		// Override!!
 		log.SetLevel(log.ERROR)
 	}
-	log.Infof("starting freno %s", AppVersion)
+	log.Infof("starting freno %s, git commit %s", AppVersion, GitCommit)
 
 	loadConfiguration(*configFile)
 
