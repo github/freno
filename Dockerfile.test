@@ -1,7 +1,5 @@
-FROM golang:1.14-stretch
+FROM golang:1.12.1
 LABEL maintainer="github@github.com"
-
-RUN useradd -m testuser
 
 RUN apt-get update
 RUN apt-get install -y lsb-release
@@ -9,8 +7,5 @@ RUN rm -rf /var/lib/apt/lists/*
 
 COPY . /go/src/github.com/github/freno
 WORKDIR /go/src/github.com/github/freno
-
-RUN chown -R testuser .
-USER testuser
 
 CMD ["script/test"]

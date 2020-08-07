@@ -1,12 +1,17 @@
 #!/bin/bash
 
-set -ex
+set -e
 
-echo "Verifying code is formatted via 'go fmt'"
-go fmt  ./...
+. script/bootstrap
+
+echo "Verifying code is formatted via 'gofmt -s -w  go/'"
+gofmt -s -w  go/
+git diff --exit-code --quiet
 
 echo "Building"
 script/build
 
+cd .gopath/src/github.com/github/freno
+
 echo "Running unit tests"
-go test ./...
+go test ./go/...
