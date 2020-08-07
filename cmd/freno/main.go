@@ -43,7 +43,7 @@ func main() {
 	group.ForceLeadership = *forceLeadership
 
 	if *help {
-		printUsage()
+		printHelp()
 		return
 	}
 
@@ -83,6 +83,8 @@ func main() {
 	case *http:
 		err := httpServe()
 		log.Errore(err)
+	case *help:
+		printHelp()
 	default:
 		printUsage()
 	}
@@ -124,22 +126,25 @@ func httpServe() error {
 	return gohttp.ListenAndServe(fmt.Sprintf(":%d", port), router)
 }
 
+func printHelp() {
+	panic("not yet implemented")
+}
+
 func printUsage() {
 	fmt.Println(`Usage: freno [OPTIONS]
-  To run the freno service, execute:
-    freno --http
+	To run the freno service, execute:
+		freno --http
 
-  freno is a free and open source software.
-    Please see https://github.com/github/freno/blob/master/README.md#license for license.
-    Sources and binaries are found on https://github.com/github/freno/releases.
-    Sources are also available by cloning https://github.com/github/freno.
+	For more help options use: freno -help.
+
+	freno is a free and open source software.
+	  Please see https://github.com/github/freno/blob/master/README.md#license for license.
+	  Sources and binaries are found on https://github.com/github/freno/releases.
+	  Sources are also available by cloning https://github.com/github/freno.
 
   Issues can be sumbitted on https://github.com/github/freno/issues
-  Please see https://github.com/github/freno/blob/master/README.md#contributing for contributions
+	Please see https://github.com/github/freno/blob/master/README.md#contributing for contributions
 
-  Authored by GitHub engineering
-
-  OPTIONS:`)
-
-	flag.PrintDefaults()
+	Authored by GitHub engineering
+	`)
 }

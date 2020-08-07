@@ -5,4 +5,3 @@ main
 conf/freno.local.conf.json
 .vendor/
 freno
-.idea/
