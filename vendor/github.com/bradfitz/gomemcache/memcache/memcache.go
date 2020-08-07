@@ -23,7 +23,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net"
 
 	"strconv"
@@ -33,7 +32,7 @@ import (
 )
 
 // Similar to:
-// http://code.google.com/appengine/docs/go/memcache/reference.html
+// https://godoc.org/google.golang.org/appengine/memcache
 
 var (
 	// ErrCacheMiss means that a Get failed because the item wasn't present.
@@ -113,6 +112,7 @@ var (
 	resultTouched   = []byte("TOUCHED\r\n")
 
 	resultClientErrorPrefix = []byte("CLIENT_ERROR ")
+	versionPrefix           = []byte("VERSION")
 )
 
 // New returns a memcache client using the provided server(s)
@@ -326,8 +326,9 @@ func (c *Client) Get(key string) (item *Item, err error) {
 
 // Touch updates the expiry for the given key. The seconds parameter is either
 // a Unix timestamp or, if seconds is less than 1 month, the number of seconds
-// into the future at which time the item will expire. ErrCacheMiss is returned if the
-// key is not in the cache. The key must be at most 250 bytes in length.
+// into the future at which time the item will expire. Zero means the item has
+// no expiration time. ErrCacheMiss is returned if the key is not in the cache.
+// The key must be at most 250 bytes in length.
 func (c *Client) Touch(key string, seconds int32) (err error) {
 	return c.withKeyAddr(key, func(addr net.Addr) error {
 		return c.touchFromAddr(addr, []string{key}, seconds)
@@ -393,6 +394,30 @@ func (c *Client) flushAllFromAddr(addr net.Addr) error {
 			break
 		default:
 			return fmt.Errorf("memcache: unexpected response line from flush_all: %q", string(line))
+		}
+		return nil
+	})
+}
+
+// ping sends the version command to the given addr
+func (c *Client) ping(addr net.Addr) error {
+	return c.withAddrRw(addr, func(rw *bufio.ReadWriter) error {
+		if _, err := fmt.Fprintf(rw, "version\r\n"); err != nil {
+			return err
+		}
+		if err := rw.Flush(); err != nil {
+			return err
+		}
+		line, err := rw.ReadSlice('\n')
+		if err != nil {
+			return err
+		}
+
+		switch {
+		case bytes.HasPrefix(line, versionPrefix):
+			break
+		default:
+			return fmt.Errorf("memcache: unexpected response line from ping: %q", string(line))
 		}
 		return nil
 	})
@@ -481,11 +506,14 @@ func parseGetResponse(r *bufio.Reader, cb func(*Item)) error {
 		if err != nil {
 			return err
 		}
-		it.Value, err = ioutil.ReadAll(io.LimitReader(r, int64(size)+2))
+		it.Value = make([]byte, size+2)
+		_, err = io.ReadFull(r, it.Value)
 		if err != nil {
+			it.Value = nil
 			return err
 		}
 		if !bytes.HasSuffix(it.Value, crlf) {
+			it.Value = nil
 			return fmt.Errorf("memcache: corrupt get result read")
 		}
 		it.Value = it.Value[:size]
@@ -639,6 +667,12 @@ func (c *Client) DeleteAll() error {
 	return c.withKeyRw("", func(rw *bufio.ReadWriter) error {
 		return writeExpectf(rw, resultDeleted, "flush_all\r\n")
 	})
+}
+
+// Ping checks all instances if they are alive. Returns error if any
+// of them is down.
+func (c *Client) Ping() error {
+	return c.selector.Each(c.ping)
 }
 
 // Increment atomically increments key by delta. The return value is

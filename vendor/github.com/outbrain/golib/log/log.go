@@ -240,19 +240,19 @@ func Criticale(err error) error {
 func Fatal(message string, args ...interface{}) error {
 	logEntry(FATAL, message, args...)
 	os.Exit(1)
-	return nil
+	return errors.New(logEntry(CRITICAL, message, args...))
 }
 
 // Fatalf emits a FATAL level entry and exists the program
 func Fatalf(message string, args ...interface{}) error {
 	logFormattedEntry(FATAL, message, args...)
 	os.Exit(1)
-	return nil
+	return errors.New(logFormattedEntry(CRITICAL, message, args...))
 }
 
 // Fatale emits a FATAL level entry and exists the program
 func Fatale(err error) error {
 	logErrorEntry(FATAL, err)
 	os.Exit(1)
-	return nil
+	return err
 }
