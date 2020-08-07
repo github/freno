@@ -32,6 +32,7 @@ type API interface {
 	ReadCheckIfExists(w http.ResponseWriter, r *http.Request, _ httprouter.Params)
 	AggregatedMetrics(w http.ResponseWriter, r *http.Request, _ httprouter.Params)
 	MetricsHealth(w http.ResponseWriter, r *http.Request, _ httprouter.Params)
+	HandleShareDomainHealthUpdate(w http.ResponseWriter, r *http.Request, _ httprouter.Params)
 	ThrottleApp(w http.ResponseWriter, r *http.Request, _ httprouter.Params)
 	UnthrottleApp(w http.ResponseWriter, r *http.Request, _ httprouter.Params)
 	ThrottledApps(w http.ResponseWriter, r *http.Request, _ httprouter.Params)
@@ -321,10 +322,30 @@ func (api *APIImpl) MemcacheConfig(w http.ResponseWriter, r *http.Request, ps ht
 	json.NewEncoder(w).Encode(memcacheConfig)
 }
 
+// ShareDomainHealthUpdate represents a push-update to share domain health metrics
+type ShareDomainHealthUpdate struct {
+	ShareDomain  string
+	Domain       string
+	Leader       string
+	MetricHealth base.MetricHealthMap
+	Timestamp    int64
+}
+
+func (api *APIImpl) HandleShareDomainHealthUpdate(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
+	return
+}
+
 // register is a wrapper function for accepting both GET and HEAD requests
 func register(router *httprouter.Router, path string, f httprouter.Handle) {
 	router.HEAD(path, f)
 	router.GET(path, f)
+
+	endpoints = append(endpoints, path)
+}
+
+// registerPost is a wrapper function for accepting POST requests
+func registerPost(router *httprouter.Router, path string, f httprouter.Handle) {
+	router.POST(path, f)
 
 	endpoints = append(endpoints, path)
 }
@@ -357,6 +378,8 @@ func ConfigureRoutes(api API) *httprouter.Router {
 
 	register(router, "/aggregated-metrics", api.AggregatedMetrics)
 	register(router, "/metrics-health", api.MetricsHealth)
+
+	registerPost(router, "/share-domain/health", api.HandleShareDomainHealthUpdate)
 
 	register(router, "/throttle-app/:app", api.ThrottleApp)
 	register(router, "/throttle-app/:app/ratio/:ratio", api.ThrottleApp)

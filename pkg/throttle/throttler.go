@@ -597,6 +597,12 @@ func (throttler *Throttler) collectShareDomainMetricHealth() error {
 	return nil
 }
 
+func (throttler *Throttler) SetShareDomainHealth(shareDomainHealth base.MetricHealthMap) error {
+	for metricName, metricHealth := range shareDomainHealth {
+		throttler.shareDomainMetricHealth.SetDefault(metricName, metricHealth)
+	}
+}
+
 func (throttler *Throttler) getShareDomainSecondsSinceHealth(metricName string) int64 {
 	if object, found := throttler.shareDomainMetricHealth.Get(metricName); found {
 		metricHealth := object.(*base.MetricHealth)

@@ -97,6 +97,7 @@ type ConfigurationSettings struct {
 	Environment          string
 	Domain               string
 	ShareDomain          string
+	ShareDomainPush      bool // if true, share domain updates will be pushed to known leaders
 	RaftBind             string
 	RaftDataDir          string
 	DefaultRaftPort      int      // if a RaftNodes entry does not specify port, use this one
