@@ -15,6 +15,7 @@ import (
 	"github.com/github/freno/pkg/config"
 	"github.com/github/freno/pkg/haproxy"
 	"github.com/github/freno/pkg/mysql"
+	"github.com/github/freno/pkg/proxysql"
 	"github.com/github/freno/pkg/vitess"
 
 	"github.com/outbrain/golib/log"
@@ -68,6 +69,8 @@ type Throttler struct {
 	memcacheClient *memcache.Client
 	memcachePath   string
 
+	proxysqlClient *proxysql.Client
+
 	throttledAppsMutex sync.Mutex
 
 	nonLowPriorityAppRequestsThrottled *cache.Cache
@@ -101,6 +104,10 @@ func NewThrottler() *Throttler {
 		throttler.memcacheClient = memcache.New(memcacheServers...)
 	}
 	throttler.memcachePath = config.Settings().MemcachePath
+
+	if throttler.hasProxySQLStores() {
+		throttler.proxysqlClient = proxysql.NewClient(mysqlRefreshInterval)
+	}
 
 	return throttler
 }
@@ -183,6 +190,15 @@ func (throttler *Throttler) Operate() {
 			time.Sleep(1 * time.Second)
 		}
 	}
+}
+
+func (throttler *Throttler) hasProxySQLStores() bool {
+	for _, clusterSettings := range config.Settings().Stores.MySQL.Clusters {
+		if !clusterSettings.ProxySQLSettings.IsEmpty() {
+			return true
+		}
+	}
+	return false
 }
 
 func (throttler *Throttler) collectMySQLMetrics() error {
@@ -313,6 +329,34 @@ func (throttler *Throttler) refreshMySQLInventory() error {
 				}
 				for _, host := range totalHosts {
 					key := mysql.InstanceKey{Hostname: host, Port: clusterSettings.Port}
+					addInstanceKey(&key, clusterName, clusterSettings, clusterProbes.InstanceProbes)
+				}
+				throttler.mysqlClusterProbesChan <- clusterProbes
+				return nil
+			}
+
+			if !clusterSettings.ProxySQLSettings.IsEmpty() {
+				db, addr, err := throttler.proxysqlClient.GetDB(clusterSettings.ProxySQLSettings)
+				if err != nil {
+					log.Debugf("Unable to connect to ProxySQL: %v", err)
+					return err
+				}
+
+				dsn := clusterSettings.ProxySQLSettings.AddressToDSN(addr)
+				log.Debugf("getting ProxySQL data from %s, hostgroup id: %d (%s)", dsn, clusterSettings.ProxySQLSettings.HostgroupID, clusterName)
+				servers, err := throttler.proxysqlClient.GetOnlineServers(db, clusterSettings.ProxySQLSettings)
+				if err != nil {
+					throttler.proxysqlClient.CloseDB(addr)
+					return log.Errorf("Unable to get hosts from ProxySQL %s: %+v", dsn, err)
+				}
+				log.Debugf("Read %+v hosts from ProxySQL %s, hostgroup id: %d (%s)", len(servers), dsn, clusterSettings.ProxySQLSettings.HostgroupID, clusterName)
+				clusterProbes := &mysql.ClusterProbes{
+					ClusterName:      clusterName,
+					IgnoreHostsCount: clusterSettings.IgnoreHostsCount,
+					InstanceProbes:   mysql.NewProbes(),
+				}
+				for _, server := range servers {
+					key := mysql.InstanceKey{Hostname: server.Host, Port: int(server.Port)}
 					addInstanceKey(&key, clusterName, clusterSettings, clusterProbes.InstanceProbes)
 				}
 				throttler.mysqlClusterProbesChan <- clusterProbes
