@@ -18,27 +18,37 @@ func TestParseTablets(t *testing.T) {
 		case "/api/keyspace/test/tablets/00":
 			data, _ := json.Marshal([]Tablet{
 				{
+					Alias:         &topodata.TabletAlias{Cell: "cell1"},
 					MysqlHostname: "master",
 					Type:          topodata.TabletType_MASTER,
 				},
 				{
-					MysqlHostname: "replica",
+					Alias:         &topodata.TabletAlias{Cell: "cell2"},
+					MysqlHostname: "replica1",
 					Type:          topodata.TabletType_REPLICA,
 				},
 				{
+					Alias:         &topodata.TabletAlias{Cell: "cell3"},
+					MysqlHostname: "replica2",
+					Type:          topodata.TabletType_REPLICA,
+				},
+				{
+					Alias:         &topodata.TabletAlias{Cell: "cell2"},
 					MysqlHostname: "spare",
 					Type:          topodata.TabletType_SPARE,
 				},
 				{
+					Alias:         &topodata.TabletAlias{Cell: "cell3"},
 					MysqlHostname: "batch",
 					Type:          topodata.TabletType_BATCH,
 				},
 				{
+					Alias:         &topodata.TabletAlias{Cell: "cell2"},
 					MysqlHostname: "backup",
 					Type:          topodata.TabletType_BACKUP,
 				},
 				{
-
+					Alias:         &topodata.TabletAlias{Cell: "cell1"},
 					MysqlHostname: "restore",
 					Type:          topodata.TabletType_RESTORE,
 				},
@@ -46,7 +56,6 @@ func TestParseTablets(t *testing.T) {
 			fmt.Fprint(w, string(data))
 		default:
 			w.WriteHeader(http.StatusNotFound)
-			fmt.Fprint(w, "[]")
 		}
 	}))
 	defer vitessApi.Close()
@@ -62,16 +71,50 @@ func TestParseTablets(t *testing.T) {
 			t.Fatalf("Expected no error, got %q", err)
 		}
 
-		if len(tablets) != 1 {
-			t.Fatalf("Expected 1 tablet, got %d", len(tablets))
+		if len(tablets) != 2 {
+			t.Fatalf("Expected 2 tablets, got %d", len(tablets))
 		}
 
-		if tablets[0].MysqlHostname != "replica" {
-			t.Fatalf("Expected hostname %q, got %q", "replica", tablets[0].MysqlHostname)
+		if tablets[0].MysqlHostname != "replica1" {
+			t.Fatalf("Expected hostname %q, got %q", "replica1", tablets[0].MysqlHostname)
+		}
+		if tablets[1].MysqlHostname != "replica2" {
+			t.Fatalf("Expected hostname %q, got %q", "replica2", tablets[1].MysqlHostname)
 		}
 
 		if httpClient.Timeout != time.Second {
 			t.Fatalf("Expected vitess client timeout of %v, got %v", time.Second, httpClient.Timeout)
+		}
+	})
+
+	t.Run("with-cell", func(t *testing.T) {
+		settings := config.VitessConfigurationSettings{
+			API:      vitessApi.URL,
+			Cells:    []string{"cell2"},
+			Keyspace: "test",
+			Shard:    "00",
+		}
+		tablets, err := ParseTablets(settings)
+		if err != nil {
+			t.Fatalf("Expected no error, got %q", err)
+		}
+
+		if len(tablets) != 1 {
+			t.Fatalf("Expected 1 tablet, got %d", len(tablets))
+		}
+
+		if tablets[0].MysqlHostname != "replica1" {
+			t.Fatalf("Expected hostname %q, got %q", "replica1", tablets[0].MysqlHostname)
+		}
+		if tablets[0].Alias.GetCell() != "cell2" {
+			t.Fatalf("Expected vitess cell %s, got %s", "cell2", tablets[0].Alias.GetCell())
+		}
+
+		// empty cell names should cause no filtering
+		settings.Cells = []string{"", ""}
+		tablets, _ = ParseTablets(settings)
+		if len(tablets) != 2 {
+			t.Fatalf("Expected 2 tablet, got %d", len(tablets))
 		}
 	})
 
@@ -81,11 +124,11 @@ func TestParseTablets(t *testing.T) {
 			Keyspace: "not-found",
 			Shard:    "40-80",
 		})
-		if err != nil {
-			t.Fatalf("Expected no error, got %q", err)
+		if err == nil || err.Error() != "404 Not Found" {
+			t.Fatalf("Expected %q error, got %q", "404 Not Found", err)
 		}
 
-		if len(tablets) > 0 {
+		if len(tablets) != 0 {
 			t.Fatalf("Expected 0 tablets, got %d", len(tablets))
 		}
 

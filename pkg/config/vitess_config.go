@@ -6,6 +6,7 @@ package config
 
 type VitessConfigurationSettings struct {
 	API         string
+	Cells       []string
 	Keyspace    string
 	Shard       string
 	TimeoutSecs uint
