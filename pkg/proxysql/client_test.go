@@ -92,12 +92,12 @@ func TestProxySQLGetOnlineServers(t *testing.T) {
 			t.Fatalf("got unexpected error: %v", err)
 		}
 
-		if len(servers) != 2 {
-			t.Fatalf("expected 2 servers, got %d", len(servers))
+		if len(servers) != 3 {
+			t.Fatalf("expected 3 servers, got %d", len(servers))
 		}
 		for _, server := range servers {
-			if server.Status != "ONLINE" {
-				t.Fatalf("expected servers to have status ONLINE, got %q", server.Status)
+			if server.Status != "ONLINE" && server.Status != "SHUNNED_REPLICATION_LAG" {
+				t.Fatalf("expected servers to have status ONLINE or SHUNNED_REPLICATION_LAG, got %q", server.Status)
 			}
 		}
 	})
@@ -105,15 +105,16 @@ func TestProxySQLGetOnlineServers(t *testing.T) {
 	t.Run("ignored", func(t *testing.T) {
 		db, mock, _ := sqlmock.New()
 		rows := sqlmock.NewRows([]string{"srv_host", "srv_port", "status"}).
-			AddRow("replica1", 3306, "ONLINE").
-			AddRow("replica2", 3306, "ONLINE")
+			AddRow("replica1", 3306, "SHUNNED_REPLICATION_LAG").
+			AddRow("replica2", 3306, "ONLINE").
+			AddRow("replica3", 3306, "ONLINE")
 		mock.ExpectQuery(`SELECT srv_host, srv_port, status FROM stats_mysql_connection_pool WHERE hostgroup=321`).WillReturnRows(rows)
 
 		c := &Client{
 			ignoreServerCache:      cache.New(cache.NoExpiration, time.Second),
 			defaultIgnoreServerTTL: time.Second,
 		}
-		c.ignoreServerCache.Set("replica1:3306", true, cache.NoExpiration) // this host should be ignored
+		c.ignoreServerCache.Set("replica3:3306", true, cache.NoExpiration) // this host should be ignored
 
 		servers, err := c.GetOnlineServers(db, config.ProxySQLConfigurationSettings{
 			Addresses:   []string{"127.0.0.1:3306"},
@@ -123,16 +124,23 @@ func TestProxySQLGetOnlineServers(t *testing.T) {
 			t.Fatalf("got unexpected error: %v", err)
 		}
 
-		if len(servers) != 1 {
-			t.Fatalf("expected 1 server, got %d", len(servers))
+		if len(servers) != 2 {
+			t.Fatalf("expected 2 servers, got %d", len(servers))
 		}
 
-		replica := servers[0]
-		if replica.Host != "replica2" {
-			t.Fatalf("expected host to have hostname %q, got %q", replica.Host, "replica2")
-		}
-		if replica.Status != "ONLINE" {
-			t.Fatalf("expected host to have status ONLINE, got %q", replica.Status)
+		for _, replica := range servers {
+			switch replica.Host {
+			case "replica1":
+				if replica.Status != "SHUNNED_REPLICATION_LAG" {
+					t.Fatalf("expected server to have status %q, got %q", "SHUNNED_REPLICATION_LAG", replica.Status)
+				}
+			case "replica2":
+				if replica.Status != "ONLINE" {
+					t.Fatalf("expected server to have status %q, got %q", "ONLINE", replica.Status)
+				}
+			default:
+				t.Fatalf("got unexpected replica %v", replica)
+			}
 		}
 	})
 }

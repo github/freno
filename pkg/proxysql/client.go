@@ -105,8 +105,11 @@ func (c *Client) GetOnlineServers(db *sql.DB, settings config.ProxySQLConfigurat
 			if _, ignore := c.ignoreServerCache.Get(server.Address()); !ignore {
 				servers = append(servers, server)
 			} else {
-				log.Debugf("found %q in the proxysql ignore-server cache, ignoring for %s", server.Address(), ignoreServerTTL)
+				log.Debugf("found %q in the proxysql ignore-server cache, ignoring ONLINE state for %s", server.Address(), ignoreServerTTL)
 			}
+		case "SHUNNED_REPLICATION_LAG":
+			servers = append(servers, server)
+			defer c.ignoreServerCache.Delete(server.Address())
 		default:
 			c.ignoreServerCache.Set(server.Address(), true, ignoreServerTTL)
 		}
