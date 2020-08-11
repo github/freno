@@ -82,8 +82,8 @@ func (c *Client) CloseDB(addr string) {
 	}
 }
 
-// GetOnlineServers returns a list of MySQLConnectionPoolServers with 'ONLINE' status based on hostgroup ID
-func (c *Client) GetOnlineServers(db *sql.DB, settings config.ProxySQLConfigurationSettings) (servers []*MySQLConnectionPoolServer, err error) {
+// GetServers returns a list of MySQLConnectionPoolServers with 'ONLINE' or 'SHUNNED_REPLICATION_LAG' status, based on hostgroup ID
+func (c *Client) GetServers(db *sql.DB, settings config.ProxySQLConfigurationSettings) (servers []*MySQLConnectionPoolServer, err error) {
 	ignoreServerTTL := c.defaultIgnoreServerTTL
 	if settings.IgnoreServerTTLSecs > 0 {
 		ignoreServerTTL = time.Duration(settings.IgnoreServerTTLSecs) * time.Second
@@ -95,21 +95,23 @@ func (c *Client) GetOnlineServers(db *sql.DB, settings config.ProxySQLConfigurat
 	}
 	defer rows.Close()
 
+	var server *MySQLConnectionPoolServer
 	for rows.Next() {
-		server := &MySQLConnectionPoolServer{}
+		server = &MySQLConnectionPoolServer{}
 		if err = rows.Scan(&server.Host, &server.Port, &server.Status); err != nil {
 			return nil, err
 		}
+
 		switch server.Status {
 		case "ONLINE":
-			if _, ignore := c.ignoreServerCache.Get(server.Address()); !ignore {
-				servers = append(servers, server)
-			} else {
+			if _, ignore := c.ignoreServerCache.Get(server.Address()); ignore {
 				log.Debugf("found %q in the proxysql ignore-server cache, ignoring ONLINE state for %s", server.Address(), ignoreServerTTL)
+				continue
 			}
-		case "SHUNNED_REPLICATION_LAG":
 			servers = append(servers, server)
+		case "SHUNNED_REPLICATION_LAG":
 			defer c.ignoreServerCache.Delete(server.Address())
+			servers = append(servers, server)
 		default:
 			c.ignoreServerCache.Set(server.Address(), true, ignoreServerTTL)
 		}

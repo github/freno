@@ -69,7 +69,7 @@ func TestProxySQLCloseDB(t *testing.T) {
 	}
 }
 
-func TestProxySQLGetOnlineServers(t *testing.T) {
+func TestProxySQLGetServers(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
 		db, mock, _ := sqlmock.New()
 		rows := sqlmock.NewRows([]string{"srv_host", "srv_port", "status"}).
@@ -84,7 +84,7 @@ func TestProxySQLGetOnlineServers(t *testing.T) {
 			ignoreServerCache: cache.New(cache.NoExpiration, time.Second),
 		}
 
-		servers, err := c.GetOnlineServers(db, config.ProxySQLConfigurationSettings{
+		servers, err := c.GetServers(db, config.ProxySQLConfigurationSettings{
 			Addresses:   []string{"127.0.0.1:3306"},
 			HostgroupID: 123,
 		})
@@ -116,7 +116,7 @@ func TestProxySQLGetOnlineServers(t *testing.T) {
 		}
 		c.ignoreServerCache.Set("replica3:3306", true, cache.NoExpiration) // this host should be ignored
 
-		servers, err := c.GetOnlineServers(db, config.ProxySQLConfigurationSettings{
+		servers, err := c.GetServers(db, config.ProxySQLConfigurationSettings{
 			Addresses:   []string{"127.0.0.1:3306"},
 			HostgroupID: 321,
 		})

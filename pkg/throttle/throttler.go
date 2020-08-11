@@ -344,7 +344,7 @@ func (throttler *Throttler) refreshMySQLInventory() error {
 
 				dsn := clusterSettings.ProxySQLSettings.AddressToDSN(addr)
 				log.Debugf("getting ProxySQL data from %s, hostgroup id: %d (%s)", dsn, clusterSettings.ProxySQLSettings.HostgroupID, clusterName)
-				servers, err := throttler.proxysqlClient.GetOnlineServers(db, clusterSettings.ProxySQLSettings)
+				servers, err := throttler.proxysqlClient.GetServers(db, clusterSettings.ProxySQLSettings)
 				if err != nil {
 					throttler.proxysqlClient.CloseDB(addr)
 					return log.Errorf("Unable to get hosts from ProxySQL %s: %+v", dsn, err)
