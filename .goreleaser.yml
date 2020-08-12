@@ -1,7 +1,7 @@
 before:
   hooks:
     - go mod download
-    - go test -covermode=atomic -race -v ./pkg/...
+    - go test -covermode=atomic -race ./pkg/...
 builds:
 - env:
     - CGO_ENABLED=0
