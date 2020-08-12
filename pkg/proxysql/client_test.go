@@ -2,6 +2,7 @@ package proxysql
 
 import (
 	"database/sql"
+	"strings"
 	"testing"
 	"time"
 
@@ -50,7 +51,7 @@ func TestProxySQLGetDB(t *testing.T) {
 		if err == nil {
 			t.Fatal("expected error for failed connection")
 		}
-		if err.Error() != "dial tcp: lookup this.should.fail: no such host" {
+		if !strings.HasSuffix(err.Error(), "no such host") {
 			t.Fatalf("expected a 'no such host' error, got %v", err)
 		}
 	})
