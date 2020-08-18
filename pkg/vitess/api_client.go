@@ -42,11 +42,12 @@ func (t Tablet) HasValidCell(validCells []string) bool {
 	return false
 }
 
-// IsValidReplica returns a bool reflecting if a tablet type is REPLICA
+// IsValidReplica returns a bool reflecting if a tablet type is REPLICA.
+// If tablet stats are available the tablet must be "serving" and "up"
 func (t Tablet) IsValidReplica() bool {
 	if t.Type == topodata.TabletType_REPLICA {
 		if t.Stats != nil {
-			return t.Stats.Up && t.Stats.Serving
+			return t.Stats.Serving && t.Stats.Up
 		}
 		return true
 	}
@@ -64,6 +65,10 @@ func constructAPIURL(settings config.VitessConfigurationSettings) (url string) {
 	}
 	url = fmt.Sprintf("%s/keyspace/%s/tablets/%s", api, settings.Keyspace, settings.Shard)
 
+	cells := ParseCells(settings)
+	if len(cells) > 0 {
+		url = fmt.Sprintf("%s?cells=%s", url, strings.Join(cells, ","))
+	}
 	return url
 }
 
@@ -98,12 +103,7 @@ func ParseTablets(settings config.VitessConfigurationSettings) (tablets []Tablet
 		httpClient.Timeout = time.Duration(settings.TimeoutSecs) * time.Second
 	}
 
-	cells := ParseCells(settings)
 	url := constructAPIURL(settings)
-	if len(cells) > 0 {
-		url = fmt.Sprintf("%s?cells=%s", url, strings.Join(cells, ","))
-	}
-
 	resp, err := httpClient.Get(url)
 	if err != nil {
 		return tablets, err
