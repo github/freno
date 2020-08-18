@@ -133,7 +133,7 @@ func httpServe() error {
 	throttlerCheck := throttle.NewThrottlerCheck(throttler)
 	throttlerCheck.SelfChecks()
 	api := http.NewAPIImpl(throttlerCheck, consensusServiceProvider.GetConsensusService())
-	router := http.ConfigureRoutes(api, config.Settings().EnableProfiling)
+	router := http.ConfigureRoutes(api)
 	port := config.Settings().ListenPort
 	log.Infof("Starting server in port %d", port)
 	return gohttp.ListenAndServe(fmt.Sprintf(":%d", port), router)

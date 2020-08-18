@@ -28,7 +28,7 @@ func TestLbCheck(t *testing.T) {
 
 // TestRoutes applies an end-to-end canary test over each of the different routes
 func TestRoutes(t *testing.T) {
-	router := ConfigureRoutes(new(APIImpl), false)
+	router := ConfigureRoutes(new(APIImpl))
 
 	expectedRoutes := []struct {
 		verb string

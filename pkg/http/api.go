@@ -337,7 +337,7 @@ func metricsHandle(w http.ResponseWriter, r *http.Request, p httprouter.Params) 
 
 // ConfigureRoutes configures a set of HTTP routes to be actions dispatched by the
 // given api's methods.
-func ConfigureRoutes(api API, enableProfiling bool) *httprouter.Router {
+func ConfigureRoutes(api API) *httprouter.Router {
 	router := httprouter.New()
 	register(router, "/lb-check", api.LbCheck)
 	register(router, "/_ping", api.LbCheck)
@@ -371,7 +371,7 @@ func ConfigureRoutes(api API, enableProfiling bool) *httprouter.Router {
 	register(router, "/debug/vars", metricsHandle)
 	register(router, "/debug/metrics", metricsHandle)
 
-	if enableProfiling {
+	if config.Settings().EnableProfiling {
 		router.HandlerFunc(http.MethodGet, "/debug/pprof/", pprof.Index)
 		router.HandlerFunc(http.MethodGet, "/debug/pprof/cmdline", pprof.Cmdline)
 		router.HandlerFunc(http.MethodGet, "/debug/pprof/profile", pprof.Profile)
