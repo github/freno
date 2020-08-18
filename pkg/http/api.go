@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/http/pprof"
 	"os"
 	"strconv"
 	"strings"
@@ -336,7 +337,7 @@ func metricsHandle(w http.ResponseWriter, r *http.Request, p httprouter.Params) 
 
 // ConfigureRoutes configures a set of HTTP routes to be actions dispatched by the
 // given api's methods.
-func ConfigureRoutes(api API) *httprouter.Router {
+func ConfigureRoutes(api API, enableProfiling bool) *httprouter.Router {
 	router := httprouter.New()
 	register(router, "/lb-check", api.LbCheck)
 	register(router, "/_ping", api.LbCheck)
@@ -369,6 +370,18 @@ func ConfigureRoutes(api API) *httprouter.Router {
 
 	register(router, "/debug/vars", metricsHandle)
 	register(router, "/debug/metrics", metricsHandle)
+
+	if enableProfiling {
+		router.HandlerFunc(http.MethodGet, "/debug/pprof/", pprof.Index)
+		router.HandlerFunc(http.MethodGet, "/debug/pprof/cmdline", pprof.Cmdline)
+		router.HandlerFunc(http.MethodGet, "/debug/pprof/profile", pprof.Profile)
+		router.HandlerFunc(http.MethodGet, "/debug/pprof/symbol", pprof.Symbol)
+		router.HandlerFunc(http.MethodGet, "/debug/pprof/trace", pprof.Trace)
+		router.Handler(http.MethodGet, "/debug/pprof/goroutine", pprof.Handler("goroutine"))
+		router.Handler(http.MethodGet, "/debug/pprof/heap", pprof.Handler("heap"))
+		router.Handler(http.MethodGet, "/debug/pprof/threadcreate", pprof.Handler("threadcreate"))
+		router.Handler(http.MethodGet, "/debug/pprof/block", pprof.Handler("block"))
+	}
 
 	register(router, "/help", api.Help)
 

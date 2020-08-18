@@ -44,6 +44,7 @@ func main() {
 	verbose := flag.Bool("verbose", false, "verbose")
 	debug := flag.Bool("debug", false, "debug mode (very verbose)")
 	stack := flag.Bool("stack", false, "add stack trace upon error")
+	enableProfiling := flag.Bool("enable-profiling", false, "enable pprof profiling")
 
 	help := flag.Bool("help", false, "show the help")
 	flag.Parse()
@@ -89,10 +90,13 @@ func main() {
 	if *httpPort > 0 {
 		config.Settings().ListenPort = *httpPort
 	}
+	if *enableProfiling {
+		config.Settings().EnableProfiling = *enableProfiling
+	}
 
 	switch {
 	case *http:
-		err := httpServe()
+		err := httpServe(config.Settings())
 		log.Errore(err)
 	default:
 		printUsage()
@@ -112,7 +116,7 @@ func loadConfiguration(configFile string) {
 	}
 }
 
-func httpServe() error {
+func httpServe(settings *config.ConfigurationSettings) error {
 	throttler := throttle.NewThrottler()
 	log.Infof("Starting consensus service")
 	log.Infof("- forced leadership: %+v", group.ForceLeadership)
@@ -129,7 +133,7 @@ func httpServe() error {
 	throttlerCheck := throttle.NewThrottlerCheck(throttler)
 	throttlerCheck.SelfChecks()
 	api := http.NewAPIImpl(throttlerCheck, consensusServiceProvider.GetConsensusService())
-	router := http.ConfigureRoutes(api)
+	router := http.ConfigureRoutes(api, settings.EnableProfiling)
 	port := config.Settings().ListenPort
 	log.Infof("Starting server in port %d", port)
 	return gohttp.ListenAndServe(fmt.Sprintf(":%d", port), router)
