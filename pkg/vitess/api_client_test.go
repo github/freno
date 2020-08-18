@@ -54,6 +54,36 @@ func TestParseTablets(t *testing.T) {
 				},
 			})
 			fmt.Fprint(w, string(data))
+		case "/api/keyspace/test_w_stats/tablets/00":
+			data, _ := json.Marshal([]Tablet{
+				{
+					Alias:         &topodata.TabletAlias{Cell: "cell2"},
+					MysqlHostname: "replica1",
+					Stats:         &TabletStats{Serving: true, Up: true}, // healthy stats
+					Type:          topodata.TabletType_REPLICA,
+				},
+				{
+					Alias:         &topodata.TabletAlias{Cell: "cell2"},
+					MysqlHostname: "replica2",
+					Stats:         &TabletStats{Serving: false, Up: true}, // unhealthy stats
+					Type:          topodata.TabletType_REPLICA,
+				},
+			})
+			fmt.Fprint(w, string(data))
+		case "/api/keyspace/test/tablets/00?cells=cell2":
+			data, _ := json.Marshal([]Tablet{
+				{
+					Alias:         &topodata.TabletAlias{Cell: "cell2"},
+					MysqlHostname: "replica1",
+					Type:          topodata.TabletType_REPLICA,
+				},
+				{
+					Alias:         &topodata.TabletAlias{Cell: "cell2"},
+					MysqlHostname: "spare",
+					Type:          topodata.TabletType_SPARE,
+				},
+			})
+			fmt.Fprint(w, string(data))
 		default:
 			w.WriteHeader(http.StatusNotFound)
 		}
@@ -84,6 +114,26 @@ func TestParseTablets(t *testing.T) {
 
 		if httpClient.Timeout != time.Second {
 			t.Fatalf("Expected vitess client timeout of %v, got %v", time.Second, httpClient.Timeout)
+		}
+	})
+
+	t.Run("with-stats", func(t *testing.T) {
+		settings := config.VitessConfigurationSettings{
+			API:      vitessApi.URL,
+			Keyspace: "test_w_stats",
+			Shard:    "00",
+		}
+		tablets, err := ParseTablets(settings)
+		if err != nil {
+			t.Fatalf("Expected no error, got %q", err)
+		}
+
+		if len(tablets) != 1 {
+			t.Fatalf("Expected 1 tablet, got %d", len(tablets))
+		}
+
+		if tablets[0].MysqlHostname != "replica1" {
+			t.Fatalf("Expected hostname %q, got %q", "replica1", tablets[0].MysqlHostname)
 		}
 	})
 

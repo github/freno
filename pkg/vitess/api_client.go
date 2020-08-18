@@ -14,11 +14,18 @@ import (
 
 const defaultTimeout = time.Duration(5) * time.Second
 
+// TabletStats represents realtime stats of a running instance of vttablet.
+type TabletStats struct {
+	Serving bool `json:"serving"`
+	Up      bool `json:"up"`
+}
+
 // Tablet represents information about a running instance of vttablet.
 type Tablet struct {
 	Alias         *topodata.TabletAlias `json:"alias,omitempty"`
 	MysqlHostname string                `json:"mysql_hostname,omitempty"`
 	MysqlPort     int32                 `json:"mysql_port,omitempty"`
+	Stats         *TabletStats          `json:"stats,omitempty"`
 	Type          topodata.TabletType   `json:"type,omitempty"`
 }
 
@@ -37,7 +44,13 @@ func (t Tablet) HasValidCell(validCells []string) bool {
 
 // IsValidReplica returns a bool reflecting if a tablet type is REPLICA
 func (t Tablet) IsValidReplica() bool {
-	return t.Type == topodata.TabletType_REPLICA
+	if t.Type == topodata.TabletType_REPLICA {
+		if t.Stats != nil {
+			return t.Stats.Up && t.Stats.Serving
+		}
+		return true
+	}
+	return false
 }
 
 var httpClient = http.Client{
@@ -85,7 +98,12 @@ func ParseTablets(settings config.VitessConfigurationSettings) (tablets []Tablet
 		httpClient.Timeout = time.Duration(settings.TimeoutSecs) * time.Second
 	}
 
+	cells := ParseCells(settings)
 	url := constructAPIURL(settings)
+	if len(cells) > 0 {
+		url = fmt.Sprintf("%s?cells=%s", url, strings.Join(cells, ","))
+	}
+
 	resp, err := httpClient.Get(url)
 	if err != nil {
 		return tablets, err
