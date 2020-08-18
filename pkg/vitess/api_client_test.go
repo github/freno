@@ -54,16 +54,14 @@ func TestParseTablets(t *testing.T) {
 				},
 			})
 			fmt.Fprint(w, string(data))
-		case "/api/keyspace/test_w_stats/tablets/00":
+		case "/api/keyspace/test_w_stats/tablets/":
 			data, _ := json.Marshal([]Tablet{
 				{
-					Alias:         &topodata.TabletAlias{Cell: "cell2"},
 					MysqlHostname: "replica1",
 					Stats:         &TabletStats{Serving: true, Up: true}, // healthy stats
 					Type:          topodata.TabletType_REPLICA,
 				},
 				{
-					Alias:         &topodata.TabletAlias{Cell: "cell2"},
 					MysqlHostname: "replica2",
 					Stats:         &TabletStats{Serving: false, Up: true}, // unhealthy stats
 					Type:          topodata.TabletType_REPLICA,
@@ -121,7 +119,6 @@ func TestParseTablets(t *testing.T) {
 		settings := config.VitessConfigurationSettings{
 			API:      vitessApi.URL,
 			Keyspace: "test_w_stats",
-			Shard:    "00",
 		}
 		tablets, err := ParseTablets(settings)
 		if err != nil {
