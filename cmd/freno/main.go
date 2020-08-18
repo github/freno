@@ -44,7 +44,7 @@ func main() {
 	verbose := flag.Bool("verbose", false, "verbose")
 	debug := flag.Bool("debug", false, "debug mode (very verbose)")
 	stack := flag.Bool("stack", false, "add stack trace upon error")
-	enableProfiling := flag.Bool("enable-profiling", false, "enable pprof profiling")
+	enableProfiling := flag.Bool("enable-profiling", false, "enable pprof profiling http api")
 
 	help := flag.Bool("help", false, "show the help")
 	flag.Parse()

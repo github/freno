@@ -108,7 +108,7 @@ type ConfigurationSettings struct {
 	BackendMySQLPassword string
 	MemcacheServers      []string // if given, freno will report to aggregated values to given memcache
 	MemcachePath         string   // use as prefix to metric path in memcache key, e.g. if `MemcachePath` is "myprefix" the key would be "myprefix/mysql/maincluster". Default: "freno"
-	EnableProfiling      bool     // enable pprof http APIs for profiling
+	EnableProfiling      bool     // enable pprof profiling http api
 	Stores               StoresSettings
 }
 
