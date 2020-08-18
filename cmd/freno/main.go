@@ -96,7 +96,7 @@ func main() {
 
 	switch {
 	case *http:
-		err := httpServe(config.Settings())
+		err := httpServe()
 		log.Errore(err)
 	default:
 		printUsage()
@@ -116,7 +116,7 @@ func loadConfiguration(configFile string) {
 	}
 }
 
-func httpServe(settings *config.ConfigurationSettings) error {
+func httpServe() error {
 	throttler := throttle.NewThrottler()
 	log.Infof("Starting consensus service")
 	log.Infof("- forced leadership: %+v", group.ForceLeadership)
@@ -133,7 +133,7 @@ func httpServe(settings *config.ConfigurationSettings) error {
 	throttlerCheck := throttle.NewThrottlerCheck(throttler)
 	throttlerCheck.SelfChecks()
 	api := http.NewAPIImpl(throttlerCheck, consensusServiceProvider.GetConsensusService())
-	router := http.ConfigureRoutes(api, settings.EnableProfiling)
+	router := http.ConfigureRoutes(api, config.Settings().EnableProfiling)
 	port := config.Settings().ListenPort
 	log.Infof("Starting server in port %d", port)
 	return gohttp.ListenAndServe(fmt.Sprintf(":%d", port), router)
