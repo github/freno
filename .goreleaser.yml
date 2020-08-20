@@ -19,6 +19,7 @@ changelog:
 nfpms:
   - vendor: GitHub
     homepage: https://github.com/github/freno
+    maintainer: GitHub Engineering <github@github.com>
     description: Cooperative, highly available throttler service
     license: MIT
     bindir: /usr/bin
