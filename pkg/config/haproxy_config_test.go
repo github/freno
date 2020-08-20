@@ -16,7 +16,7 @@ func init() {
 	log.SetLevel(log.ERROR)
 }
 
-func TestParseAddresses(t *testing.T) {
+func TestHAProxyParseAddresses(t *testing.T) {
 	{
 		c := &HAProxyConfigurationSettings{Addresses: ""}
 		addresses, err := c.parseAddresses()
@@ -90,7 +90,7 @@ func TestParseAddresses(t *testing.T) {
 	}
 }
 
-func TestGetProxyAddresses(t *testing.T) {
+func TestHAProxyGetProxyAddresses(t *testing.T) {
 	{
 		c := &HAProxyConfigurationSettings{Addresses: ""}
 		addresses, err := c.GetProxyAddresses()
@@ -127,7 +127,7 @@ func TestGetProxyAddresses(t *testing.T) {
 	}
 }
 
-func TestIsEmpty(t *testing.T) {
+func TestHAProxyIsEmpty(t *testing.T) {
 	{
 		c := &HAProxyConfigurationSettings{}
 		isEmpty := c.IsEmpty()

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/http/pprof"
 	"os"
 	"strconv"
 	"strings"
@@ -369,6 +370,18 @@ func ConfigureRoutes(api API) *httprouter.Router {
 
 	register(router, "/debug/vars", metricsHandle)
 	register(router, "/debug/metrics", metricsHandle)
+
+	if config.Settings().EnableProfiling {
+		router.HandlerFunc(http.MethodGet, "/debug/pprof/", pprof.Index)
+		router.HandlerFunc(http.MethodGet, "/debug/pprof/cmdline", pprof.Cmdline)
+		router.HandlerFunc(http.MethodGet, "/debug/pprof/profile", pprof.Profile)
+		router.HandlerFunc(http.MethodGet, "/debug/pprof/symbol", pprof.Symbol)
+		router.HandlerFunc(http.MethodGet, "/debug/pprof/trace", pprof.Trace)
+		router.Handler(http.MethodGet, "/debug/pprof/goroutine", pprof.Handler("goroutine"))
+		router.Handler(http.MethodGet, "/debug/pprof/heap", pprof.Handler("heap"))
+		router.Handler(http.MethodGet, "/debug/pprof/threadcreate", pprof.Handler("threadcreate"))
+		router.Handler(http.MethodGet, "/debug/pprof/block", pprof.Handler("block"))
+	}
 
 	register(router, "/help", api.Help)
 
