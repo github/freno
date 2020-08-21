@@ -26,7 +26,8 @@ nfpms:
     config_files:
       "resources/freno.conf.skeleton.json": "/etc/freno.conf.json"
     files:
-      "resources/etc/init.d/freno": "/etc/init.d/freno"
+      "resources/etc/default/freno": "/etc/default/freno"
+      "resources/freno.service": "/usr/lib/systemd/system/freno.service"
     empty_folders:
       - "/var/lib/freno"
     formats:

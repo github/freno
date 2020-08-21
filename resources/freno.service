@@ -1,0 +1,15 @@
+[Unit]
+Description=freno
+
+[Service]
+LimitNOFILE=1048576
+EnvironmentFile=/etc/default/freno
+ExecStart=/bin/bash -c "/usr/bin/freno ${FRENO_FLAGS}"
+KillMode=process
+Restart=always
+RestartSec=5
+StandardOutput=syslog
+StandardError=syslog
+
+[Install]
+Alias=freno freno.service

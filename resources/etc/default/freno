@@ -1,0 +1,4 @@
+FRENO_FLAGS="--http"
+
+# Debug mode
+FRENO_FLAGS="$FRENO_FLAGS --debug"
