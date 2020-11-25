@@ -34,7 +34,7 @@ func TestParseTablets(t *testing.T) {
 				},
 				{
 					Alias:         &topodata.TabletAlias{Cell: "cell3"},
-					MysqlHostname: "replica-not-replication",
+					MysqlHostname: "replica-no-replication",
 					Stats: &TabletStats{
 						Realtime: &TabletRealtimeStats{
 							HealthError: errMsgHealthErrorNoReplication,
