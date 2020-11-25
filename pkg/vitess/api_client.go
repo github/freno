@@ -51,8 +51,8 @@ func (t Tablet) HasValidCell(validCells []string) bool {
 	return false
 }
 
-// IsHealthyReplica returns a bool reflecting if a tablet is healthy.
-func (t Tablet) IsHealthyReplica() bool {
+// IsReplicating returns a bool reflecting if a tablet replication status is healthy.
+func (t Tablet) IsReplicating() bool {
 	if t.Stats != nil && t.Stats.Realtime != nil {
 		return t.Stats.Realtime.HealthError != errMsgHealthErrorNoReplication
 	}
@@ -64,7 +64,7 @@ func (t Tablet) IsValidReplica() bool {
 	if t.Type != topodata.TabletType_REPLICA {
 		return false
 	}
-	return t.IsHealthyReplica()
+	return t.IsReplicating()
 }
 
 var httpClient = http.Client{
