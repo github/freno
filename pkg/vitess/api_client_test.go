@@ -33,6 +33,16 @@ func TestParseTablets(t *testing.T) {
 					Type:          topodata.TabletType_REPLICA,
 				},
 				{
+					Alias:         &topodata.TabletAlias{Cell: "cell3"},
+					MysqlHostname: "replica-not-replication",
+					Stats: &TabletStats{
+						Realtime: &TabletRealtimeStats{
+							HealthError: errMsgHealthErrorNoReplication,
+						},
+					},
+					Type: topodata.TabletType_REPLICA,
+				},
+				{
 					Alias:         &topodata.TabletAlias{Cell: "cell2"},
 					MysqlHostname: "spare",
 					Type:          topodata.TabletType_SPARE,

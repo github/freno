@@ -12,13 +12,29 @@ import (
 	"vitess.io/vitess/go/vt/proto/topodata"
 )
 
-const defaultTimeout = time.Duration(5) * time.Second
+const (
+	defaultTimeout                 = time.Duration(5) * time.Second
+	errMsgHealthErrorNoReplication = "replication is not running"
+)
+
+type TabletRealtimeStats struct {
+	HealthError         string `json:"health_error,omitempty"`
+	SecondsBehindMaster uint32 `json:"seconds_behind_master,omitempty"`
+}
+
+type TabletStats struct {
+	LastError string               `json:"last_error,omitempty"`
+	Realtime  *TabletRealtimeStats `json:"realtime,omitempty"`
+	Serving   bool                 `json:"serving,omitempty"`
+	Up        bool                 `json:"up,omitempty"`
+}
 
 // Tablet represents information about a running instance of vttablet.
 type Tablet struct {
 	Alias         *topodata.TabletAlias `json:"alias,omitempty"`
 	MysqlHostname string                `json:"mysql_hostname,omitempty"`
 	MysqlPort     int32                 `json:"mysql_port,omitempty"`
+	Stats         *TabletStats          `json:"stats,omitempty"`
 	Type          topodata.TabletType   `json:"type,omitempty"`
 }
 
@@ -35,9 +51,20 @@ func (t Tablet) HasValidCell(validCells []string) bool {
 	return false
 }
 
+// IsHealthyReplica returns a bool reflecting if a tablet is healthy.
+func (t Tablet) IsHealthyReplica() bool {
+	if t.Stats != nil && t.Stats.Realtime != nil {
+		return t.Stats.Realtime.HealthError != errMsgHealthErrorNoReplication
+	}
+	return true
+}
+
 // IsValidReplica returns a bool reflecting if a tablet type is REPLICA
 func (t Tablet) IsValidReplica() bool {
-	return t.Type == topodata.TabletType_REPLICA
+	if t.Type != topodata.TabletType_REPLICA {
+		return false
+	}
+	return t.IsHealthyReplica()
 }
 
 var httpClient = http.Client{
