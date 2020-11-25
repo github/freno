@@ -52,6 +52,7 @@ func (t Tablet) HasValidCell(validCells []string) bool {
 }
 
 // IsReplicating returns a bool reflecting if a tablet replication status is healthy.
+// If realtime tablet stats are unavailable a tablet is assumed to be replicating
 func (t Tablet) IsReplicating() bool {
 	if t.Stats != nil && t.Stats.Realtime != nil {
 		return t.Stats.Realtime.HealthError != errMsgHealthErrorNoReplication
