@@ -52,7 +52,7 @@ func constructAPIURL(settings config.VitessConfigurationSettings) (url string) {
 	validCells := ParseCells(settings)
 	var queryParams string
 	if len(validCells) > 0 {
-		params = fmt.Sprintf("?cells=%s", strings.Join(validCells, ","))
+		queryParams = fmt.Sprintf("?cells=%s", strings.Join(validCells, ","))
 	}
 	return fmt.Sprintf("%s/keyspace/%s/tablets/%s%s", api, settings.Keyspace, settings.Shard, queryParams)
 }
