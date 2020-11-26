@@ -2,7 +2,6 @@ package vitess
 
 import (
 	"encoding/json"
-	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -16,54 +15,60 @@ func TestParseTablets(t *testing.T) {
 	vitessApi := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.String() {
 		case "/api/keyspace/test/tablets/00":
-			data, _ := json.Marshal([]Tablet{
+			json.NewEncoder(w).Encode([]Tablet{
 				{
-					Alias:         &topodata.TabletAlias{Cell: "cell1"},
-					MysqlHostname: "master",
-					Type:          topodata.TabletType_MASTER,
+					// primary
+					Alias: &topodata.TabletAlias{Cell: "cell1"},
+					Type:  topodata.TabletType_MASTER,
 				},
 				{
+					// replica without tablet stats
 					Alias:         &topodata.TabletAlias{Cell: "cell2"},
 					MysqlHostname: "replica1",
 					Type:          topodata.TabletType_REPLICA,
 				},
 				{
+					// replica with healthy tablet stats
 					Alias:         &topodata.TabletAlias{Cell: "cell3"},
 					MysqlHostname: "replica2",
+					Stats:         &TabletStats{Serving: true, Up: true},
 					Type:          topodata.TabletType_REPLICA,
 				},
 				{
-					Alias:         &topodata.TabletAlias{Cell: "cell3"},
-					MysqlHostname: "replica-no-replication",
+					// replica with tablet stats + not serving (replication not running)
+					Alias:         &topodata.TabletAlias{Cell: "cell1"},
+					MysqlHostname: "replica3",
 					Stats: &TabletStats{
+						LastError: "vttablet error: replication is not running",
 						Realtime: &TabletRealtimeStats{
-							HealthError: errMsgHealthErrorNoReplication,
+							HealthError: "replication is not running",
 						},
+						Serving: false,
+						Up:      true,
 					},
 					Type: topodata.TabletType_REPLICA,
 				},
 				{
-					Alias:         &topodata.TabletAlias{Cell: "cell2"},
-					MysqlHostname: "spare",
-					Type:          topodata.TabletType_SPARE,
+					// spare tablet
+					Alias: &topodata.TabletAlias{Cell: "cell2"},
+					Type:  topodata.TabletType_SPARE,
 				},
 				{
-					Alias:         &topodata.TabletAlias{Cell: "cell3"},
-					MysqlHostname: "batch",
-					Type:          topodata.TabletType_BATCH,
+					// batch tablet
+					Alias: &topodata.TabletAlias{Cell: "cell3"},
+					Type:  topodata.TabletType_BATCH,
 				},
 				{
-					Alias:         &topodata.TabletAlias{Cell: "cell2"},
-					MysqlHostname: "backup",
-					Type:          topodata.TabletType_BACKUP,
+					// backup tablet
+					Alias: &topodata.TabletAlias{Cell: "cell2"},
+					Type:  topodata.TabletType_BACKUP,
 				},
 				{
-					Alias:         &topodata.TabletAlias{Cell: "cell1"},
-					MysqlHostname: "restore",
-					Type:          topodata.TabletType_RESTORE,
+					// restore tablet
+					Alias: &topodata.TabletAlias{Cell: "cell1"},
+					Type:  topodata.TabletType_RESTORE,
 				},
 			})
-			fmt.Fprint(w, string(data))
 		default:
 			w.WriteHeader(http.StatusNotFound)
 		}
