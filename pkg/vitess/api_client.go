@@ -49,9 +49,12 @@ func constructAPIURL(settings config.VitessConfigurationSettings) (url string) {
 	if !strings.HasSuffix(api, "/api") {
 		api = fmt.Sprintf("%s/api", api)
 	}
-	url = fmt.Sprintf("%s/keyspace/%s/tablets/%s", api, settings.Keyspace, settings.Shard)
-
-	return url
+	validCells := ParseCells(settings)
+	var params string
+	if len(validCells) > 0 {
+		params = fmt.Sprintf("?cells=%s", strings.Join(validCells, ","))
+	}
+	return fmt.Sprintf("%s/keyspace/%s/tablets/%s%s", api, settings.Keyspace, settings.Shard, params)
 }
 
 // ParseCells returns a slice of non-empty Vitess cell names
