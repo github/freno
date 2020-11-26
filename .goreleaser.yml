@@ -5,6 +5,8 @@ before:
 builds:
 - env:
     - CGO_ENABLED=0
+  goarch:
+    - amd64
   goos:
     - linux
     - darwin
@@ -33,6 +35,7 @@ nfpms:
       - deb
       - rpm
 release:
+  name_template: "GA release {{.Tag}}"
   github:
     owner: github
     name: freno
