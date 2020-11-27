@@ -31,8 +31,12 @@ func TestParseTablets(t *testing.T) {
 					// replica with healthy tablet stats
 					Alias:         &topodata.TabletAlias{Cell: "cell3"},
 					MysqlHostname: "replica2",
-					Stats:         &TabletStats{Serving: true, Up: true},
-					Type:          topodata.TabletType_REPLICA,
+					Stats: &TabletStats{
+						Realtime: &TabletRealtimeStats{},
+						Serving:  true,
+						Up:       true,
+					},
+					Type: topodata.TabletType_REPLICA,
 				},
 				{
 					// replica with tablet stats + not serving (replication not running)

@@ -55,10 +55,7 @@ func (t Tablet) HasValidCell(validCells []string) bool {
 // count (not important to freno) and replication lag (freno polls its own replication lag)
 func (t Tablet) IsServeable() bool {
 	if t.Stats != nil {
-		if t.Stats.Realtime != nil && t.Stats.Realtime.HealthError != "" {
-			return false
-		}
-		return t.Stats.Serving && t.Stats.Up && t.Stats.LastError == ""
+		return t.Stats.Serving && t.Stats.LastError == "" && t.Stats.Realtime != nil
 	}
 	return true
 }
