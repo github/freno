@@ -5,6 +5,8 @@ before:
 builds:
 - env:
     - CGO_ENABLED=0
+  goarch:
+    - amd64
   goos:
     - linux
     - darwin
@@ -19,6 +21,7 @@ changelog:
 nfpms:
   - vendor: GitHub
     homepage: https://github.com/github/freno
+    maintainer: GitHub Engineering <github@github.com>
     description: Cooperative, highly available throttler service
     license: MIT
     bindir: /usr/bin
@@ -32,6 +35,7 @@ nfpms:
       - deb
       - rpm
 release:
+  name_template: "GA release {{.Tag}}"
   github:
     owner: github
     name: freno
