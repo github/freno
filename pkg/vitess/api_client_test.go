@@ -39,9 +39,19 @@ func TestParseTablets(t *testing.T) {
 					Type: topodata.TabletType_REPLICA,
 				},
 				{
-					// replica with tablet stats + not serving (replication not running)
+					// replica with nil realtime stats (ignore)
 					Alias:         &topodata.TabletAlias{Cell: "cell1"},
 					MysqlHostname: "replica3",
+					Stats: &TabletStats{
+						Realtime: nil,
+						Serving:  true,
+						Up:       true,
+					},
+				},
+				{
+					// replica with tablet stats + not serving (replication not running)
+					Alias:         &topodata.TabletAlias{Cell: "cell2"},
+					MysqlHostname: "replica4",
 					Stats: &TabletStats{
 						LastError: "vttablet error: replication is not running",
 						Realtime: &TabletRealtimeStats{
