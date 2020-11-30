@@ -14,7 +14,7 @@ import (
 func TestParseTablets(t *testing.T) {
 	vitessApi := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.String() {
-		case "/api/keyspace/test/tablets/00":
+		case "/api/keyspace/test/tablets/00", "/api/keyspace/test/tablets/00?cells=cell2":
 			json.NewEncoder(w).Encode([]Tablet{
 				{
 					// primary

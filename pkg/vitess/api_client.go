@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
@@ -72,14 +73,21 @@ var httpClient = http.Client{
 	Timeout: defaultTimeout,
 }
 
-func constructAPIURL(settings config.VitessConfigurationSettings) (url string) {
+func constructAPIURL(settings config.VitessConfigurationSettings) (apiUrl string) {
 	api := strings.TrimRight(settings.API, "/")
 	if !strings.HasSuffix(api, "/api") {
 		api = fmt.Sprintf("%s/api", api)
 	}
-	url = fmt.Sprintf("%s/keyspace/%s/tablets/%s", api, settings.Keyspace, settings.Shard)
-
-	return url
+	queryParams := url.Values{}
+	validCells := ParseCells(settings)
+	if len(validCells) > 0 {
+		queryParams.Add("cells", strings.Join(validCells, ","))
+	}
+	apiUrl = fmt.Sprintf("%s/keyspace/%s/tablets/%s", api, settings.Keyspace, settings.Shard)
+	if len(queryParams) > 0 {
+		apiUrl = fmt.Sprintf("%s?%s", apiUrl, queryParams.Encode())
+	}
+	return apiUrl
 }
 
 // ParseCells returns a slice of non-empty Vitess cell names
