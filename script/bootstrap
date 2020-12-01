@@ -2,7 +2,7 @@
 
 set -e
 
-readonly supportedGo="go1.1[234]"
+readonly supportedGo="go1.1[2345]"
 
 # Ensure go is installed
 if ! command -v go ; then
