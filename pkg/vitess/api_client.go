@@ -52,11 +52,11 @@ func (t Tablet) HasValidCell(validCells []string) bool {
 
 // IsServeable returns a bool reflecting if a tablet is eligible to serve traffic based on tablet stats. For
 // backwards-compatibilty tablets are assumed to be healthy if realtime stats is disabled. This method aims
-// to mimic the logic used by vtgate to select tablets for read queries without considering minimum tablet
-// count (not important to freno) and replication lag (freno polls its own replication lag)
+// to mimic the logic used by vtgate to select tablets for read queries without considering 'serving', minimum
+// tablet count (not important to freno) and replication lag (freno polls its own replication lag)
 func (t Tablet) IsServeable() bool {
 	if t.Stats != nil {
-		return t.Stats.Serving && t.Stats.LastError == "" && t.Stats.Realtime != nil
+		return t.Stats.LastError == "" && t.Stats.Realtime != nil
 	}
 	return true
 }

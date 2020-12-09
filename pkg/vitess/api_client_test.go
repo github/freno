@@ -22,19 +22,17 @@ func TestParseTablets(t *testing.T) {
 					Type:  topodata.TabletType_MASTER,
 				},
 				{
-					// replica without tablet stats
+					// replica without realtime tablet stats
 					Alias:         &topodata.TabletAlias{Cell: "cell2"},
 					MysqlHostname: "replica1",
 					Type:          topodata.TabletType_REPLICA,
 				},
 				{
-					// replica with healthy tablet stats
+					// replica with healthy realtime tablet stats
 					Alias:         &topodata.TabletAlias{Cell: "cell3"},
 					MysqlHostname: "replica2",
 					Stats: &TabletStats{
 						Realtime: &TabletRealtimeStats{},
-						Serving:  true,
-						Up:       true,
 					},
 					Type: topodata.TabletType_REPLICA,
 				},
@@ -44,12 +42,10 @@ func TestParseTablets(t *testing.T) {
 					MysqlHostname: "replica3",
 					Stats: &TabletStats{
 						Realtime: nil,
-						Serving:  true,
-						Up:       true,
 					},
 				},
 				{
-					// replica with tablet stats + not serving (replication not running)
+					// replica with realtime tablet stats and 'replication not running' error
 					Alias:         &topodata.TabletAlias{Cell: "cell2"},
 					MysqlHostname: "replica4",
 					Stats: &TabletStats{
@@ -57,8 +53,6 @@ func TestParseTablets(t *testing.T) {
 						Realtime: &TabletRealtimeStats{
 							HealthError: "replication is not running",
 						},
-						Serving: false,
-						Up:      true,
 					},
 					Type: topodata.TabletType_REPLICA,
 				},
