@@ -17,12 +17,12 @@ func TestParseTablets(t *testing.T) {
 		case "/api/keyspace/test/tablets/00", "/api/keyspace/test/tablets/00?cells=cell2":
 			json.NewEncoder(w).Encode([]Tablet{
 				{
-					// primary
+					// primary (should be ignored)
 					Alias: &topodata.TabletAlias{Cell: "cell1"},
 					Type:  topodata.TabletType_MASTER,
 				},
 				{
-					// replica without realtime tablet stats
+					// replica without realtime tablet stats enabled (assumed to be healthy)
 					Alias:         &topodata.TabletAlias{Cell: "cell2"},
 					MysqlHostname: "replica1",
 					Type:          topodata.TabletType_REPLICA,
@@ -37,7 +37,7 @@ func TestParseTablets(t *testing.T) {
 					Type: topodata.TabletType_REPLICA,
 				},
 				{
-					// replica with nil realtime stats (ignore)
+					// replica with nil realtime stats (should be ignored)
 					Alias:         &topodata.TabletAlias{Cell: "cell1"},
 					MysqlHostname: "replica3",
 					Stats: &TabletStats{
@@ -45,7 +45,7 @@ func TestParseTablets(t *testing.T) {
 					},
 				},
 				{
-					// replica with realtime tablet stats and 'replication not running' error
+					// replica with realtime tablet stats and 'replication not running' error (should be ignored)
 					Alias:         &topodata.TabletAlias{Cell: "cell2"},
 					MysqlHostname: "replica4",
 					Stats: &TabletStats{
@@ -57,22 +57,22 @@ func TestParseTablets(t *testing.T) {
 					Type: topodata.TabletType_REPLICA,
 				},
 				{
-					// spare tablet
+					// spare tablet (should be ignored)
 					Alias: &topodata.TabletAlias{Cell: "cell2"},
 					Type:  topodata.TabletType_SPARE,
 				},
 				{
-					// batch tablet
+					// batch tablet (should be ignored)
 					Alias: &topodata.TabletAlias{Cell: "cell3"},
 					Type:  topodata.TabletType_BATCH,
 				},
 				{
-					// backup tablet
+					// backup tablet (should be ignored)
 					Alias: &topodata.TabletAlias{Cell: "cell2"},
 					Type:  topodata.TabletType_BACKUP,
 				},
 				{
-					// restore tablet
+					// restore tablet (should be ignored)
 					Alias: &topodata.TabletAlias{Cell: "cell1"},
 					Type:  topodata.TabletType_RESTORE,
 				},
