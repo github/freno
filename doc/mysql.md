@@ -34,6 +34,9 @@ You will find the top-level configuration:
 "MySQL": {
   "User": "some_user",
   "Password": "${mysql_password_env_variable}",
+  "TlsCaCertPath": "/usr/local/share/certs/ca_freno.pem",
+  "TlsClientCertPath": "${client_cert_path_env_variable}",
+  "TlsClientKeyPath": "${client_key_path_env_variable}",
   "MetricQuery": "select unix_timestamp(now(6)) - unix_timestamp(ts) as lag_check from meta.heartbeat order by ts desc limit 1",
   "CacheMillis": 0,
   "ThrottleThreshold": 1.0,
@@ -53,6 +56,8 @@ You will find the top-level configuration:
 These params apply in general to all MySQL clusters, unless specified differently (overridden) on a per-cluster basis.
 
 - `User`, `Password`: these can be specified as plaintext, or in a `${some_env_variable}` format, in which case `freno` will look up its environment for specified variable. (e.g. to match the above config, a `shell` script invoking `freno` can `export mysql_password_env_variable=flyingcircus`)
+- `TlsCaCertPath`, `TlsClientCertPath`, `TlsClientKeyCertPath`. Are the file system paths of the PEM-encoded, TLS certificates needed to connect to MySQL using TLS. 
+   They can also be specified as text or in `${some_env_variable}` format.  
 - `MetricQuery`:
   - Note: returned value is expected to be `[0..)` (`0` or more), where lower values are "better" and higher values are "worse".
   - if not provided, `freno` will assume you're interested in replication lag, and will issue a `SHOW SLAVE STATUS` to extract `Seconds_behind_master`

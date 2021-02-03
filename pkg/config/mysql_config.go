@@ -11,8 +11,12 @@ import (
 const DefaultMySQLPort = 3306
 
 type MySQLClusterConfigurationSettings struct {
-	User                 string   // override MySQLConfigurationSettings's, or leave empty to inherit those settings
-	Password             string   // override MySQLConfigurationSettings's, or leave empty to inherit those settings
+	User                 string // override MySQLConfigurationSettings's, or leave empty to inherit those settings
+	Password             string // override MySQLConfigurationSettings's, or leave empty to inherit those settings
+	TlsCaCertPath        string // optional, if not provided it won't setup any TLS connection
+	TlsClientCertPath    string
+	TlsClientKeyPath     string
+	TlsSkipVerify        bool     // optional, set it to true to skip certificate verification. Not recommended in production.
 	MetricQuery          string   // override MySQLConfigurationSettings's, or leave empty to inherit those settings
 	CacheMillis          int      // override MySQLConfigurationSettings's, or leave empty to inherit those settings
 	ThrottleThreshold    float64  // override MySQLConfigurationSettings's, or leave empty to inherit those settings
@@ -49,6 +53,10 @@ func (settings *MySQLClusterConfigurationSettings) postReadAdjustments() error {
 type MySQLConfigurationSettings struct {
 	User                 string
 	Password             string
+	TlsCaCertPath        string // optional, if not provided it won't setup any TLS connection
+	TlsClientCertPath    string
+	TlsClientKeyPath     string
+	TlsSkipVerify        bool // optional, set it to true to skip certificate verification. Not recommended in production.
 	MetricQuery          string
 	CacheMillis          int // optional, if defined then probe result will be cached, and future probes may use cached value
 	ThrottleThreshold    float64
@@ -81,6 +89,15 @@ func (settings *MySQLConfigurationSettings) postReadAdjustments() error {
 	if submatch := envVariableRegexp.FindStringSubmatch(settings.Password); len(submatch) > 1 {
 		settings.Password = os.Getenv(submatch[1])
 	}
+	if submatch := envVariableRegexp.FindStringSubmatch(settings.TlsCaCertPath); len(submatch) > 1 {
+		settings.TlsCaCertPath = os.Getenv(submatch[1])
+	}
+	if submatch := envVariableRegexp.FindStringSubmatch(settings.TlsClientCertPath); len(submatch) > 1 {
+		settings.TlsClientCertPath = os.Getenv(submatch[1])
+	}
+	if submatch := envVariableRegexp.FindStringSubmatch(settings.TlsClientKeyPath); len(submatch) > 1 {
+		settings.TlsClientKeyPath = os.Getenv(submatch[1])
+	}
 
 	for _, clusterSettings := range settings.Clusters {
 		if err := clusterSettings.postReadAdjustments(); err != nil {
@@ -91,6 +108,15 @@ func (settings *MySQLConfigurationSettings) postReadAdjustments() error {
 		}
 		if clusterSettings.Password == "" {
 			clusterSettings.Password = settings.Password
+		}
+		if clusterSettings.TlsCaCertPath == "" {
+			clusterSettings.TlsCaCertPath = settings.TlsCaCertPath
+		}
+		if clusterSettings.TlsClientCertPath == "" {
+			clusterSettings.TlsClientCertPath = settings.TlsClientCertPath
+		}
+		if clusterSettings.TlsClientKeyPath == "" {
+			clusterSettings.TlsClientKeyPath = settings.TlsClientKeyPath
 		}
 		if clusterSettings.MetricQuery == "" {
 			clusterSettings.MetricQuery = settings.MetricQuery
