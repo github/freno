@@ -7,18 +7,19 @@ package mysql
 
 import (
 	"fmt"
-	"net"
+	"time"
 )
 
-const maxPoolConnections = 3
-const maxIdleConnections = 3
-const timeoutMillis = 1000
+const (
+	maxPoolConnections = 3
+	maxIdleConnections = 3
+	probeTimeout       = 10 * time.Millisecond
+)
 
 // Probe is the minimal configuration required to connect to a MySQL server
 type Probe struct {
 	Key                 InstanceKey
-	User                string
-	Password            string
+	Uri                 string
 	MetricQuery         string
 	CacheMillis         int
 	QueryInProgress     int64
@@ -40,23 +41,26 @@ func NewProbes() *Probes {
 	return &Probes{}
 }
 
-func NewProbe() *Probe {
-	config := &Probe{
-		Key: InstanceKey{},
+// NewProbe allocates memory for a new Probe value and returns its address, or an error in case tlsConfiguration parameters were
+// provided, but TLS configuration couldn't be registered. If that's the case, the address of the probe will be nil.
+func NewProbe(key *InstanceKey, user, password, databaseName, metricQuery string, cacheMillis int, httpCheckPath string, httpCheckPort int) (*Probe, error) {
+	uri, err := MakeUri(key.Hostname, key.Port, user, password, databaseName, probeTimeout)
+	if err != nil {
+		return nil, fmt.Errorf("cannot create probe. Cause:  %w", err)
 	}
-	return config
+
+	p := Probe{
+		Key:           *key,
+		Uri:           uri,
+		MetricQuery:   metricQuery,
+		CacheMillis:   cacheMillis,
+		HttpCheckPath: httpCheckPath,
+		HttpCheckPort: httpCheckPort,
+	}
+
+	return &p, nil
 }
 
-func (this *Probe) String() string {
-	return fmt.Sprintf("%s, user=%s", this.Key.DisplayString(), this.User)
-}
-
-func (this *Probe) GetDBUri(databaseName string) string {
-	hostname := this.Key.Hostname
-	var ip = net.ParseIP(hostname)
-	if (ip != nil) && (ip.To4() == nil) {
-		// Wrap IPv6 literals in square brackets
-		hostname = fmt.Sprintf("[%s]", hostname)
-	}
-	return fmt.Sprintf("%s:%s@tcp(%s:%d)/%s?interpolateParams=true&charset=utf8mb4,utf8,latin1&timeout=%dms", this.User, this.Password, hostname, this.Key.Port, databaseName, timeoutMillis)
+func (p *Probe) String() string {
+	return p.Key.String()
 }

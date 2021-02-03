@@ -25,23 +25,27 @@ import (
 	metrics "github.com/rcrowley/go-metrics"
 )
 
-const leaderCheckInterval = 1 * time.Second
-const mysqlCollectInterval = 50 * time.Millisecond
-const mysqlRefreshInterval = 10 * time.Second
-const mysqlAggreateInterval = 25 * time.Millisecond
-const mysqlHttpCheckInterval = 5 * time.Second
-const sharedDomainCollectInterval = 1 * time.Second
+const (
+	leaderCheckInterval    = 1 * time.Second
+	mysqlCollectInterval   = 50 * time.Millisecond
+	mysqlRefreshInterval   = 10 * time.Second
+	mysqlAggreateInterval  = 25 * time.Millisecond
+	mysqlHttpCheckInterval = 5 * time.Second
 
-const aggregatedMetricsExpiration = 5 * time.Second
-const aggregatedMetricsCleanup = 1 * time.Second
-const throttledAppsSnapshotInterval = 5 * time.Second
-const recentAppsExpiration = time.Hour * 24
+	sharedDomainCollectInterval   = 1 * time.Second
+	aggregatedMetricsExpiration   = 5 * time.Second
+	aggregatedMetricsCleanup      = 1 * time.Second
+	throttledAppsSnapshotInterval = 5 * time.Second
+	recentAppsExpiration          = time.Hour * 24
 
-const nonDeprioritizedAppMapExpiration = time.Second
-const nonDeprioritizedAppMapInterval = 100 * time.Millisecond
+	nonDeprioritizedAppMapExpiration = time.Second
+	nonDeprioritizedAppMapInterval   = 100 * time.Millisecond
 
-const DefaultThrottleTTLMinutes = 60
-const DefaultThrottleRatio = 1.0
+	defaultDatabaseName = "information-schema"
+
+	DefaultThrottleTTL   = 60 * time.Minute
+	DefaultThrottleRatio = 1.0
+)
 
 func init() {
 	rand.Seed(time.Now().UnixNano())
@@ -280,14 +284,17 @@ func (throttler *Throttler) refreshMySQLInventory() error {
 		}
 		log.Debugf("read instance key: %+v", key)
 
-		probe := &mysql.Probe{
-			Key:           *key,
-			User:          clusterSettings.User,
-			Password:      clusterSettings.Password,
-			MetricQuery:   clusterSettings.MetricQuery,
-			CacheMillis:   clusterSettings.CacheMillis,
-			HttpCheckPath: clusterSettings.HttpCheckPath,
-			HttpCheckPort: clusterSettings.HttpCheckPort,
+		probe, err := mysql.NewProbe(key,
+			clusterSettings.User,
+			clusterSettings.Password,
+			defaultDatabaseName,
+			clusterSettings.MetricQuery,
+			clusterSettings.CacheMillis,
+			clusterSettings.HttpCheckPath,
+			clusterSettings.HttpCheckPort,
+		)
+		if err != nil {
+			log.Fatale(err)
 		}
 		(*probes)[*key] = probe
 	}
@@ -509,7 +516,7 @@ func (throttler *Throttler) ThrottleApp(appName string, expireAt time.Time, rati
 		}
 	} else {
 		if expireAt.IsZero() {
-			expireAt = now.Add(DefaultThrottleTTLMinutes * time.Minute)
+			expireAt = now.Add(DefaultThrottleTTL)
 		}
 		if ratio < 0 {
 			ratio = DefaultThrottleRatio

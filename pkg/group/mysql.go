@@ -24,7 +24,7 @@ service_id varchar(128) NOT NULL,
 CREATE TABLE throttled_apps (
   app_name varchar(128) NOT NULL,
 	throttled_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  expires_at TIMESTAMP NOT NULL,
+  	expires_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
 	ratio DOUBLE,
   PRIMARY KEY (app_name)
 );
@@ -39,6 +39,8 @@ import (
 	"strconv"
 	"sync/atomic"
 	"time"
+
+	"github.com/github/freno/pkg/mysql"
 
 	"github.com/github/freno/pkg/base"
 	"github.com/github/freno/pkg/config"
@@ -59,27 +61,42 @@ type MySQLBackend struct {
 	throttler   *throttle.Throttler
 }
 
-const maxConnections = 3
-const electionExpireSeconds = 5
+const (
+	maxConnections        = 3
+	electionExpireSeconds = 5
 
-const electionInterval = time.Second
-const healthInterval = 2 * electionInterval
-const stateInterval = 10 * time.Second
+	electionInterval = time.Second
+	healthInterval   = 2 * electionInterval
+	stateInterval    = 10 * time.Second
+
+	connectionTimeout = 500 * time.Millisecond
+)
 
 func NewMySQLBackend(throttler *throttle.Throttler) (*MySQLBackend, error) {
-	if config.Settings().BackendMySQLHost == "" {
+	settings := config.Settings()
+	if settings.BackendMySQLHost == "" {
 		return nil, nil
 	}
-	dbUri := fmt.Sprintf("%s:%s@tcp(%s:%d)/%s?interpolateParams=true&charset=utf8mb4,utf8,latin1&timeout=500ms",
-		config.Settings().BackendMySQLUser, config.Settings().BackendMySQLPassword, config.Settings().BackendMySQLHost, config.Settings().BackendMySQLPort, config.Settings().BackendMySQLSchema,
-	)
-	db, _, err := sqlutils.GetDB(dbUri)
+	uri, err := mysql.MakeUri(
+		settings.BackendMySQLHost,
+		settings.BackendMySQLPort,
+		settings.BackendMySQLSchema,
+		settings.BackendMySQLUser,
+		settings.BackendMySQLPassword,
+		connectionTimeout)
+
 	if err != nil {
 		return nil, err
 	}
+
+	db, _, err := sqlutils.GetDB(uri)
+	if err != nil {
+		return nil, err
+	}
+
 	db.SetMaxOpenConns(maxConnections)
 	db.SetMaxIdleConns(maxConnections)
-	log.Debugf("created db at: %s", dbUri)
+	log.Debugf("created db at: %s", uri)
 	hostname, err := os.Hostname()
 	if err != nil {
 		return nil, err
@@ -368,7 +385,7 @@ func (backend *MySQLBackend) ThrottleApp(appName string, ttlMinutes int64, expir
 			on duplicate key update
 				ratio=values(ratio)
 		`
-		args = sqlutils.Args(appName, throttle.DefaultThrottleTTLMinutes, ratio)
+		args = sqlutils.Args(appName, throttle.DefaultThrottleTTL.Minutes(), ratio)
 	}
 	_, err := sqlutils.ExecNoPrepare(backend.db, query, args...)
 	backend.throttler.ThrottleApp(appName, expireAt, ratio)
