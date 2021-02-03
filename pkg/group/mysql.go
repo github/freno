@@ -83,6 +83,10 @@ func NewMySQLBackend(throttler *throttle.Throttler) (*MySQLBackend, error) {
 		settings.BackendMySQLSchema,
 		settings.BackendMySQLUser,
 		settings.BackendMySQLPassword,
+		settings.BackendMySQLTlsCaCertPath,
+		settings.BackendMySQLTlsClientCertPath,
+		settings.BackendMySQLTlsClientKeyPath,
+		settings.BackendMySQLTlsSkipVerify,
 		connectionTimeout)
 
 	if err != nil {
