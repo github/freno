@@ -15,7 +15,7 @@ const (
 	DefaultMySQLPort = 3306
 )
 
-// InstanceKey is an instance indicator, identifued by hostname and port
+// InstanceKey is an instance indicator, identified by hostname and port
 type InstanceKey struct {
 	Hostname string
 	Port     int
@@ -46,14 +46,6 @@ func ParseInstanceKey(hostPort string, defaultPort int) (*InstanceKey, error) {
 	return newRawInstanceKey(hostPort)
 }
 
-// Equals tests equality between this key and another key
-func (this *InstanceKey) Equals(other *InstanceKey) bool {
-	if other == nil {
-		return false
-	}
-	return this.Hostname == other.Hostname && this.Port == other.Port
-}
-
 // SmallerThan returns true if this key is dictionary-smaller than another.
 // This is used for consistent sorting/ordering; there's nothing magical about it.
 func (this *InstanceKey) SmallerThan(other *InstanceKey) bool {
@@ -77,11 +69,6 @@ func (this *InstanceKey) IsValid() bool {
 // StringCode returns an official string representation of this key
 func (this *InstanceKey) StringCode() string {
 	return fmt.Sprintf("%s:%d", this.Hostname, this.Port)
-}
-
-// DisplayString returns a user-friendly string representation of this key
-func (this *InstanceKey) DisplayString() string {
-	return this.StringCode()
 }
 
 // String returns a user-friendly string representation of this key

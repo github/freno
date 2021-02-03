@@ -52,15 +52,6 @@ func TestParseInstanceKey(t *testing.T) {
 	}
 }
 
-func TestEquals(t *testing.T) {
-	{
-		expect := &InstanceKey{Hostname: "127.0.0.1", Port: 3306}
-		key, err := ParseInstanceKey("127.0.0.1", 3306)
-		test.S(t).ExpectNil(err)
-		test.S(t).ExpectTrue(key.Equals(expect))
-	}
-}
-
 func TestStringCode(t *testing.T) {
 	{
 		key := &InstanceKey{Hostname: "127.0.0.1", Port: 3306}
