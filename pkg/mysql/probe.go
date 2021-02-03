@@ -47,26 +47,8 @@ func NewProbe() *Probe {
 	return config
 }
 
-// DuplicateCredentials creates a new connection config with given key and with same credentials as this config
-func (this *Probe) DuplicateCredentials(key InstanceKey) *Probe {
-	config := &Probe{
-		Key:      key,
-		User:     this.User,
-		Password: this.Password,
-	}
-	return config
-}
-
-func (this *Probe) Duplicate() *Probe {
-	return this.DuplicateCredentials(this.Key)
-}
-
 func (this *Probe) String() string {
 	return fmt.Sprintf("%s, user=%s", this.Key.DisplayString(), this.User)
-}
-
-func (this *Probe) Equals(other *Probe) bool {
-	return this.Key.Equals(&other.Key)
 }
 
 func (this *Probe) GetDBUri(databaseName string) string {
