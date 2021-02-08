@@ -88,7 +88,7 @@ func ReadThrottleMetric(probe *Probe, clusterName string) (mySQLThrottleMetric *
 		}()
 	}(mySQLThrottleMetric, started)
 
-	db, fromCache, err := sqlutils.GetDB(probe.Uri)
+	db, fromCache, err := sqlutils.GetDB(probe.Url.String())
 	if err != nil {
 		mySQLThrottleMetric.Err = err
 		return mySQLThrottleMetric

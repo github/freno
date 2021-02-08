@@ -7,23 +7,23 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net"
+	"net/url"
 	"time"
 
 	"github.com/go-sql-driver/mysql"
 )
 
-const timeout = 10 * time.Millisecond
-
-// MakeUri creates a new string representing the URI for the mysql driver to connect to, including timeout, charset and tls settings.
-// In case the URI cannot be created due to a wrong TLS configuration, an error is returned.
-func MakeUri(hostname string, port int, databaseName, user, password, tlsCaCerPath, tlsClientCertPath, tlsClientKeyPath string, tlsSkipVerify bool, timeout time.Duration) (uri string, err error) {
+// NewURL creates a new string representing the URI for the mysql driver to connect to, including timeout, charset and tls settings.
+// In case the URL cannot be created due to a wrong TLS configuration, an error is returned.
+func NewURL(hostname string, port int, databaseName, user, password, tlsCaCerPath, tlsClientCertPath, tlsClientKeyPath string, tlsSkipVerify bool, timeout time.Duration) (*url.URL, error) {
+	var err error
 	tlsKey := "false"
 
 	if tlsCaCerPath != "" || tlsClientCertPath != "" || tlsClientKeyPath != "" {
 		tlsKey = fmt.Sprintf("%s:%d", hostname, port)
 		err = registerTlsConfig(tlsKey, tlsCaCerPath, tlsClientCertPath, tlsClientKeyPath, tlsSkipVerify)
 		if err != nil {
-			return "", err
+			return nil, err
 		}
 	}
 
@@ -33,8 +33,8 @@ func MakeUri(hostname string, port int, databaseName, user, password, tlsCaCerPa
 		hostname = fmt.Sprintf("[%s]", hostname)
 	}
 
-	uri = fmt.Sprintf("%s:%s@tcp(%s:%d)/%s?interpolateParams=true&charset=utf8mb4,utf8,latin1&tls=%s&timeout=%dms", user, password, hostname, port, databaseName, tlsKey, timeout.Milliseconds())
-	return uri, err
+	s := fmt.Sprintf("%s:%s@tcp(%s:%d)/%s?interpolateParams=true&charset=utf8mb4,utf8,latin1&tls=%s&timeout=%dms", user, password, hostname, port, databaseName, tlsKey, timeout.Milliseconds())
+	return url.Parse(s)
 }
 
 // registerTlsConfig registers the certificates under a given key which is calculated based on the

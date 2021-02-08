@@ -7,6 +7,7 @@ package mysql
 
 import (
 	"fmt"
+	"net/url"
 	"time"
 )
 
@@ -19,7 +20,7 @@ const (
 // Probe is the minimal configuration required to connect to a MySQL server
 type Probe struct {
 	Key                 InstanceKey
-	Uri                 string
+	Url                 *url.URL
 	MetricQuery         string
 	CacheMillis         int
 	QueryInProgress     int64
@@ -44,14 +45,14 @@ func NewProbes() *Probes {
 // NewProbe allocates memory for a new Probe value and returns its address, or an error in case tlsConfiguration parameters were
 // provided, but TLS configuration couldn't be registered. If that's the case, the address of the probe will be nil.
 func NewProbe(key *InstanceKey, user, password, databaseName, tlsCaCertPath, tlsClientCertPath, tlsClientKeyPath string, tlsSkipVerify bool, metricQuery string, cacheMillis int, httpCheckPath string, httpCheckPort int) (*Probe, error) {
-	uri, err := MakeUri(key.Hostname, key.Port, user, password, databaseName, tlsCaCertPath, tlsClientCertPath, tlsClientKeyPath, tlsSkipVerify, probeTimeout)
+	url, err := NewURL(key.Hostname, key.Port, user, password, databaseName, tlsCaCertPath, tlsClientCertPath, tlsClientKeyPath, tlsSkipVerify, probeTimeout)
 	if err != nil {
 		return nil, fmt.Errorf("cannot create probe. Cause:  %w", err)
 	}
 
 	p := Probe{
 		Key:           *key,
-		Uri:           uri,
+		Url:           url,
 		MetricQuery:   metricQuery,
 		CacheMillis:   cacheMillis,
 		HttpCheckPath: httpCheckPath,

@@ -77,7 +77,7 @@ func NewMySQLBackend(throttler *throttle.Throttler) (*MySQLBackend, error) {
 	if settings.BackendMySQLHost == "" {
 		return nil, nil
 	}
-	uri, err := mysql.MakeUri(
+	url, err := mysql.NewURL(
 		settings.BackendMySQLHost,
 		settings.BackendMySQLPort,
 		settings.BackendMySQLSchema,
@@ -93,14 +93,14 @@ func NewMySQLBackend(throttler *throttle.Throttler) (*MySQLBackend, error) {
 		return nil, err
 	}
 
-	db, _, err := sqlutils.GetDB(uri)
+	db, _, err := sqlutils.GetDB(url.String())
 	if err != nil {
 		return nil, err
 	}
 
 	db.SetMaxOpenConns(maxConnections)
 	db.SetMaxIdleConns(maxConnections)
-	log.Debugf("created db at: %s", uri)
+	log.Debugf("created db at: %s", url.Redacted())
 	hostname, err := os.Hostname()
 	if err != nil {
 		return nil, err
