@@ -15,11 +15,25 @@ import (
 
 const defaultTimeout = time.Duration(5) * time.Second
 
+// TabletRealtimeStats represents realtime stats from a running instance of vttablet.
+type TabletRealtimeStats struct {
+	HealthError string `json:"health_error,omitempty"`
+}
+
+// TabletStats represents stats from a running instance of vttablet.
+type TabletStats struct {
+	LastError string               `json:"last_error,omitempty"`
+	Realtime  *TabletRealtimeStats `json:"realtime,omitempty"`
+	Serving   bool                 `json:"serving,omitempty"`
+	Up        bool                 `json:"up,omitempty"`
+}
+
 // Tablet represents information about a running instance of vttablet.
 type Tablet struct {
 	Alias         *topodata.TabletAlias `json:"alias,omitempty"`
 	MysqlHostname string                `json:"mysql_hostname,omitempty"`
 	MysqlPort     int32                 `json:"mysql_port,omitempty"`
+	Stats         *TabletStats          `json:"stats,omitempty"`
 	Type          topodata.TabletType   `json:"type,omitempty"`
 }
 
@@ -36,9 +50,23 @@ func (t Tablet) HasValidCell(validCells []string) bool {
 	return false
 }
 
+// IsServeable returns a bool reflecting if a tablet is eligible to serve traffic based on tablet stats. For
+// backwards-compatibilty tablets are assumed to be healthy if realtime stats is disabled. This method aims
+// to mimic the logic used by vtgate to select tablets for read queries without considering 'serving', minimum
+// tablet count (not important to freno) and replication lag (freno polls its own replication lag)
+func (t Tablet) IsServeable() bool {
+	if t.Stats != nil {
+		return t.Stats.LastError == "" && t.Stats.Realtime != nil
+	}
+	return true
+}
+
 // IsValidReplica returns a bool reflecting if a tablet type is REPLICA
 func (t Tablet) IsValidReplica() bool {
-	return t.Type == topodata.TabletType_REPLICA
+	if t.Type != topodata.TabletType_REPLICA {
+		return false
+	}
+	return t.IsServeable()
 }
 
 var httpClient = http.Client{
