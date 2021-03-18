@@ -1,0 +1,8 @@
+.gopath/
+bin/
+dist/
+main
+conf/freno.local.conf.json
+.vendor/
+freno
+.idea/
