@@ -2,7 +2,6 @@ package vitess
 
 import (
 	"encoding/json"
-	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -16,44 +15,68 @@ func TestParseTablets(t *testing.T) {
 	vitessApi := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.String() {
 		case "/api/keyspace/test/tablets/00", "/api/keyspace/test/tablets/00?cells=cell2":
-			data, _ := json.Marshal([]Tablet{
+			json.NewEncoder(w).Encode([]Tablet{
 				{
-					Alias:         &topodata.TabletAlias{Cell: "cell1"},
-					MysqlHostname: "master",
-					Type:          topodata.TabletType_MASTER,
+					// primary (should be ignored)
+					Alias: &topodata.TabletAlias{Cell: "cell1"},
+					Type:  topodata.TabletType_MASTER,
 				},
 				{
+					// replica without realtime tablet stats enabled (assumed to be healthy)
 					Alias:         &topodata.TabletAlias{Cell: "cell2"},
 					MysqlHostname: "replica1",
 					Type:          topodata.TabletType_REPLICA,
 				},
 				{
+					// replica with healthy realtime tablet stats
 					Alias:         &topodata.TabletAlias{Cell: "cell3"},
 					MysqlHostname: "replica2",
-					Type:          topodata.TabletType_REPLICA,
+					Stats: &TabletStats{
+						Realtime: &TabletRealtimeStats{},
+					},
+					Type: topodata.TabletType_REPLICA,
 				},
 				{
-					Alias:         &topodata.TabletAlias{Cell: "cell2"},
-					MysqlHostname: "spare",
-					Type:          topodata.TabletType_SPARE,
-				},
-				{
-					Alias:         &topodata.TabletAlias{Cell: "cell3"},
-					MysqlHostname: "batch",
-					Type:          topodata.TabletType_BATCH,
-				},
-				{
-					Alias:         &topodata.TabletAlias{Cell: "cell2"},
-					MysqlHostname: "backup",
-					Type:          topodata.TabletType_BACKUP,
-				},
-				{
+					// replica with nil realtime stats (should be ignored)
 					Alias:         &topodata.TabletAlias{Cell: "cell1"},
-					MysqlHostname: "restore",
-					Type:          topodata.TabletType_RESTORE,
+					MysqlHostname: "replica3",
+					Stats: &TabletStats{
+						Realtime: nil,
+					},
+				},
+				{
+					// replica with realtime tablet stats and 'replication not running' error (should be ignored)
+					Alias:         &topodata.TabletAlias{Cell: "cell2"},
+					MysqlHostname: "replica4",
+					Stats: &TabletStats{
+						LastError: "vttablet error: replication is not running",
+						Realtime: &TabletRealtimeStats{
+							HealthError: "replication is not running",
+						},
+					},
+					Type: topodata.TabletType_REPLICA,
+				},
+				{
+					// spare tablet (should be ignored)
+					Alias: &topodata.TabletAlias{Cell: "cell2"},
+					Type:  topodata.TabletType_SPARE,
+				},
+				{
+					// batch tablet (should be ignored)
+					Alias: &topodata.TabletAlias{Cell: "cell3"},
+					Type:  topodata.TabletType_BATCH,
+				},
+				{
+					// backup tablet (should be ignored)
+					Alias: &topodata.TabletAlias{Cell: "cell2"},
+					Type:  topodata.TabletType_BACKUP,
+				},
+				{
+					// restore tablet (should be ignored)
+					Alias: &topodata.TabletAlias{Cell: "cell1"},
+					Type:  topodata.TabletType_RESTORE,
 				},
 			})
-			fmt.Fprint(w, string(data))
 		default:
 			w.WriteHeader(http.StatusNotFound)
 		}
