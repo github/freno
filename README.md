@@ -1,6 +1,6 @@
 # freno
 
-[![build status](https://github.com/github/freno/actions/workflows/main.yml/badge.svg)](https://github.com/github/freno/actions/workflows/main.yml/badge.svg) [![downloads](https://img.shields.io/github/downloads/github/freno/total.svg)](https://github.com/github/freno/releases) [![release](https://img.shields.io/github/release/github/freno.svg)](https://github.com/github/freno/releases)
+[![build status](https://github.com/github/freno/actions/workflows/main.yml/badge.svg)](https://github.com/github/freno/actions/workflows/main.yml) [![downloads](https://img.shields.io/github/downloads/github/freno/total.svg)](https://github.com/github/freno/releases) [![release](https://img.shields.io/github/release/github/freno.svg)](https://github.com/github/freno/releases)
 
 Cooperative, highly available throttler service: clients use `freno` to throttle writes to a resource.
 
