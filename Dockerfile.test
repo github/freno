@@ -1,4 +1,4 @@
-FROM golang:1.15-buster
+FROM golang:1.16-buster
 LABEL maintainer="github@github.com"
 
 RUN useradd -m testuser
