@@ -31,6 +31,9 @@ Let's dissect the general section of the [sample config file](../resources/freno
   "BackendMySQLSchema": "freno_backend",
   "BackendMySQLUser": "freno_daemon",
   "BackendMySQLPassword": "123456",
+  "BackendMySQLTlsCaCertPath": "/usr/local/share/certs/ca.crt",
+  "BackendMySQLTlsClientCertPath": "/usr/local/share/certs/client.crt",
+  "BackendMySQLTlsClientKeyPath": "/usr/local/share/certs/client.key",
   "Domain": "us-east-1/production",
   "ShareDomain": "production",
 }
@@ -40,12 +43,14 @@ Let's dissect the general section of the [sample config file](../resources/freno
 - `BackendMySQLPort`: MySQL master port
 - `BackendMySQLSchema`: schema where `freno` will read/write state (see below)
 - `BackendMySQLUser`: user with read+write privileges on backend schema
+- `BackendMySQLTlsCaCertPath´: optional file system path for the PEM-encoded CA certificate to be used when connecting to mysql using TLS
+- `BackendMySQLTlsClientCertPath`: optional file system path for the PEM-encoded client certificate
+- `BackendMySQLTlsClientKeyPath`:  optional file system path for the PEM-encoded client key
 - `BackendMySQLPassword`: password
 - `Domain`: the same MySQL backend can serve multiple, unrelated `freno` clusters. Nodes within the same cluster should have the same `Domain` value and will compete for leadership.
 - `ShareDomain`: it is possible for clusters to collaborate. Clusters with same `ShareDomain` will consul with each other's metric health reports. A cluster may reject a `check` request if another cluster considers the `check` metrics unhealthy.
 
 You may exchange the above for environment variables:
-
 ```json
 {
   "BackendMySQLHost": "${MYSQL_BACKEND_HOST}",
@@ -53,6 +58,9 @@ You may exchange the above for environment variables:
   "BackendMySQLSchema": "${MYSQL_BACKEND_SCHEMA}",
   "BackendMySQLUser": "${MYSQL_BACKEND_RW_USER}",
   "BackendMySQLPassword": "${MYSQL_BACKEND_RW_PASSWORD}",
+  "BackendMySQLTlsCaCertPath": "${MYSQL_BACKEND_CA_CERT}",
+  "BackendMySQLTlsClientCertPath": "${MYSQL_BACKEND_CLIENT_CERT}",
+  "BackendMySQLTlsClientKeyPath": "${MYSQL_BACKEND_CLIENT_KEY}",
   "Domain": "us-east-1/production",
   "ShareDomain": "production",
 }

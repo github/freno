@@ -92,24 +92,29 @@ func (config *Configuration) Reload() error {
 // Some of the settinges have reasonable default values, and some other
 // (like database credentials) are strictly expected from user.
 type ConfigurationSettings struct {
-	ListenPort           int
-	DataCenter           string
-	Environment          string
-	Domain               string
-	ShareDomain          string
-	RaftBind             string
-	RaftDataDir          string
-	DefaultRaftPort      int      // if a RaftNodes entry does not specify port, use this one
-	RaftNodes            []string // Raft nodes to make initial connection with
-	BackendMySQLHost     string
-	BackendMySQLPort     int
-	BackendMySQLSchema   string
-	BackendMySQLUser     string
-	BackendMySQLPassword string
-	MemcacheServers      []string // if given, freno will report to aggregated values to given memcache
-	MemcachePath         string   // use as prefix to metric path in memcache key, e.g. if `MemcachePath` is "myprefix" the key would be "myprefix/mysql/maincluster". Default: "freno"
-	EnableProfiling      bool     // enable pprof profiling http api
-	Stores               StoresSettings
+	ListenPort                    int
+	DataCenter                    string
+	Environment                   string
+	Domain                        string
+	ShareDomain                   string
+	RaftBind                      string
+	RaftDataDir                   string
+	DefaultRaftPort               int      // if a RaftNodes entry does not specify port, use this one
+	RaftNodes                     []string // Raft nodes to make initial connection with
+	BackendMySQLHost              string
+	BackendMySQLPort              int
+	BackendMySQLSchema            string
+	BackendMySQLUser              string
+	BackendMySQLPassword          string
+	BackendMySQLTlsCaCertPath     string // optional, if not provided it won't setup any TLS connection
+	BackendMySQLTlsClientCertPath string
+	BackendMySQLTlsClientKeyPath  string
+	BackendMySQLTlsSkipVerify     bool // optional, set it to true to skip certificate verification. Not recommended in production
+
+	MemcacheServers []string // if given, freno will report to aggregated values to given memcache
+	MemcachePath    string   // use as prefix to metric path in memcache key, e.g. if `MemcachePath` is "myprefix" the key would be "myprefix/mysql/maincluster". Default: "freno"
+	EnableProfiling bool     // enable pprof profiling http api
+	Stores          StoresSettings
 }
 
 func newConfigurationSettings() *ConfigurationSettings {
@@ -144,6 +149,15 @@ func (settings *ConfigurationSettings) postReadAdjustments() error {
 	}
 	if submatch := envVariableRegexp.FindStringSubmatch(settings.BackendMySQLPassword); len(submatch) > 1 {
 		settings.BackendMySQLPassword = os.Getenv(submatch[1])
+	}
+	if submatch := envVariableRegexp.FindStringSubmatch(settings.BackendMySQLTlsCaCertPath); len(submatch) > 1 {
+		settings.BackendMySQLTlsCaCertPath = os.Getenv(submatch[1])
+	}
+	if submatch := envVariableRegexp.FindStringSubmatch(settings.BackendMySQLTlsClientCertPath); len(submatch) > 1 {
+		settings.BackendMySQLTlsClientCertPath = os.Getenv(submatch[1])
+	}
+	if submatch := envVariableRegexp.FindStringSubmatch(settings.BackendMySQLTlsClientKeyPath); len(submatch) > 1 {
+		settings.BackendMySQLTlsClientKeyPath = os.Getenv(submatch[1])
 	}
 	if settings.RaftDataDir == "" && settings.BackendMySQLHost == "" {
 		return fmt.Errorf("Either RaftDataDir or BackendMySQLHost must be set")
