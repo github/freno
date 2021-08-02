@@ -1,0 +1,41 @@
+before:
+  hooks:
+    - go mod download
+    - go test -covermode=atomic -race ./pkg/...
+builds:
+- env:
+    - CGO_ENABLED=0
+  goarch:
+    - amd64
+  goos:
+    - linux
+    - darwin
+  ldflags:
+    - -w -s
+    - -X main.AppVersion={{.Version}} -X main.GitCommit={{.Commit}}
+  main: ./cmd/freno/main.go
+checksum:
+  name_template: 'checksums.txt'
+changelog:
+  sort: asc
+nfpms:
+  - vendor: GitHub
+    homepage: https://github.com/github/freno
+    maintainer: GitHub Engineering <github@github.com>
+    description: Cooperative, highly available throttler service
+    license: MIT
+    bindir: /usr/bin
+    config_files:
+      "resources/freno.conf.skeleton.json": "/etc/freno.conf.json"
+    files:
+      "resources/etc/init.d/freno": "/etc/init.d/freno"
+    empty_folders:
+      - "/var/lib/freno"
+    formats:
+      - deb
+      - rpm
+release:
+  name_template: "GA release {{.Tag}}"
+  github:
+    owner: github
+    name: freno
