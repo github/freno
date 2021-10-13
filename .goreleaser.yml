@@ -28,6 +28,7 @@ nfpms:
     contents:
       - src: "resources/freno.conf.skeleton.json"
         dst: "/etc/freno.conf.json"
+        type: config
       - src: "resources/etc/init.d/freno"
         dst: "/etc/init.d/freno"
         file_info:
