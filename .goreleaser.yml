@@ -40,5 +40,5 @@ nfpms:
 release:
   name_template: "GA release {{.Tag}}"
   github:
-    owner: timvaillancourt
+    owner: github
     name: freno
