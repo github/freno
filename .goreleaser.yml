@@ -25,10 +25,13 @@ nfpms:
     description: Cooperative, highly available throttler service
     license: MIT
     bindir: /usr/bin
-    config_files:
-      "resources/freno.conf.skeleton.json": "/etc/freno.conf.json"
-    files:
-      "resources/etc/init.d/freno": "/etc/init.d/freno"
+    contents:
+      - src: "resources/freno.conf.skeleton.json"
+        dest: "/etc/freno.conf.json"
+      - src: "resources/etc/init.d/freno"
+        dest: "/etc/init.d/freno"
+        file_info:
+          mode: 0777
     empty_folders:
       - "/var/lib/freno"
     formats:
