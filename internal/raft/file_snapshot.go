@@ -8,7 +8,6 @@ import (
 	"hash"
 	"hash/crc64"
 	"io"
-	"io/ioutil"
 	"log"
 	"os"
 	"path/filepath"
@@ -214,7 +213,7 @@ func (f *FileSnapshotStore) List() ([]*SnapshotMeta, error) {
 // getSnapshots returns all the known snapshots.
 func (f *FileSnapshotStore) getSnapshots() ([]*fileSnapshotMeta, error) {
 	// Get the eligible snapshots
-	snapshots, err := ioutil.ReadDir(f.path)
+	snapshots, err := os.ReadDir(f.path)
 	if err != nil {
 		f.logger.Printf("[ERR] snapshot: Failed to scan snapshot dir: %v", err)
 		return nil, err
