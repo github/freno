@@ -156,7 +156,7 @@ func (store *Store) UnthrottleApp(appName string) error {
 	return store.genericCommand(c)
 }
 
-func (store *Store) SkipHost(hostName string, expireAt time.Time) error {
+func (store *Store) SkipHost(hostName string, ttlMinutes int64, expireAt time.Time) error {
 	c := &command{
 		Operation: "skip",
 		Key:       hostName,

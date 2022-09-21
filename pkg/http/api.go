@@ -199,7 +199,7 @@ func (api *APIImpl) ReadCheck(w http.ResponseWriter, r *http.Request, ps httprou
 	api.readCheck(w, r, ps, &throttle.CheckFlags{})
 }
 
-// WriteCheckIfExists checks for a metric, but reports an OK if the metric does not exist.
+// ReadCheckIfExists checks for a metric, but reports an OK if the metric does not exist.
 // If the metric does exist, then all usual checks are made.
 func (api *APIImpl) ReadCheckIfExists(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 	api.readCheck(w, r, ps, &throttle.CheckFlags{OKIfNotExists: true})
@@ -354,7 +354,7 @@ func (api *APIImpl) SkipHost(w http.ResponseWriter, r *http.Request, ps httprout
 		expireAt = time.Now().Add(time.Duration(ttlMinutes) * time.Minute)
 	}
 
-	err = api.consensusService.SkipHost(hostName, expireAt)
+	err = api.consensusService.SkipHost(hostName, ttlMinutes, expireAt)
 
 	api.respondGeneric(w, r, err)
 }

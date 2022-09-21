@@ -36,6 +36,7 @@ const aggregatedMetricsExpiration = 5 * time.Second
 const aggregatedMetricsCleanup = 1 * time.Second
 const throttledAppsSnapshotInterval = 5 * time.Second
 const recentAppsExpiration = time.Hour * 24
+const skippedHostsSnapshotInterval = 5 * time.Second
 
 const nonDeprioritizedAppMapExpiration = time.Second
 const nonDeprioritizedAppMapInterval = 100 * time.Millisecond
@@ -136,6 +137,7 @@ func (throttler *Throttler) Operate() {
 	mysqlHttpCheckTick := time.Tick(mysqlHttpCheckInterval)
 	throttledAppsTick := time.Tick(throttledAppsSnapshotInterval)
 	sharedDomainTick := time.Tick(sharedDomainCollectInterval)
+	skippedHostsTick := time.Tick(skippedHostsSnapshotInterval)
 
 	// initial read of inventory:
 	go throttler.refreshMySQLInventory()
@@ -188,6 +190,10 @@ func (throttler *Throttler) Operate() {
 			{
 				go throttler.expireThrottledApps()
 				go throttler.pushStatusToExpVar()
+			}
+		case <-skippedHostsTick:
+			{
+				go throttler.expireSkippedHosts()
 			}
 		}
 		if !throttler.isLeader {
@@ -332,6 +338,9 @@ func (throttler *Throttler) refreshMySQLInventory() error {
 					InstanceProbes:       mysql.NewProbes(),
 				}
 				for _, host := range totalHosts {
+					if _, skipped := throttler.skippedHosts.Get(host); skipped {
+						continue
+					}
 					key := mysql.InstanceKey{Hostname: host, Port: clusterSettings.Port}
 					addInstanceKey(&key, clusterName, clusterSettings, clusterProbes.InstanceProbes)
 				}
@@ -554,6 +563,16 @@ func (throttler *Throttler) ThrottledAppsMap() (result map[string](*base.AppThro
 		result[appName] = appThrottle
 	}
 	return result
+}
+
+func (throttler *Throttler) expireSkippedHosts() {
+	now := time.Now()
+	for hostName, item := range throttler.skippedHosts.Items() {
+		expireAt := item.Object.(time.Time)
+		if expireAt.Before(now) {
+			throttler.RecoverHost(hostName)
+		}
+	}
 }
 
 func (throttler *Throttler) SkipHost(hostName string, expireAt time.Time) {
