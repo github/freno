@@ -580,14 +580,6 @@ func (throttler *Throttler) SkipHost(hostName string, expireAt time.Time) {
 	defer throttler.skippedHostsMutex.Unlock()
 
 	now := time.Now()
-	var t time.Time
-	if object, found := throttler.skippedHosts.Get(hostName); found {
-		t = object.(time.Time)
-		if !t.IsZero() {
-			expireAt = t
-		}
-	}
-
 	if expireAt.IsZero() {
 		expireAt = now.Add(DefaultSkipTTLMinutes * time.Minute)
 	}

@@ -405,7 +405,7 @@ func ConfigureRoutes(api API) *httprouter.Router {
 	register(router, "/recent-apps/:lastMinutes", api.RecentApps)
 
 	register(router, "/skip-host/:hostName", api.SkipHost)
-	register(router, "/skipped-hosts/:hostName/ttl/:ttlMinutes", api.SkipHost)
+	register(router, "/skip-host/:hostName/ttl/:ttlMinutes", api.SkipHost)
 	register(router, "/skipped-hosts", api.SkippedHosts)
 	register(router, "/recover-host/:hostName", api.RecoverHost)
 
