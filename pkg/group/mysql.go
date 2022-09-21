@@ -389,6 +389,21 @@ func (backend *MySQLBackend) UnthrottleApp(appName string) error {
 	return err
 }
 
+func (backend *MySQLBackend) SkipHost(hostName string, expireAt time.Time) error {
+	//TODO
+	return nil
+}
+
+func (backend *MySQLBackend) RecoverHost(hostName string) error {
+	//TODO
+	return nil
+}
+
+func (backend *MySQLBackend) SkippedHostsMap() map[string]time.Time {
+	//TODO
+	return nil
+}
+
 func (backend *MySQLBackend) RecentAppsMap() (result map[string](*base.RecentApp)) {
 	return backend.throttler.RecentAppsMap()
 }

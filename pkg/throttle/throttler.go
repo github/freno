@@ -41,6 +41,7 @@ const nonDeprioritizedAppMapExpiration = time.Second
 const nonDeprioritizedAppMapInterval = 100 * time.Millisecond
 
 const DefaultThrottleTTLMinutes = 60
+const DefaultSkipTTLMinutes = 60
 const DefaultThrottleRatio = 1.0
 
 func init() {
@@ -62,6 +63,7 @@ type Throttler struct {
 	mysqlClusterThresholds  *cache.Cache
 	aggregatedMetrics       *cache.Cache
 	throttledApps           *cache.Cache
+	skippedHosts            *cache.Cache
 	recentApps              *cache.Cache
 	metricsHealth           *cache.Cache
 	shareDomainMetricHealth *cache.Cache
@@ -72,6 +74,7 @@ type Throttler struct {
 	proxysqlClient *proxysql.Client
 
 	throttledAppsMutex sync.Mutex
+	skippedHostsMutex  sync.Mutex
 
 	nonLowPriorityAppRequestsThrottled *cache.Cache
 	httpClient                         *http.Client
@@ -89,6 +92,7 @@ func NewThrottler() *Throttler {
 		mysqlInventory:         mysql.NewMySQLInventory(),
 
 		throttledApps:           cache.New(cache.NoExpiration, 10*time.Second),
+		skippedHosts:            cache.New(cache.NoExpiration, 10*time.Second),
 		mysqlClusterThresholds:  cache.New(cache.NoExpiration, 0),
 		aggregatedMetrics:       cache.New(aggregatedMetricsExpiration, aggregatedMetricsCleanup),
 		recentApps:              cache.New(recentAppsExpiration, time.Minute),
@@ -548,6 +552,43 @@ func (throttler *Throttler) ThrottledAppsMap() (result map[string](*base.AppThro
 	for appName, item := range throttler.throttledApps.Items() {
 		appThrottle := item.Object.(*base.AppThrottle)
 		result[appName] = appThrottle
+	}
+	return result
+}
+
+func (throttler *Throttler) SkipHost(hostName string, expireAt time.Time) {
+	throttler.skippedHostsMutex.Lock()
+	defer throttler.skippedHostsMutex.Unlock()
+
+	now := time.Now()
+	var t time.Time
+	if object, found := throttler.skippedHosts.Get(hostName); found {
+		t = object.(time.Time)
+		if !t.IsZero() {
+			expireAt = t
+		}
+	}
+
+	if expireAt.IsZero() {
+		expireAt = now.Add(DefaultSkipTTLMinutes * time.Minute)
+	}
+
+	if now.Before(expireAt) {
+		throttler.skippedHosts.Set(hostName, expireAt, cache.DefaultExpiration)
+	} else {
+		throttler.RecoverHost(hostName)
+	}
+}
+
+func (throttler *Throttler) RecoverHost(hostName string) {
+	throttler.skippedHosts.Delete(hostName)
+}
+
+func (throttler *Throttler) SkippedHostsMap() map[string]time.Time {
+	result := make(map[string]time.Time)
+	for hostName, item := range throttler.skippedHosts.Items() {
+		expireAt := item.Object.(time.Time)
+		result[hostName] = expireAt
 	}
 	return result
 }

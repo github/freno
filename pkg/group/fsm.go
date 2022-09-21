@@ -26,6 +26,10 @@ func (f *fsm) Apply(l *raft.Log) interface{} {
 		return f.applyThrottleApp(c.Key, c.ExpireAt, c.Ratio)
 	case "unthrottle":
 		return f.applyUnthrottleApp(c.Key)
+	case "skip":
+		return f.applySkipHost(c.Key, c.ExpireAt)
+	case "recover":
+		return f.applyRecoverHost(c.Key)
 	}
 	return log.Errorf("unrecognized command operation: %s", c.Operation)
 }
@@ -38,6 +42,11 @@ func (f *fsm) Snapshot() (raft.FSMSnapshot, error) {
 	for appName, appThrottle := range f.throttler.ThrottledAppsMap() {
 		snapshot.data.throttledApps[appName] = *appThrottle
 	}
+
+	for hostName, expireAt := range f.throttler.SkippedHostsMap() {
+		snapshot.data.skippedHosts[hostName] = expireAt
+	}
+
 	return snapshot, nil
 }
 
@@ -52,7 +61,12 @@ func (f *fsm) Restore(rc io.ReadCloser) error {
 	for appName, appThrottle := range data.throttledApps {
 		f.throttler.ThrottleApp(appName, appThrottle.ExpireAt, appThrottle.Ratio)
 	}
-	log.Debugf("freno/raft: restored from snapshot: %d elements restored", len(data.throttledApps))
+	log.Debugf("freno/raft: restored from snapshot: %d throttled apps", len(data.throttledApps))
+
+	for hostName, expireAt := range data.skippedHosts {
+		f.throttler.SkipHost(hostName, expireAt)
+	}
+	log.Debugf("freno/raft: restored from snapshot: %d skipped hosts", len(data.skippedHosts))
 	return nil
 }
 
@@ -65,5 +79,15 @@ func (f *fsm) applyThrottleApp(appName string, expireAt time.Time, ratio float64
 // applyThrottleApp will apply a "unthrottle" command locally (this applies as result of the raft consensus algorithm)
 func (f *fsm) applyUnthrottleApp(appName string) interface{} {
 	f.throttler.UnthrottleApp(appName)
+	return nil
+}
+
+func (f *fsm) applySkipHost(hostName string, expireAt time.Time) interface{} {
+	f.throttler.SkipHost(hostName, expireAt)
+	return nil
+}
+
+func (f *fsm) applyRecoverHost(hostName string) interface{} {
+	f.throttler.RecoverHost(hostName)
 	return nil
 }

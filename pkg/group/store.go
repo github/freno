@@ -19,7 +19,7 @@ import (
 	"github.com/github/freno/pkg/throttle"
 
 	"github.com/github/freno/internal/raft"
-	"github.com/github/freno/internal/raft-boltdb"
+	raftboltdb "github.com/github/freno/internal/raft-boltdb"
 	"github.com/outbrain/golib/log"
 	metrics "github.com/rcrowley/go-metrics"
 )
@@ -154,6 +154,27 @@ func (store *Store) UnthrottleApp(appName string) error {
 		Key:       appName,
 	}
 	return store.genericCommand(c)
+}
+
+func (store *Store) SkipHost(hostName string, expireAt time.Time) error {
+	c := &command{
+		Operation: "skip",
+		Key:       hostName,
+		ExpireAt:  expireAt,
+	}
+	return store.genericCommand(c)
+}
+
+func (store *Store) RecoverHost(hostName string) error {
+	c := &command{
+		Operation: "recover",
+		Key:       hostName,
+	}
+	return store.genericCommand(c)
+}
+
+func (store *Store) SkippedHostsMap() map[string]time.Time {
+	return store.throttler.SkippedHostsMap()
 }
 
 func (store *Store) ThrottledAppsMap() (result map[string](*base.AppThrottle)) {
