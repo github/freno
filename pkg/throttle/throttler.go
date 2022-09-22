@@ -527,7 +527,7 @@ func (throttler *Throttler) UnthrottleApp(appName string) {
 	appWithStore := appName + "/"
 	for app, _ := range throttler.throttledApps.Items() {
 		if app == appName || strings.HasPrefix(app, appWithStore) {
-			throttler.throttledApps.Delete(appName)
+			throttler.throttledApps.Delete(app)
 		}
 	}
 }
