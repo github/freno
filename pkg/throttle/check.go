@@ -48,7 +48,7 @@ func (check *ThrottlerCheck) checkAppMetricResult(appName string, storeType stri
 		}
 	}
 	//
-	metricResult, threshold := check.throttler.AppRequestMetricResult(appName, metricResultFunc, denyApp)
+	metricResult, threshold := check.throttler.AppRequestMetricResult(appName, storeName, metricResultFunc, denyApp)
 	if flags.OverrideThreshold > 0 {
 		threshold = flags.OverrideThreshold
 	}

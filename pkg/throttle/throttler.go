@@ -524,19 +524,29 @@ func (throttler *Throttler) ThrottleApp(appName string, expireAt time.Time, rati
 }
 
 func (throttler *Throttler) UnthrottleApp(appName string) {
-	throttler.throttledApps.Delete(appName)
+	appWithStore := appName + "/"
+	for app, _ := range throttler.throttledApps.Items() {
+		if app == appName || strings.HasPrefix(app, appWithStore) {
+			throttler.throttledApps.Delete(appName)
+		}
+	}
 }
 
-func (throttler *Throttler) IsAppThrottled(appName string) bool {
-	if object, found := throttler.throttledApps.Get(appName); found {
-		appThrottle := object.(*base.AppThrottle)
-		if appThrottle.ExpireAt.Before(time.Now()) {
-			// throttling cleanup hasn't purged yet, but it is expired
-			return false
-		}
-		// handle ratio
-		if rand.Float64() < appThrottle.Ratio {
-			return true
+func (throttler *Throttler) IsAppThrottled(appName, storeName string) bool {
+	appWithStore := fmt.Sprintf("%s/%s", appName, storeName)
+	keys := []string{appWithStore, appName}
+	// check if app is throttled globally
+	for _, key := range keys {
+		if object, found := throttler.throttledApps.Get(key); found {
+			appThrottle := object.(*base.AppThrottle)
+			if appThrottle.ExpireAt.Before(time.Now()) {
+				// throttling cleanup hasn't purged yet, but it is expired
+				return false
+			}
+			// handle ratio
+			if rand.Float64() < appThrottle.Ratio {
+				return true
+			}
 		}
 	}
 	return false
@@ -589,11 +599,11 @@ func (throttler *Throttler) metricsHealthSnapshot() base.MetricHealthMap {
 	return snapshot
 }
 
-func (throttler *Throttler) AppRequestMetricResult(appName string, metricResultFunc base.MetricResultFunc, denyApp bool) (metricResult base.MetricResult, threshold float64) {
+func (throttler *Throttler) AppRequestMetricResult(appName string, storeName string, metricResultFunc base.MetricResultFunc, denyApp bool) (metricResult base.MetricResult, threshold float64) {
 	if denyApp {
 		return base.AppDeniedMetric, 0
 	}
-	if throttler.IsAppThrottled(appName) {
+	if throttler.IsAppThrottled(appName, storeName) {
 		return base.AppDeniedMetric, 0
 	}
 	return metricResultFunc()

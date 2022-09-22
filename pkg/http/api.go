@@ -235,11 +235,21 @@ func (api *APIImpl) MetricsHealth(w http.ResponseWriter, r *http.Request, ps htt
 
 // ThrottleApp forcibly marks given app as throttled. Future requests by this app may be denied.
 func (api *APIImpl) ThrottleApp(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
-	appName := ps.ByName("app")
+	storeName := r.URL.Query().Get("store_name")
+	var appName string
+	if storeName != "" {
+		// limit throttling to this store
+		appName = fmt.Sprintf("%s/%s", ps.ByName("app"), storeName)
+	} else {
+		// default is throttle app globally
+		appName = ps.ByName("app")
+	}
+
 	var expireAt time.Time // default zero
 	var ttlMinutes int64
 	var ratio float64
 	var err error
+
 	if ps.ByName("ttlMinutes") == "" {
 		ttlMinutes = 0
 	} else if ttlMinutes, err = strconv.ParseInt(ps.ByName("ttlMinutes"), 10, 64); err != nil {
