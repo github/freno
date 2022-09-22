@@ -101,6 +101,11 @@ Notes:
 
 - `/check-read-if-exists/<app>/<store-type>/<store-name>/<threshold>`: like `/check-read`, but if the metric is unknown (e.g. `<store-name>` not in `freno`'s configuration), return `200 OK`. This is useful for hybrid systems where some metrics need to be strictly controlled, and some not. `freno` would probe the important stores, and still can serve requests for all stores.
 
+- `/skip-host/<hostname>/ttl/<ttl-minutes>`: skip host when aggregating metrics for specified number of minutes. If host is already skipped, update the TTL.
+- `/skip-host/<hostname>`: same as `/skip-host/<hostname>/ttl/60`
+- `/recover-host/<hostname>`: recover a previously skipped host.
+- `/skipped-hosts`:  list currently skipped hosts
+
 ### Other requests
 
 - `/help`: show all supported request paths
