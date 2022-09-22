@@ -284,6 +284,10 @@ func (throttler *Throttler) refreshMySQLInventory() error {
 				return
 			}
 		}
+		if _, skipped := throttler.skippedHosts.Get(key.Hostname); skipped {
+			log.Debugf("host skipped: %+v", key.Hostname)
+			return
+		}
 		if !key.IsValid() {
 			log.Debugf("read invalid instance key: [%+v] for cluster %+v", key, clusterName)
 			return
@@ -338,9 +342,6 @@ func (throttler *Throttler) refreshMySQLInventory() error {
 					InstanceProbes:       mysql.NewProbes(),
 				}
 				for _, host := range totalHosts {
-					if _, skipped := throttler.skippedHosts.Get(host); skipped {
-						continue
-					}
 					key := mysql.InstanceKey{Hostname: host, Port: clusterSettings.Port}
 					addInstanceKey(&key, clusterName, clusterSettings, clusterProbes.InstanceProbes)
 				}
