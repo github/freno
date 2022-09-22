@@ -273,12 +273,21 @@ response:
 	api.respondGeneric(w, r, err)
 }
 
-// ThrottleApp unthrottles given app.
+// UnthrottleApp unthrottles given app.
 func (api *APIImpl) UnthrottleApp(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 	appName := ps.ByName("app")
-	err := api.consensusService.UnthrottleApp(appName)
+	appWithStorePrefix := appName + "/"
 
-	api.respondGeneric(w, r, err)
+	for app := range api.consensusService.ThrottledAppsMap() {
+		if app == appName || strings.HasPrefix(app, appWithStorePrefix) {
+			err := api.consensusService.UnthrottleApp(app)
+			if err != nil {
+				api.respondGeneric(w, r, err)
+				return
+			}
+		}
+	}
+	api.respondGeneric(w, r, nil)
 }
 
 // ThrottledApps returns a snapshot of all currently throttled apps

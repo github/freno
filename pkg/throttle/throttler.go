@@ -524,24 +524,19 @@ func (throttler *Throttler) ThrottleApp(appName string, expireAt time.Time, rati
 }
 
 func (throttler *Throttler) UnthrottleApp(appName string) {
-	appWithStore := appName + "/"
-	for app, _ := range throttler.throttledApps.Items() {
-		if app == appName || strings.HasPrefix(app, appWithStore) {
-			throttler.throttledApps.Delete(app)
-		}
-	}
+	throttler.throttledApps.Delete(appName)
 }
 
 func (throttler *Throttler) IsAppThrottled(appName, storeName string) bool {
 	appWithStore := fmt.Sprintf("%s/%s", appName, storeName)
 	keys := []string{appWithStore, appName}
-	// check if app is throttled globally
+	// check if app is throttled for this store or globally
 	for _, key := range keys {
 		if object, found := throttler.throttledApps.Get(key); found {
 			appThrottle := object.(*base.AppThrottle)
 			if appThrottle.ExpireAt.Before(time.Now()) {
 				// throttling cleanup hasn't purged yet, but it is expired
-				return false
+				continue
 			}
 			// handle ratio
 			if rand.Float64() < appThrottle.Ratio {
