@@ -36,6 +36,9 @@ type API interface {
 	ThrottleApp(w http.ResponseWriter, r *http.Request, _ httprouter.Params)
 	UnthrottleApp(w http.ResponseWriter, r *http.Request, _ httprouter.Params)
 	ThrottledApps(w http.ResponseWriter, r *http.Request, _ httprouter.Params)
+	SkipHost(w http.ResponseWriter, r *http.Request, _ httprouter.Params)
+	SkippedHosts(w http.ResponseWriter, r *http.Request, _ httprouter.Params)
+	RecoverHost(w http.ResponseWriter, r *http.Request, _ httprouter.Params)
 	RecentApps(w http.ResponseWriter, r *http.Request, _ httprouter.Params)
 	Help(w http.ResponseWriter, r *http.Request, _ httprouter.Params)
 	MemcacheConfig(w http.ResponseWriter, r *http.Request, _ httprouter.Params)
@@ -196,7 +199,7 @@ func (api *APIImpl) ReadCheck(w http.ResponseWriter, r *http.Request, ps httprou
 	api.readCheck(w, r, ps, &throttle.CheckFlags{})
 }
 
-// WriteCheckIfExists checks for a metric, but reports an OK if the metric does not exist.
+// ReadCheckIfExists checks for a metric, but reports an OK if the metric does not exist.
 // If the metric does exist, then all usual checks are made.
 func (api *APIImpl) ReadCheckIfExists(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 	api.readCheck(w, r, ps, &throttle.CheckFlags{OKIfNotExists: true})
@@ -354,6 +357,39 @@ func metricsHandle(w http.ResponseWriter, r *http.Request, p httprouter.Params) 
 	handler.ServeHTTP(w, r)
 }
 
+func (api *APIImpl) SkipHost(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
+	var ttlMinutes int64
+	var expireAt time.Time
+	var err error
+
+	hostName := ps.ByName("hostName")
+	ttlString := ps.ByName("ttlMinutes")
+	if ttlString == "" {
+		ttlMinutes = 0
+	} else if ttlMinutes, err = strconv.ParseInt(ttlString, 10, 64); err != nil {
+		api.respondGeneric(w, r, err)
+	}
+	if ttlMinutes != 0 {
+		expireAt = time.Now().Add(time.Duration(ttlMinutes) * time.Minute)
+	}
+
+	err = api.consensusService.SkipHost(hostName, ttlMinutes, expireAt)
+
+	api.respondGeneric(w, r, err)
+}
+
+func (api *APIImpl) RecoverHost(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
+	hostName := ps.ByName("hostName")
+	err := api.consensusService.RecoverHost(hostName)
+
+	api.respondGeneric(w, r, err)
+}
+
+func (api *APIImpl) SkippedHosts(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(api.consensusService.SkippedHostsMap())
+}
+
 // ConfigureRoutes configures a set of HTTP routes to be actions dispatched by the
 // given api's methods.
 func ConfigureRoutes(api API) *httprouter.Router {
@@ -386,6 +422,11 @@ func ConfigureRoutes(api API) *httprouter.Router {
 	register(router, "/throttled-apps", api.ThrottledApps)
 	register(router, "/recent-apps", api.RecentApps)
 	register(router, "/recent-apps/:lastMinutes", api.RecentApps)
+
+	register(router, "/skip-host/:hostName", api.SkipHost)
+	register(router, "/skip-host/:hostName/ttl/:ttlMinutes", api.SkipHost)
+	register(router, "/skipped-hosts", api.SkippedHosts)
+	register(router, "/recover-host/:hostName", api.RecoverHost)
 
 	register(router, "/debug/vars", metricsHandle)
 	register(router, "/debug/metrics", metricsHandle)

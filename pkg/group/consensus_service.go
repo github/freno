@@ -28,6 +28,10 @@ type ConsensusService interface {
 	UnthrottleApp(appName string) error
 	RecentAppsMap() (result map[string](*base.RecentApp))
 
+	SkipHost(hostName string, ttlMinutes int64, expireAt time.Time) error
+	RecoverHost(hostName string) error
+	SkippedHostsMap() (result map[string]time.Time)
+
 	IsHealthy() bool
 	IsLeader() bool
 	GetLeader() string

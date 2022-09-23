@@ -82,6 +82,14 @@ CREATE TABLE throttled_apps (
 	ratio DOUBLE,
   PRIMARY KEY (app_name)
 );
+
+CREATE TABLE skipped_hosts (
+   host_name varchar(128) NOT NULL,
+   skipped_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+   expires_at TIMESTAMP NOT NULL,
+
+   PRIMARY KEY (host_name)
+);
 ```
 
 The `BackendMySQLUser` account must have `SELECT, INSERT, DELETE, UPDATE` privileges on those tables.

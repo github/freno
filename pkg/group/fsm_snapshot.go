@@ -2,6 +2,7 @@ package group
 
 import (
 	"encoding/json"
+	"time"
 
 	"github.com/github/freno/pkg/base"
 
@@ -12,11 +13,13 @@ import (
 // it will mostly duplicate data stored in `throttler`.
 type snapshotData struct {
 	throttledApps map[string](base.AppThrottle)
+	skippedHosts  map[string]time.Time
 }
 
 func newSnapshotData() *snapshotData {
 	return &snapshotData{
 		throttledApps: make(map[string](base.AppThrottle)),
+		skippedHosts:  make(map[string]time.Time),
 	}
 }
 

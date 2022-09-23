@@ -28,6 +28,13 @@ CREATE TABLE throttled_apps (
 	ratio DOUBLE,
   PRIMARY KEY (app_name)
 );
+
+CREATE TABLE skipped_hosts (
+   host_name varchar(128) NOT NULL,
+   skipped_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+   expires_at TIMESTAMP NOT NULL,
+   PRIMARY KEY (host_name)
+);
 */
 
 package group
@@ -145,6 +152,7 @@ func (backend *MySQLBackend) onLeaderStateChange(newLeaderState int64) error {
 	if newLeaderState > 0 {
 		log.Infof("Transitioned into leader state")
 		backend.readThrottledApps()
+		backend.readSkippedHosts()
 	} else {
 		log.Infof("Transitioned out of leader state")
 	}
@@ -343,6 +351,24 @@ func (backend *MySQLBackend) readThrottledApps() error {
 	return err
 }
 
+func (backend *MySQLBackend) readSkippedHosts() error {
+	query := `
+        select
+            host_name,
+            timestampdiff(second, now(), expires_at) as ttl_seconds
+        from
+            skipped_hosts
+            `
+	err := sqlutils.QueryRowsMap(backend.db, query, func(m sqlutils.RowMap) error {
+		hostName := m.GetString("host_name")
+		ttlSeconds := m.GetInt64("ttl_seconds")
+		expireAt := time.Now().Add(time.Duration(ttlSeconds) * time.Second)
+		go backend.throttler.SkipHost(hostName, expireAt)
+		return nil
+	})
+	return err
+}
+
 func (backend *MySQLBackend) ThrottleApp(appName string, ttlMinutes int64, expireAt time.Time, ratio float64) error {
 	log.Debugf("throttle-app: app=%s, ttlMinutes=%+v, expireAt=%+v, ratio=%+v", appName, ttlMinutes, expireAt, ratio)
 	var query string
@@ -387,6 +413,36 @@ func (backend *MySQLBackend) UnthrottleApp(appName string) error {
 	args := sqlutils.Args(appName)
 	_, err := sqlutils.ExecNoPrepare(backend.db, query, args...)
 	return err
+}
+
+func (backend *MySQLBackend) SkipHost(hostName string, ttlMinutes int64, expireAt time.Time) error {
+	backend.throttler.SkipHost(hostName, expireAt)
+	query := `
+	    replace into skipped_hosts (
+	        host_name, skipped_at, expires_at
+	      ) values (
+	        ?, now(), now() + interval ? minute
+	      )`
+
+	ttl := ttlMinutes
+	if ttlMinutes == 0 {
+		ttl = throttle.DefaultSkipTTLMinutes
+	}
+	args := sqlutils.Args(hostName, ttl)
+	_, err := sqlutils.ExecNoPrepare(backend.db, query, args...)
+	return err
+}
+
+func (backend *MySQLBackend) RecoverHost(hostName string) error {
+	backend.throttler.RecoverHost(hostName)
+	query := `update skipped_hosts set expires_at=now() where host_name=?`
+	args := sqlutils.Args(hostName)
+	_, err := sqlutils.ExecNoPrepare(backend.db, query, args...)
+	return err
+}
+
+func (backend *MySQLBackend) SkippedHostsMap() map[string]time.Time {
+	return backend.throttler.SkippedHostsMap()
 }
 
 func (backend *MySQLBackend) RecentAppsMap() (result map[string](*base.RecentApp)) {
