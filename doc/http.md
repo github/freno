@@ -49,7 +49,7 @@ Notes:
   - `/throttle-app/archive/ttl/30/ratio/1`: completely refuse `/check/archive/*` requests for a duration of `30` minutes
   - `/throttle-app/archive/ttl/30/ratio/0.9`: _mostly_ refuse `/check/archive/*` requests for a duration of `30` minutes. On average (random dice roll), `9` out of `10` requests (i.e. `90%`) will be denied, and one approved.
   - `/throttle-app/archive/ttl/30/ratio/0.5`: refuse `50%` of `/check/archive/*` requests for a duration of `30` minutes
-
+  
 - `/throttle-app/<app-name>/ttl/<ttlMinutes>`:
 
   - If app is already throttled, modify TTL portion only, without changing the ratio.
@@ -65,7 +65,8 @@ Notes:
 
   Same as calling `/throttle-app/<app-name>/ttl/60/ratio/1`. Provided as convenience endpoint.
 
-- `/unthrottle-app/<app-name>`: remove any imposed throttling constraint from given app. Example:
+- `/throttle-app` can take a query parameter `store_name` to throttle the app only on one store (i.e. MySQL cluster). For example `/throttle-app/archive?store_name=mycluster` refuses `/check/archive/mysql/mycluster` requests for `1` hour.
+
 
   `/unthrottle-app/archive` will re-allow the `archive` app to get valid response from `/check/archive/*` requests.
 

@@ -238,11 +238,21 @@ func (api *APIImpl) MetricsHealth(w http.ResponseWriter, r *http.Request, ps htt
 
 // ThrottleApp forcibly marks given app as throttled. Future requests by this app may be denied.
 func (api *APIImpl) ThrottleApp(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
-	appName := ps.ByName("app")
+	storeName := r.URL.Query().Get("store_name")
+	var appName string
+	if storeName != "" {
+		// limit throttling to this store
+		appName = fmt.Sprintf("%s/%s", ps.ByName("app"), storeName)
+	} else {
+		// default is throttle app globally
+		appName = ps.ByName("app")
+	}
+
 	var expireAt time.Time // default zero
 	var ttlMinutes int64
 	var ratio float64
 	var err error
+
 	if ps.ByName("ttlMinutes") == "" {
 		ttlMinutes = 0
 	} else if ttlMinutes, err = strconv.ParseInt(ps.ByName("ttlMinutes"), 10, 64); err != nil {
@@ -266,12 +276,21 @@ response:
 	api.respondGeneric(w, r, err)
 }
 
-// ThrottleApp unthrottles given app.
+// UnthrottleApp unthrottles given app.
 func (api *APIImpl) UnthrottleApp(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 	appName := ps.ByName("app")
-	err := api.consensusService.UnthrottleApp(appName)
+	appWithStorePrefix := appName + "/"
 
-	api.respondGeneric(w, r, err)
+	for app := range api.consensusService.ThrottledAppsMap() {
+		if app == appName || strings.HasPrefix(app, appWithStorePrefix) {
+			err := api.consensusService.UnthrottleApp(app)
+			if err != nil {
+				api.respondGeneric(w, r, err)
+				return
+			}
+		}
+	}
+	api.respondGeneric(w, r, nil)
 }
 
 // ThrottledApps returns a snapshot of all currently throttled apps
