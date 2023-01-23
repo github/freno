@@ -8,6 +8,8 @@ package mysql
 import (
 	"fmt"
 	"net"
+
+	"github.com/github/freno/pkg/config"
 )
 
 const maxPoolConnections = 3
@@ -48,33 +50,46 @@ func NewProbe() *Probe {
 }
 
 // DuplicateCredentials creates a new connection config with given key and with same credentials as this config
-func (this *Probe) DuplicateCredentials(key InstanceKey) *Probe {
+func (probe *Probe) DuplicateCredentials(key InstanceKey) *Probe {
 	config := &Probe{
 		Key:      key,
-		User:     this.User,
-		Password: this.Password,
+		User:     probe.User,
+		Password: probe.Password,
 	}
 	return config
 }
 
-func (this *Probe) Duplicate() *Probe {
-	return this.DuplicateCredentials(this.Key)
+func (probe *Probe) Duplicate() *Probe {
+	return probe.DuplicateCredentials(probe.Key)
 }
 
-func (this *Probe) String() string {
-	return fmt.Sprintf("%s, user=%s", this.Key.DisplayString(), this.User)
+func (probe *Probe) String() string {
+	return fmt.Sprintf("%s, user=%s", probe.Key.DisplayString(), probe.User)
 }
 
-func (this *Probe) Equals(other *Probe) bool {
-	return this.Key.Equals(&other.Key)
+func (probe *Probe) Equals(other *Probe) bool {
+	return probe.Key.Equals(&other.Key)
 }
 
-func (this *Probe) GetDBUri(databaseName string) string {
-	hostname := this.Key.Hostname
+func (probe *Probe) GetDBUri(databaseName string) string {
+	hostname := probe.Key.Hostname
 	var ip = net.ParseIP(hostname)
 	if (ip != nil) && (ip.To4() == nil) {
 		// Wrap IPv6 literals in square brackets
 		hostname = fmt.Sprintf("[%s]", hostname)
 	}
-	return fmt.Sprintf("%s:%s@tcp(%s:%d)/%s?interpolateParams=true&charset=utf8mb4,utf8,latin1&timeout=%dms", this.User, this.Password, hostname, this.Key.Port, databaseName, timeoutMillis)
+	dsnCharsetCollation := "charset=utf8mb4,utf8,latin1"
+	if config.Settings().StoresCollation != "" {
+		// Set collation instead of charset, if StoresCollation is specified
+		dsnCharsetCollation = fmt.Sprintf("collation=%s", config.Settings().StoresCollation)
+	}
+	return fmt.Sprintf("%s:%s@tcp(%s:%d)/%s?interpolateParams=true&%s&timeout=%dms",
+		probe.User,
+		probe.Password,
+		hostname,
+		probe.Key.Port,
+		databaseName,
+		dsnCharsetCollation,
+		timeoutMillis,
+	)
 }

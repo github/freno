@@ -37,7 +37,6 @@ var (
 )
 
 /*
-
 NetworkTransport provides a network based transport that can be
 used to communicate with Raft on remote machines. It requires
 an underlying stream layer to provide a stream abstraction, which can
@@ -53,7 +52,6 @@ both are encoded using MsgPack.
 InstallSnapshot is special, in that after the RPC request we stream
 the entire state. That socket is not re-used as the connection state
 is not known if there is an error.
-
 */
 type NetworkTransport struct {
 	connPool     map[string][]*netConn
