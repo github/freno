@@ -78,9 +78,9 @@ func NewMySQLBackend(throttler *throttle.Throttler) (*MySQLBackend, error) {
 		return nil, nil
 	}
 	dsnCharsetCollation := "charset=utf8mb4,utf8,latin1"
-	if config.Settings().BackendCollation != "" {
-		// Set collation instead of charset, if BackendCollation is specified
-		dsnCharsetCollation = fmt.Sprintf("collation=%s", config.Settings().BackendCollation)
+	if config.Settings().BackendMySQLCollation != "" {
+		// Set collation instead of charset, if BackendMySQLCollation is specified
+		dsnCharsetCollation = fmt.Sprintf("collation=%s", config.Settings().BackendMySQLCollation)
 	}
 	dbUri := fmt.Sprintf("%s:%s@tcp(%s:%d)/%s?interpolateParams=true&%s&timeout=500ms",
 		config.Settings().BackendMySQLUser,
