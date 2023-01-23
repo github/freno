@@ -80,7 +80,7 @@ func (probe *Probe) GetDBUri(databaseName string) string {
 	}
 	dsnCharsetCollation := "charset=utf8mb4,utf8,latin1"
 	if config.Settings().Stores.MySQL.Collation != "" {
-		// Set collation instead of charset, if StoresCollation is specified
+		// Set collation instead of charset, if Stores.MySQL.Collation is specified
 		dsnCharsetCollation = fmt.Sprintf("collation=%s", config.Settings().Stores.MySQL.Collation)
 	}
 	return fmt.Sprintf("%s:%s@tcp(%s:%d)/%s?interpolateParams=true&%s&timeout=%dms",
