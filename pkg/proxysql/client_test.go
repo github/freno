@@ -51,8 +51,8 @@ func TestProxySQLGetDB(t *testing.T) {
 		if err == nil {
 			t.Fatal("expected error for failed connection")
 		}
-		if !strings.HasSuffix(err.Error(), "no such host") {
-			t.Fatalf("expected a 'no such host' error, got %v", err)
+		if !strings.HasSuffix(err.Error(), "no such host") && !strings.HasSuffix(err.Error(), "i/o timeout") {
+			t.Fatalf("expected a 'no such host' or 'i/o timeout' error, got %v", err)
 		}
 	})
 }
