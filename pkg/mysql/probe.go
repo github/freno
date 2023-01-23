@@ -79,9 +79,9 @@ func (probe *Probe) GetDBUri(databaseName string) string {
 		hostname = fmt.Sprintf("[%s]", hostname)
 	}
 	dsnCharsetCollation := "charset=utf8mb4,utf8,latin1"
-	if config.Settings().StoresCollation != "" {
+	if config.Settings().Stores.MySQL.Collation != "" {
 		// Set collation instead of charset, if StoresCollation is specified
-		dsnCharsetCollation = fmt.Sprintf("collation=%s", config.Settings().StoresCollation)
+		dsnCharsetCollation = fmt.Sprintf("collation=%s", config.Settings().Stores.MySQL.Collation)
 	}
 	return fmt.Sprintf("%s:%s@tcp(%s:%d)/%s?interpolateParams=true&%s&timeout=%dms",
 		probe.User,

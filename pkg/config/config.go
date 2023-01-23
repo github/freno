@@ -106,8 +106,7 @@ type ConfigurationSettings struct {
 	BackendMySQLSchema   string
 	BackendMySQLUser     string
 	BackendMySQLPassword string
-	BackendCollation     string
-	StoresCollation      string
+	BackendCollation     string   // if specified, use this collation instead of charset when connecting to MySQL backend
 	MemcacheServers      []string // if given, freno will report to aggregated values to given memcache
 	MemcachePath         string   // use as prefix to metric path in memcache key, e.g. if `MemcachePath` is "myprefix" the key would be "myprefix/mysql/maincluster". Default: "freno"
 	EnableProfiling      bool     // enable pprof profiling http api
