@@ -77,19 +77,7 @@ func NewMySQLBackend(throttler *throttle.Throttler) (*MySQLBackend, error) {
 	if config.Settings().BackendMySQLHost == "" {
 		return nil, nil
 	}
-	dsnCharsetCollation := "charset=utf8mb4,utf8,latin1"
-	if config.Settings().BackendMySQLCollation != "" {
-		// Set collation instead of charset, if BackendMySQLCollation is specified
-		dsnCharsetCollation = fmt.Sprintf("collation=%s", config.Settings().BackendMySQLCollation)
-	}
-	dbUri := fmt.Sprintf("%s:%s@tcp(%s:%d)/%s?interpolateParams=true&%s&timeout=500ms",
-		config.Settings().BackendMySQLUser,
-		config.Settings().BackendMySQLPassword,
-		config.Settings().BackendMySQLHost,
-		config.Settings().BackendMySQLPort,
-		config.Settings().BackendMySQLSchema,
-		dsnCharsetCollation,
-	)
+	dbUri := GetBackendDBUri()
 	db, _, err := sqlutils.GetDB(dbUri)
 	if err != nil {
 		return nil, err
@@ -116,6 +104,23 @@ func NewMySQLBackend(throttler *throttle.Throttler) (*MySQLBackend, error) {
 	}
 	go backend.continuousOperations()
 	return backend, nil
+}
+
+// helper function to get the DB URI
+func GetBackendDBUri() string {
+	dsnCharsetCollation := "charset=utf8mb4,utf8,latin1"
+	if config.Settings().BackendMySQLCollation != "" {
+		// Set collation instead of charset, if BackendMySQLCollation is specified
+		dsnCharsetCollation = fmt.Sprintf("collation=%s", config.Settings().BackendMySQLCollation)
+	}
+	return fmt.Sprintf("%s:%s@tcp(%s:%d)/%s?interpolateParams=true&%s&timeout=500ms",
+		config.Settings().BackendMySQLUser,
+		config.Settings().BackendMySQLPassword,
+		config.Settings().BackendMySQLHost,
+		config.Settings().BackendMySQLPort,
+		config.Settings().BackendMySQLSchema,
+		dsnCharsetCollation,
+	)
 }
 
 // Monitor is a utility function to routinely observe leadership state.
