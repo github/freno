@@ -25,11 +25,11 @@ func TestGetBackendDBUri(t *testing.T) {
 	config.Settings().BackendMySQLSchema = "test_database"
 
 	// test default (charset)
-	dbUri := GetBackendDBUri()
+	dbUri := getBackendDBUri()
 	test.S(t).ExpectEquals(dbUri, "gromit:penguin@tcp(myhost:3306)/test_database?interpolateParams=true&charset=utf8mb4,utf8,latin1&timeout=500ms")
 
 	// test setting collation
 	config.Settings().BackendMySQLCollation = "utf8mb4_unicode_ci"
-	dbUri = GetBackendDBUri()
+	dbUri = getBackendDBUri()
 	test.S(t).ExpectEquals(dbUri, "gromit:penguin@tcp(myhost:3306)/test_database?interpolateParams=true&collation=utf8mb4_unicode_ci&timeout=500ms")
 }

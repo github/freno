@@ -77,7 +77,7 @@ func NewMySQLBackend(throttler *throttle.Throttler) (*MySQLBackend, error) {
 	if config.Settings().BackendMySQLHost == "" {
 		return nil, nil
 	}
-	dbUri := GetBackendDBUri()
+	dbUri := getBackendDBUri()
 	db, _, err := sqlutils.GetDB(dbUri)
 	if err != nil {
 		return nil, err
@@ -107,7 +107,7 @@ func NewMySQLBackend(throttler *throttle.Throttler) (*MySQLBackend, error) {
 }
 
 // helper function to get the DB URI
-func GetBackendDBUri() string {
+func getBackendDBUri() string {
 	dsnCharsetCollation := "charset=utf8mb4,utf8,latin1"
 	if config.Settings().BackendMySQLCollation != "" {
 		// Set collation instead of charset, if BackendMySQLCollation is specified
