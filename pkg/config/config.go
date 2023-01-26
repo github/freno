@@ -92,24 +92,25 @@ func (config *Configuration) Reload() error {
 // Some of the settinges have reasonable default values, and some other
 // (like database credentials) are strictly expected from user.
 type ConfigurationSettings struct {
-	ListenPort           int
-	DataCenter           string
-	Environment          string
-	Domain               string
-	ShareDomain          string
-	RaftBind             string
-	RaftDataDir          string
-	DefaultRaftPort      int      // if a RaftNodes entry does not specify port, use this one
-	RaftNodes            []string // Raft nodes to make initial connection with
-	BackendMySQLHost     string
-	BackendMySQLPort     int
-	BackendMySQLSchema   string
-	BackendMySQLUser     string
-	BackendMySQLPassword string
-	MemcacheServers      []string // if given, freno will report to aggregated values to given memcache
-	MemcachePath         string   // use as prefix to metric path in memcache key, e.g. if `MemcachePath` is "myprefix" the key would be "myprefix/mysql/maincluster". Default: "freno"
-	EnableProfiling      bool     // enable pprof profiling http api
-	Stores               StoresSettings
+	ListenPort            int
+	DataCenter            string
+	Environment           string
+	Domain                string
+	ShareDomain           string
+	RaftBind              string
+	RaftDataDir           string
+	DefaultRaftPort       int      // if a RaftNodes entry does not specify port, use this one
+	RaftNodes             []string // Raft nodes to make initial connection with
+	BackendMySQLHost      string
+	BackendMySQLPort      int
+	BackendMySQLSchema    string
+	BackendMySQLUser      string
+	BackendMySQLPassword  string
+	BackendMySQLCollation string   // if specified, use this collation instead of charset when connecting to MySQL backend
+	MemcacheServers       []string // if given, freno will report to aggregated values to given memcache
+	MemcachePath          string   // use as prefix to metric path in memcache key, e.g. if `MemcachePath` is "myprefix" the key would be "myprefix/mysql/maincluster". Default: "freno"
+	EnableProfiling       bool     // enable pprof profiling http api
+	Stores                StoresSettings
 }
 
 func newConfigurationSettings() *ConfigurationSettings {

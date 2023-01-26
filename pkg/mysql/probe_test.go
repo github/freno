@@ -8,6 +8,7 @@ package mysql
 import (
 	"testing"
 
+	"github.com/github/freno/pkg/config"
 	"github.com/outbrain/golib/log"
 	test "github.com/outbrain/golib/tests"
 )
@@ -48,4 +49,20 @@ func TestDuplicate(t *testing.T) {
 	test.S(t).ExpectEquals(dup.Key.Port, 3306)
 	test.S(t).ExpectEquals(dup.User, "gromit")
 	test.S(t).ExpectEquals(dup.Password, "penguin")
+}
+
+func TestGetDBUri(t *testing.T) {
+	c := NewProbe()
+	c.Key = InstanceKey{Hostname: "myhost", Port: 3306}
+	c.User = "gromit"
+	c.Password = "penguin"
+
+	// test default (charset)
+	dbUri := c.GetDBUri("test_database")
+	test.S(t).ExpectEquals(dbUri, "gromit:penguin@tcp(myhost:3306)/test_database?interpolateParams=true&charset=utf8mb4,utf8,latin1&timeout=1000ms")
+
+	// test setting collation
+	config.Settings().Stores.MySQL.Collation = "utf8mb4_unicode_ci"
+	dbUri = c.GetDBUri("test_database")
+	test.S(t).ExpectEquals(dbUri, "gromit:penguin@tcp(myhost:3306)/test_database?interpolateParams=true&collation=utf8mb4_unicode_ci&timeout=1000ms")
 }

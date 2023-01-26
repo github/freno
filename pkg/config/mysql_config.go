@@ -63,6 +63,7 @@ type MySQLConfigurationSettings struct {
 	ProxySQLUser         string   // ProxySQL stats username
 	ProxySQLPassword     string   // ProxySQL stats password
 	VitessCells          []string // Name of the Vitess cells for polling tablet hosts
+	Collation            string   // MySQL collation to use for stores, replaces charset if specified
 
 	Clusters map[string](*MySQLClusterConfigurationSettings) // cluster name -> cluster config
 }
