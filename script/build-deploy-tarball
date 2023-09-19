@@ -32,4 +32,4 @@ cp ${tarball}.gz "$BUILD_ARTIFACT_DIR"/freno/
 # blame @carlosmn, @mattr, @timvaillancourt and @rashiq
 # Allow builds on buster to also be used for focal
 focal_tarball_name=$(echo $(basename "${tarball}") | sed s/-stretch-/-focal-/)
-cp ${tarball}.gz "$BUILD_ARTIFACT_DIR/gh-ost/${focal_tarball_name}.gz"
+cp ${tarball}.gz "$BUILD_ARTIFACT_DIR/freno/${focal_tarball_name}.gz"
