@@ -13,7 +13,7 @@ require (
 	github.com/outbrain/golib v0.0.0-20180830062331-ab954725f502
 	github.com/patrickmn/go-cache v2.1.0+incompatible
 	github.com/rcrowley/go-metrics v0.0.0-20190826022208-cac0b30c2563
-	golang.org/x/sys v0.0.0-20190602015325-4c4f7f33c9ed // indirect
+	golang.org/x/sys v0.1.0 // indirect
 	vitess.io/vitess v2.1.1+incompatible
 )
 
