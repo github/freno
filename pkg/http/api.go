@@ -278,11 +278,14 @@ response:
 
 // UnthrottleApp unthrottles given app.
 func (api *APIImpl) UnthrottleApp(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
+	storeName := r.URL.Query().Get("store_name")
 	appName := ps.ByName("app")
-	appWithStorePrefix := appName + "/"
+	if storeName != "" {
+		appName += "/" + storeName
+	}
 
 	for app := range api.consensusService.ThrottledAppsMap() {
-		if app == appName || strings.HasPrefix(app, appWithStorePrefix) {
+		if app == appName {
 			err := api.consensusService.UnthrottleApp(app)
 			if err != nil {
 				api.respondGeneric(w, r, err)
