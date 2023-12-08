@@ -464,7 +464,7 @@ CHECK:
 		}
 
 		for idx := 0; idx < len(first.logs); idx++ {
-			if bytes.Compare(first.logs[idx], fsm.logs[idx]) != 0 {
+			if !bytes.Equal(first.logs[idx], fsm.logs[idx]) {
 				fsm.Unlock()
 				if time.Now().After(limit) {
 					c.FailNowf("[ERR] FSM log mismatch at index %d", idx)
@@ -775,10 +775,10 @@ func TestRaft_LeaderFail(t *testing.T) {
 		if len(fsm.logs) != 2 {
 			c.FailNowf("[ERR] did not apply both to FSM! %v", fsm.logs)
 		}
-		if bytes.Compare(fsm.logs[0], []byte("test")) != 0 {
+		if !bytes.Equal(fsm.logs[0], []byte("test")) {
 			c.FailNowf("[ERR] first entry should be 'test'")
 		}
-		if bytes.Compare(fsm.logs[1], []byte("apply")) != 0 {
+		if !bytes.Equal(fsm.logs[1], []byte("apply")) {
 			c.FailNowf("[ERR] second entry should be 'apply'")
 		}
 		fsm.Unlock()
