@@ -1,5 +1,6 @@
-// GLB configuration specific to github's internal setup
 package config
+
+// GLB configuration specific to github's internal setup
 
 import (
 	"github.com/github/go-db/glb"
