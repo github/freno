@@ -108,7 +108,20 @@ func (settings *HAProxyConfigurationSettings) postReadAdjustments() error {
 			break
 		}
 		envVar := fmt.Sprintf("${%s}", submatch[1])
-		envValue := os.Getenv(submatch[1])
+		var envValue string
+
+		// special override for github-internal GLB settings
+		switch envVar {
+		case "glb_mysql_proxy_local":
+			envValue = GLB().ProxyReadOnly
+		case "glb_mysql_proxy_writers":
+			envValue = GLB().ProxyWriters
+		case "glb_mysql_proxy_testing":
+			envValue = GLB().ProxyTesting
+		default:
+			envValue = os.Getenv(submatch[1])
+		}
+
 		if envValue == "" {
 			return fmt.Errorf("HAProxySettings: unknown environment variable %s", envVar)
 		}

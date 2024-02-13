@@ -4,12 +4,14 @@ import (
 	"flag"
 	"fmt"
 	gohttp "net/http"
+	"os"
 	"strings"
 
 	"github.com/github/freno/pkg/config"
 	"github.com/github/freno/pkg/group"
 	"github.com/github/freno/pkg/http"
 	"github.com/github/freno/pkg/throttle"
+	"github.com/github/sitesapiclient"
 	"github.com/outbrain/golib/log"
 )
 
@@ -76,6 +78,7 @@ func main() {
 	log.Infof("starting freno %s, git commit %s", AppVersion, GitCommit)
 
 	loadConfiguration(*configFile)
+	loadGLBConfiguration()
 
 	// Potentialy override config
 	if *raftDataDir != "" {
@@ -100,6 +103,23 @@ func main() {
 		log.Errore(err)
 	default:
 		printUsage()
+	}
+}
+
+// github internal GLB setup to find HAProxy Stats endpoints
+func loadGLBConfiguration() {
+	httpClient := &gohttp.Client{
+		Transport: &gohttp.Transport{DisableKeepAlives: true},
+	}
+	sitesApiClient, sitesErr := sitesapiclient.NewClient(httpClient, &sitesapiclient.Config{
+		BaseURL:  os.Getenv("SITES_API_URL"),
+		Password: os.Getenv("SITE_API_PASSWORD")})
+	if sitesErr != nil {
+		log.Fatalf("SitesAPI client error: %s", sitesErr.Error())
+	}
+	thisSite := config.Settings().DataCenter
+	if err := config.GLB().Load(sitesApiClient, thisSite); err != nil {
+		log.Fatalf("Error loading GLB settings: %s", err.Error())
 	}
 }
 
