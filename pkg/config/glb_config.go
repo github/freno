@@ -5,6 +5,7 @@ package config
 import (
 	"github.com/github/go-db/glb"
 	"github.com/github/sitesapiclient"
+	"log"
 )
 
 var glbSettings = newGLBSettings()
@@ -26,6 +27,7 @@ func GLB() *GLBSettings {
 
 // Load loads the GLB MySQL pool endpoints.
 func (glb *GLBSettings) Load(sitesClient *sitesapiclient.Client, site string) error {
+	log.Infof("site: %s", site)
 	roProxy, err := poolEndpoint(sitesClient, "mysql-proxy", site)
 	if err != nil {
 		return err
