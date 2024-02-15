@@ -113,7 +113,7 @@ func loadGLBConfiguration() {
 	}
 	sitesApiClient, sitesErr := sitesapiclient.NewClient(httpClient, &sitesapiclient.Config{
 		BaseURL:  os.Getenv("SITES_API_URL"),
-		Password: os.Getenv("SITE_API_PASSWORD")})
+		Password: os.Getenv("SITES_API_PASSWORD")})
 	if sitesErr != nil {
 		log.Fatalf("SitesAPI client error: %s", sitesErr.Error())
 	}
