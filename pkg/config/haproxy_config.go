@@ -116,7 +116,7 @@ func (settings *HAProxyConfigurationSettings) postReadAdjustments() error {
 			envValue = GLB().ProxyReadOnly
 		case "glb_mysql_proxy_writers":
 			envValue = GLB().ProxyWriters
-		case "glb_mysql_proxy_testing":
+		case "glb_mysql_proxy_local_testing":
 			envValue = GLB().ProxyTesting
 		default:
 			envValue = os.Getenv(submatch[1])
