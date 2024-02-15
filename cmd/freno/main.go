@@ -121,6 +121,11 @@ func loadGLBConfiguration() {
 	if err := config.GLB().Load(sitesApiClient, thisSite); err != nil {
 		log.Fatalf("Error loading GLB settings: %s", err.Error())
 	}
+
+	glbPools := config.GLB()
+	log.Infof("GLB RO endpoint: %s", glbPools.ProxyReadOnly)
+	log.Infof("GLB RW endpoint: %s", glbPools.ProxyWriters)
+	log.Infof("GLB testing endpoint: %s", glbPools.ProxyTesting)
 }
 
 func loadConfiguration(configFile string) {
