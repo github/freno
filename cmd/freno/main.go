@@ -77,8 +77,8 @@ func main() {
 	}
 	log.Infof("starting freno %s, git commit %s", AppVersion, GitCommit)
 
-	loadConfiguration(*configFile)
 	loadGLBConfiguration()
+	loadConfiguration(*configFile)
 
 	// Potentialy override config
 	if *raftDataDir != "" {
@@ -117,7 +117,7 @@ func loadGLBConfiguration() {
 	if sitesErr != nil {
 		log.Fatalf("SitesAPI client error: %s", sitesErr.Error())
 	}
-	thisSite := config.Settings().DataCenter
+	thisSite := os.Getenv("GH_OTEL_GH_INFRA_SITE")
 	if err := config.GLB().Load(sitesApiClient, thisSite); err != nil {
 		log.Fatalf("Error loading GLB settings: %s", err.Error())
 	}
