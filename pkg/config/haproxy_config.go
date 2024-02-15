@@ -111,7 +111,7 @@ func (settings *HAProxyConfigurationSettings) postReadAdjustments() error {
 		var envValue string
 
 		// special override for github-internal GLB settings
-		switch envVar {
+		switch submatch[1] {
 		case "glb_mysql_proxy_local":
 			envValue = GLB().ProxyReadOnly
 		case "glb_mysql_proxy_writers":
