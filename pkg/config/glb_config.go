@@ -5,7 +5,8 @@ package config
 import (
 	"github.com/github/go-db/glb"
 	"github.com/github/sitesapiclient"
-	"log"
+
+	"github.com/outbrain/golib/log"
 )
 
 var glbSettings = newGLBSettings()
