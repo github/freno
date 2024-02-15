@@ -82,6 +82,12 @@ func (settings *MySQLConfigurationSettings) postReadAdjustments() error {
 	if submatch := envVariableRegexp.FindStringSubmatch(settings.Password); len(submatch) > 1 {
 		settings.Password = os.Getenv(submatch[1])
 	}
+	for i := 0; i < len(settings.VitessCells); i++ {
+		cell := settings.VitessCells[i]
+		if submatch := envVariableRegexp.FindStringSubmatch(cell); len(submatch) > 1 {
+			settings.VitessCells[i] = os.Getenv(submatch[1])
+		}
+	}
 
 	for _, clusterSettings := range settings.Clusters {
 		if err := clusterSettings.postReadAdjustments(); err != nil {
