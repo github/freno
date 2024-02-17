@@ -146,6 +146,18 @@ func (settings *ConfigurationSettings) postReadAdjustments() error {
 	if submatch := envVariableRegexp.FindStringSubmatch(settings.BackendMySQLPassword); len(submatch) > 1 {
 		settings.BackendMySQLPassword = os.Getenv(submatch[1])
 	}
+	if submatch := envVariableRegexp.FindStringSubmatch(settings.DataCenter); len(submatch) > 1 {
+		settings.DataCenter = os.Getenv(submatch[1])
+	}
+	if submatch := envVariableRegexp.FindStringSubmatch(settings.Environment); len(submatch) > 1 {
+		settings.Environment = os.Getenv(submatch[1])
+	}
+	if submatch := envVariableRegexp.FindStringSubmatch(settings.Domain); len(submatch) > 1 {
+		settings.Domain = os.Getenv(submatch[1])
+	}
+	if submatch := envVariableRegexp.FindStringSubmatch(settings.ShareDomain); len(submatch) > 1 {
+		settings.ShareDomain = os.Getenv(submatch[1])
+	}
 	if settings.RaftDataDir == "" && settings.BackendMySQLHost == "" {
 		return fmt.Errorf("Either RaftDataDir or BackendMySQLHost must be set")
 	}

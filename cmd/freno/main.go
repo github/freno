@@ -10,6 +10,7 @@ import (
 	"github.com/github/freno/pkg/group"
 	"github.com/github/freno/pkg/http"
 	"github.com/github/freno/pkg/throttle"
+	"github.com/joho/godotenv"
 	"github.com/outbrain/golib/log"
 )
 
@@ -104,6 +105,7 @@ func main() {
 }
 
 func loadConfiguration(configFile string) {
+	godotenv.Load()
 	var err error
 	if configFile != "" {
 		err = config.Instance().Read(configFile)
