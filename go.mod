@@ -1,6 +1,6 @@
 module github.com/github/freno
 
-go 1.17
+go 1.20
 
 require (
 	github.com/DATA-DOG/go-sqlmock v1.5.0
@@ -21,5 +21,4 @@ require (
 	github.com/golang/protobuf v1.2.0 // indirect
 	github.com/hashicorp/go-immutable-radix v1.0.0 // indirect
 	github.com/hashicorp/golang-lru v0.5.0 // indirect
-	github.com/joho/godotenv v1.5.1 // indirect
 )
