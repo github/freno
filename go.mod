@@ -1,6 +1,6 @@
 module github.com/github/freno
 
-go 1.17
+go 1.20
 
 require (
 	github.com/DATA-DOG/go-sqlmock v1.5.0
