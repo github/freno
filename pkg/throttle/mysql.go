@@ -6,6 +6,7 @@ import (
 
 	"github.com/github/freno/pkg/base"
 	"github.com/github/freno/pkg/mysql"
+	"github.com/outbrain/golib/log"
 )
 
 func aggregateMySQLProbes(
@@ -31,6 +32,7 @@ func aggregateMySQLProbes(
 
 		value, err := instanceMetricResult.Get()
 		if err != nil {
+			log.Errorf("error getting metric from %s: %v", probe.Key.Hostname, err)
 			if ignoreDialTcpErrors && base.IsDialTcpError(err) {
 				continue
 			}
