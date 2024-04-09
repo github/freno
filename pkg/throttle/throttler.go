@@ -365,9 +365,10 @@ func (throttler *Throttler) refreshMySQLInventory() error {
 				}
 				log.Debugf("Read %+v hosts from ProxySQL %s, hostgroup id: %d (%s)", len(servers), dsn, clusterSettings.ProxySQLSettings.HostgroupID, clusterName)
 				clusterProbes := &mysql.ClusterProbes{
-					ClusterName:      clusterName,
-					IgnoreHostsCount: clusterSettings.IgnoreHostsCount,
-					InstanceProbes:   mysql.NewProbes(),
+					ClusterName:          clusterName,
+					IgnoreHostsCount:     clusterSettings.IgnoreHostsCount,
+					IgnoreHostsThreshold: clusterSettings.IgnoreHostsThreshold,
+					InstanceProbes:       mysql.NewProbes(),
 				}
 				for _, server := range servers {
 					key := mysql.InstanceKey{Hostname: server.Host, Port: int(server.Port)}
@@ -389,9 +390,10 @@ func (throttler *Throttler) refreshMySQLInventory() error {
 					keyspace, shard, strings.Join(vitess.ParseCells(clusterSettings.VitessSettings), ","),
 				)
 				clusterProbes := &mysql.ClusterProbes{
-					ClusterName:      clusterName,
-					IgnoreHostsCount: clusterSettings.IgnoreHostsCount,
-					InstanceProbes:   mysql.NewProbes(),
+					ClusterName:          clusterName,
+					IgnoreHostsCount:     clusterSettings.IgnoreHostsCount,
+					IgnoreHostsThreshold: clusterSettings.IgnoreHostsThreshold,
+					InstanceProbes:       mysql.NewProbes(),
 				}
 				for _, tablet := range tablets {
 					key := mysql.InstanceKey{Hostname: tablet.MysqlHostname, Port: int(tablet.MysqlPort)}

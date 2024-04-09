@@ -40,7 +40,6 @@ func MySQLHttpCheckHashKey(clusterName string, key *InstanceKey) string {
 }
 
 func CheckHttp(clusterName string, probe *Probe) (httpCheckResult *MySQLHttpCheck) {
-
 	if probe.HttpCheckPort <= 0 {
 		go func() { metrics.GetOrRegisterCounter("httpcheck.skip", nil).Inc(1) }()
 		return NewMySQLHttpCheck(clusterName, &probe.Key, http.StatusOK)
