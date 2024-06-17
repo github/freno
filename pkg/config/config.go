@@ -97,6 +97,7 @@ type ConfigurationSettings struct {
 	Environment           string
 	Domain                string
 	ShareDomain           string
+	ServiceURL            string
 	RaftBind              string
 	RaftDataDir           string
 	DefaultRaftPort       int      // if a RaftNodes entry does not specify port, use this one
@@ -157,6 +158,9 @@ func (settings *ConfigurationSettings) postReadAdjustments() error {
 	}
 	if submatch := envVariableRegexp.FindStringSubmatch(settings.ShareDomain); len(submatch) > 1 {
 		settings.ShareDomain = os.Getenv(submatch[1])
+	}
+	if submatch := envVariableRegexp.FindStringSubmatch(settings.ServiceURL); len(submatch) > 1 {
+		settings.ServiceURL = os.Getenv(submatch[1])
 	}
 	if settings.RaftDataDir == "" && settings.BackendMySQLHost == "" {
 		return fmt.Errorf("Either RaftDataDir or BackendMySQLHost must be set")
