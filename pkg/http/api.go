@@ -17,6 +17,7 @@ import (
 	"github.com/rcrowley/go-metrics/exp"
 
 	"github.com/julienschmidt/httprouter"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
 // API exposes the contract for the throttler's web API
@@ -33,6 +34,7 @@ type API interface {
 	ReadCheckIfExists(w http.ResponseWriter, r *http.Request, _ httprouter.Params)
 	AggregatedMetrics(w http.ResponseWriter, r *http.Request, _ httprouter.Params)
 	MetricsHealth(w http.ResponseWriter, r *http.Request, _ httprouter.Params)
+	PrometheusMetrics(w http.ResponseWriter, r *http.Request, ps httprouter.Params)
 	ThrottleApp(w http.ResponseWriter, r *http.Request, _ httprouter.Params)
 	UnthrottleApp(w http.ResponseWriter, r *http.Request, _ httprouter.Params)
 	ThrottledApps(w http.ResponseWriter, r *http.Request, _ httprouter.Params)
@@ -236,6 +238,11 @@ func (api *APIImpl) MetricsHealth(w http.ResponseWriter, r *http.Request, ps htt
 	json.NewEncoder(w).Encode(metricsHealth)
 }
 
+func (api *APIImpl) PrometheusMetrics(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
+	handler := promhttp.Handler()
+	handler.ServeHTTP(w, r)
+}
+
 // ThrottleApp forcibly marks given app as throttled. Future requests by this app may be denied.
 func (api *APIImpl) ThrottleApp(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 	storeName := r.URL.Query().Get("store_name")
@@ -416,6 +423,7 @@ func ConfigureRoutes(api API) *httprouter.Router {
 
 	register(router, "/aggregated-metrics", api.AggregatedMetrics)
 	register(router, "/metrics-health", api.MetricsHealth)
+	register(router, "/metrics", api.PrometheusMetrics)
 
 	register(router, "/throttle-app/:app", api.ThrottleApp)
 	register(router, "/throttle-app/:app/ratio/:ratio", api.ThrottleApp)
