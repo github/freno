@@ -41,7 +41,6 @@ const skippedHostsSnapshotInterval = 5 * time.Second
 const nonDeprioritizedAppMapExpiration = time.Second
 const nonDeprioritizedAppMapInterval = 100 * time.Millisecond
 
-const DefaultThrottleTTLMinutes = 60
 const DefaultSkipTTLMinutes = 60
 const DefaultThrottleRatio = 1.0
 
@@ -524,15 +523,12 @@ func (throttler *Throttler) ThrottleApp(appName string, expireAt time.Time, rati
 			appThrottle.Ratio = ratio
 		}
 	} else {
-		if expireAt.IsZero() {
-			expireAt = now.Add(DefaultThrottleTTLMinutes * time.Minute)
-		}
 		if ratio < 0 {
 			ratio = DefaultThrottleRatio
 		}
 		appThrottle = base.NewAppThrottle(expireAt, ratio)
 	}
-	if now.Before(appThrottle.ExpireAt) {
+	if now.Before(appThrottle.ExpireAt) || expireAt.IsZero() {
 		throttler.throttledApps.Set(appName, appThrottle, cache.DefaultExpiration)
 	} else {
 		throttler.UnthrottleApp(appName)
