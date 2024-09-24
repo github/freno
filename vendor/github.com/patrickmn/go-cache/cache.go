@@ -56,6 +56,8 @@ func (c *cache) Set(k string, x interface{}, d time.Duration) {
 	}
 	if d > 0 {
 		e = time.Now().Add(d).UnixNano()
+	} else if d == -1 {
+		e = time.Time{}
 	}
 	c.mu.Lock()
 	c.items[k] = Item{
@@ -74,6 +76,8 @@ func (c *cache) set(k string, x interface{}, d time.Duration) {
 	}
 	if d > 0 {
 		e = time.Now().Add(d).UnixNano()
+	} else if d == -1  { 
+		e = time.Time{}
 	}
 	c.items[k] = Item{
 		Object:     x,
