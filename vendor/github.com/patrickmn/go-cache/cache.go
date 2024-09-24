@@ -54,7 +54,6 @@ func (c *cache) Set(k string, x interface{}, d time.Duration) {
 	if d == DefaultExpiration {
 		d = c.defaultExpiration
 	} else if d == NoExpiration {
-		d = c.NoExpiration
 		e = -1
 	}
 	if d > 0 {
@@ -75,7 +74,6 @@ func (c *cache) set(k string, x interface{}, d time.Duration) {
 	if d == DefaultExpiration {
 		d = c.defaultExpiration
 	} else if d == NoExpiration {
-		d = c.NoExpiration
 		e = -1
 	}
 	if d > 0 {
