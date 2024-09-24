@@ -78,7 +78,7 @@ CREATE TABLE service_election (
 CREATE TABLE throttled_apps (
   app_name varchar(128) NOT NULL,
 	throttled_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  expires_at TIMESTAMP NOT NULL,
+  expires_at TIMESTAMP,
 	ratio DOUBLE,
   PRIMARY KEY (app_name)
 );
