@@ -528,8 +528,12 @@ func (throttler *Throttler) ThrottleApp(appName string, expireAt time.Time, rati
 		}
 		appThrottle = base.NewAppThrottle(expireAt, ratio)
 	}
-	if now.Before(appThrottle.ExpireAt) || expireAt.IsZero() {
-		throttler.throttledApps.Set(appName, appThrottle, cache.DefaultExpiration)
+	
+	if expireAt.IsZero() {
+		//If expires at is zero, update the store to never expire the throttle
+		throttler.throttledApps.Set(appName, appThrottle, -1)
+	} else if now.Before(appThrottle.ExpireAt) {
+			throttler.throttledApps.Set(appName, appThrottle, cache.DefaultExpiration)
 	} else {
 		throttler.UnthrottleApp(appName)
 	}
