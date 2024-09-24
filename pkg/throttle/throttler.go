@@ -518,6 +518,8 @@ func (throttler *Throttler) ThrottleApp(appName string, expireAt time.Time, rati
 		appThrottle = object.(*base.AppThrottle)
 		if !expireAt.IsZero() {
 			appThrottle.ExpireAt = expireAt
+		} else {
+			appThrottle.ExpireAt = time.Time{}
 		}
 		if ratio >= 0 {
 			appThrottle.Ratio = ratio
