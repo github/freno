@@ -565,11 +565,20 @@ func (throttler *Throttler) IsAppThrottled(appName, storeName string) bool {
 	return false
 }
 
-func (throttler *Throttler) ThrottledAppsMap() (result map[string](*base.AppThrottle)) {
-	result = make(map[string](*base.AppThrottle))
+func (throttler *Throttler) ThrottledAppsMap() (result map[string](*base.DisplayAppThrottle)) {
+	result = make(map[string](*base.DisplayAppThrottle))
 
 	for appName, item := range throttler.throttledApps.Items() {
-		appThrottle := item.Object.(*base.AppThrottle)
+		appThrottle := item.Object.(*base.DisplayAppThrottle)
+		expire, expireErr := time.Parse(appThrottle.ExpireAt, "2024-Jan-01")
+
+		if expireErr != nil {
+			panic(expireErr)
+		}
+
+		if expire.IsZero() {
+			appThrottle.ExpireAt = "INFINITE"
+		} 
 		result[appName] = appThrottle
 	}
 	return result
