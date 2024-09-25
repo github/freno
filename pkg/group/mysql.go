@@ -420,7 +420,7 @@ func (backend *MySQLBackend) ThrottleApp(appName string, ttlMinutes int64, expir
 	return err
 }
 
-func (backend *MySQLBackend) ThrottledAppsMap() (result map[string](*base.AppThrottle)) {
+func (backend *MySQLBackend) ThrottledAppsMap() (result map[string](*base.DisplayAppThrottle)) {
 	return backend.throttler.ThrottledAppsMap()
 }
 

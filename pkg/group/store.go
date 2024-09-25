@@ -177,7 +177,7 @@ func (store *Store) SkippedHostsMap() map[string]time.Time {
 	return store.throttler.SkippedHostsMap()
 }
 
-func (store *Store) ThrottledAppsMap() (result map[string](*base.AppThrottle)) {
+func (store *Store) ThrottledAppsMap() (result map[string](*base.DisplayAppThrottle)) {
 	return store.throttler.ThrottledAppsMap()
 }
 
