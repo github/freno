@@ -18,3 +18,10 @@ func NewAppThrottle(expireAt time.Time, ratio float64) *AppThrottle {
 	}
 	return result
 }
+
+// DisplayAppThrottle is a type for displaying data back to the end 
+// user via chatop. Handles infinite TTL and allows ExpiresAt to be "INFINITE"
+type DisplayAppThrottle struct {
+	ExpireAt string
+	Ratio    float64
+}
