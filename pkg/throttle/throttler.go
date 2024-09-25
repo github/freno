@@ -502,7 +502,7 @@ func (throttler *Throttler) expireThrottledApps() {
 	now := time.Now()
 	for appName, item := range throttler.throttledApps.Items() {
 		appThrottle := item.Object.(*base.AppThrottle)
-		if appThrottle.ExpireAt.Before(now) {
+		if !appThrottle.ExpireAt.IsZero() && appThrottle.ExpireAt.Before(now) {
 			throttler.UnthrottleApp(appName)
 		}
 	}
@@ -530,12 +530,12 @@ func (throttler *Throttler) ThrottleApp(appName string, expireAt time.Time, rati
 		}
 		appThrottle = base.NewAppThrottle(expireAt, ratio)
 	}
-	
+
 	if expireAt.IsZero() {
 		//If expires at is zero, update the store to never expire the throttle
 		throttler.throttledApps.Set(appName, appThrottle, -1)
 	} else if now.Before(appThrottle.ExpireAt) {
-			throttler.throttledApps.Set(appName, appThrottle, cache.DefaultExpiration)
+		throttler.throttledApps.Set(appName, appThrottle, cache.DefaultExpiration)
 	} else {
 		throttler.UnthrottleApp(appName)
 	}
@@ -552,7 +552,7 @@ func (throttler *Throttler) IsAppThrottled(appName, storeName string) bool {
 	for _, key := range keys {
 		if object, found := throttler.throttledApps.Get(key); found {
 			appThrottle := object.(*base.AppThrottle)
-			if appThrottle.ExpireAt.Before(time.Now()) {
+			if !appThrottle.ExpireAt.IsZero() && appThrottle.ExpireAt.Before(time.Now()) {
 				// throttling cleanup hasn't purged yet, but it is expired
 				continue
 			}
