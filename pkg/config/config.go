@@ -109,22 +109,25 @@ type ConfigurationSettings struct {
 	BackendMySQLCollation string   // if specified, use this collation instead of charset when connecting to MySQL backend
 	MemcacheServers       []string // if given, freno will report to aggregated values to given memcache
 	MemcachePath          string   // use as prefix to metric path in memcache key, e.g. if `MemcachePath` is "myprefix" the key would be "myprefix/mysql/maincluster". Default: "freno"
-	EnableProfiling       bool     // enable pprof profiling http api
+	PrometheusNamespace   string
+	PrometheusSubsystem   string
+	EnableProfiling       bool // enable pprof profiling http api
 	Stores                StoresSettings
 }
 
 func newConfigurationSettings() *ConfigurationSettings {
 	return &ConfigurationSettings{
-		ListenPort:         8087,
-		RaftBind:           "127.0.0.1:10008",
-		RaftDataDir:        "",
-		DefaultRaftPort:    0,
-		RaftNodes:          []string{},
-		BackendMySQLHost:   "",
-		BackendMySQLSchema: "",
-		BackendMySQLPort:   3306,
-		MemcacheServers:    []string{},
-		MemcachePath:       "freno",
+		ListenPort:          8087,
+		RaftBind:            "127.0.0.1:10008",
+		RaftDataDir:         "",
+		DefaultRaftPort:     0,
+		RaftNodes:           []string{},
+		BackendMySQLHost:    "",
+		BackendMySQLSchema:  "",
+		BackendMySQLPort:    3306,
+		MemcacheServers:     []string{},
+		MemcachePath:        "freno",
+		PrometheusNamespace: "freno",
 		//Debug:                                        false,
 		//ListenSocket:                                 "",
 		//AnExampleListOfStrings:                       []string{"*"},

@@ -3,6 +3,7 @@ package throttle
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/prometheus/client_golang/prometheus"
 	"io/ioutil"
 	"math/rand"
 	"net/http"
@@ -48,6 +49,12 @@ func init() {
 	rand.Seed(time.Now().UnixNano())
 }
 
+type PrometheusMetrics struct {
+	value             *prometheus.GaugeVec
+	timestamp         *prometheus.GaugeVec
+	throttleThreshold *prometheus.GaugeVec
+}
+
 type Throttler struct {
 	isLeader                 bool
 	isLeaderFunc             func() bool
@@ -68,6 +75,8 @@ type Throttler struct {
 	metricsHealth           *cache.Cache
 	shareDomainMetricHealth *cache.Cache
 
+	prometheusMetrics *PrometheusMetrics
+
 	memcacheClient *memcache.Client
 	memcachePath   string
 
@@ -78,6 +87,36 @@ type Throttler struct {
 
 	nonLowPriorityAppRequestsThrottled *cache.Cache
 	httpClient                         *http.Client
+}
+
+func NewPrometheusMetrics(namespace string, subsystem string) *PrometheusMetrics {
+	promMetrics := &PrometheusMetrics{
+		value: prometheus.NewGaugeVec(prometheus.GaugeOpts{
+			Namespace: namespace,
+			Subsystem: subsystem,
+			Name:      "value",
+			Help:      "Result value for the cluster",
+		},
+			[]string{"store_type", "store_name"}),
+		timestamp: prometheus.NewGaugeVec(prometheus.GaugeOpts{
+			Namespace: namespace,
+			Subsystem: subsystem,
+			Name:      "last_update_timestamp",
+			Help:      "Timestamp of the last update",
+		},
+			[]string{"store_type", "store_name"}),
+		throttleThreshold: prometheus.NewGaugeVec(prometheus.GaugeOpts{
+			Namespace: namespace,
+			Subsystem: subsystem,
+			Name:      "throttle_threshold",
+			Help:      "Throtthe Threshold",
+		}, []string{"store_type", "store_name"}),
+	}
+	prometheus.MustRegister(promMetrics.value)
+	prometheus.MustRegister(promMetrics.timestamp)
+	prometheus.MustRegister(promMetrics.throttleThreshold)
+
+	return promMetrics
 }
 
 func NewThrottler() *Throttler {
@@ -112,6 +151,11 @@ func NewThrottler() *Throttler {
 	if throttler.hasProxySQLStores() {
 		throttler.proxysqlClient = proxysql.NewClient(mysqlRefreshInterval)
 	}
+
+	throttler.prometheusMetrics = NewPrometheusMetrics(
+		config.Settings().PrometheusNamespace,
+		config.Settings().PrometheusSubsystem,
+	)
 
 	return throttler
 }
@@ -312,6 +356,7 @@ func (throttler *Throttler) refreshMySQLInventory() error {
 		// is immutable and can only be _replaced_. Hence, it's safe to read in a goroutine:
 		go func() error {
 			throttler.mysqlClusterThresholds.Set(clusterName, clusterSettings.ThrottleThreshold, cache.DefaultExpiration)
+			throttler.prometheusMetrics.throttleThreshold.WithLabelValues("mysql", clusterName).Set(clusterSettings.ThrottleThreshold)
 			if !clusterSettings.HAProxySettings.IsEmpty() {
 				poolName := clusterSettings.HAProxySettings.PoolName
 				totalHosts := []string{}
@@ -442,6 +487,8 @@ func (throttler *Throttler) aggregateMySQLMetrics() error {
 		ignoreHostsCount := throttler.mysqlInventory.IgnoreHostsCount[clusterName]
 		ignoreHostsThreshold := throttler.mysqlInventory.IgnoreHostsThreshold[clusterName]
 		aggregatedMetric := aggregateMySQLProbes(probes, clusterName, throttler.mysqlInventory.InstanceKeyMetrics, throttler.mysqlInventory.ClusterInstanceHttpChecks, ignoreHostsCount, config.Settings().Stores.MySQL.IgnoreDialTcpErrors, ignoreHostsThreshold)
+		updateMySQLMetrics(throttler.prometheusMetrics, clusterName, aggregatedMetric)
+
 		go throttler.aggregatedMetrics.Set(metricName, aggregatedMetric, cache.DefaultExpiration)
 		if throttler.memcacheClient != nil {
 			go func() {
@@ -458,6 +505,17 @@ func (throttler *Throttler) aggregateMySQLMetrics() error {
 		}
 	}
 	return nil
+}
+
+func updateMySQLMetrics(prometheusMetrics *PrometheusMetrics, clusterName string, metric base.MetricResult) {
+	const storeType = "mysql"
+	prometheusMetrics.timestamp.WithLabelValues(storeType, clusterName).Set(float64(time.Now().Unix()))
+	value, err := metric.Get()
+	if err != nil {
+		prometheusMetrics.value.DeleteLabelValues(storeType, clusterName)
+	} else {
+		prometheusMetrics.value.WithLabelValues(storeType, clusterName).Set(value)
+	}
 }
 
 func (throttler *Throttler) pushStatusToExpVar() {
