@@ -124,6 +124,14 @@ func (check *ThrottlerCheck) Check(appName string, storeType string, storeName s
 
 			metrics.GetOrRegisterCounter(fmt.Sprintf("check.any.%s.%s.error", storeType, storeName), nil).Inc(1)
 			metrics.GetOrRegisterCounter(fmt.Sprintf("check.%s.%s.%s.error", appName, storeType, storeName), nil).Inc(1)
+
+			if statusCode == http.StatusInternalServerError {
+				metrics.GetOrRegisterCounter("check.any.internal-error", nil).Inc(1)
+				metrics.GetOrRegisterCounter(fmt.Sprintf("check.%s.internal-error", appName), nil).Inc(1)
+
+				metrics.GetOrRegisterCounter(fmt.Sprintf("check.any.%s.%s.internal-error", storeType, storeName), nil).Inc(1)
+				metrics.GetOrRegisterCounter(fmt.Sprintf("check.%s.%s.%s.internal-error", appName, storeType, storeName), nil).Inc(1)
+			}
 		}
 
 		check.throttler.markRecentApp(appName, remoteAddr)
