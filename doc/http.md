@@ -107,6 +107,12 @@ Notes:
 - `/recover-host/<hostname>`: recover a previously skipped host.
 - `/skipped-hosts`:  list currently skipped hosts
 
+### Metric requests
+
+- `/aggregated-metrics`: aggregated metrics for MySQL clusters in json format.
+
+- `/metrics`: metrics in Prometheus format. Prefix for these metrics can be modified using `PrometheusNamespace` and `PrometheusSubsystem` in the config.
+
 ### Other requests
 
 - `/help`: show all supported request paths
