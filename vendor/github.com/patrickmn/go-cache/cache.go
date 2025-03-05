@@ -53,6 +53,8 @@ func (c *cache) Set(k string, x interface{}, d time.Duration) {
 	var e int64
 	if d == DefaultExpiration {
 		d = c.defaultExpiration
+	} else if d == NoExpiration {
+		e = -1
 	}
 	if d > 0 {
 		e = time.Now().Add(d).UnixNano()
@@ -71,10 +73,12 @@ func (c *cache) set(k string, x interface{}, d time.Duration) {
 	var e int64
 	if d == DefaultExpiration {
 		d = c.defaultExpiration
+	} else if d == NoExpiration {
+		e = -1
 	}
 	if d > 0 {
 		e = time.Now().Add(d).UnixNano()
-	}
+	} 
 	c.items[k] = Item{
 		Object:     x,
 		Expiration: e,

@@ -63,6 +63,7 @@ type MySQLConfigurationSettings struct {
 	ProxySQLUser         string   // ProxySQL stats username
 	ProxySQLPassword     string   // ProxySQL stats password
 	VitessCells          []string // Name of the Vitess cells for polling tablet hosts
+	Collation            string   // MySQL collation to use for stores, replaces charset if specified
 
 	Clusters map[string](*MySQLClusterConfigurationSettings) // cluster name -> cluster config
 }
@@ -80,6 +81,13 @@ func (settings *MySQLConfigurationSettings) postReadAdjustments() error {
 	}
 	if submatch := envVariableRegexp.FindStringSubmatch(settings.Password); len(submatch) > 1 {
 		settings.Password = os.Getenv(submatch[1])
+	}
+
+	for i := 0; i < len(settings.VitessCells); i++ {
+		cell := settings.VitessCells[i]
+		if submatch := envVariableRegexp.FindStringSubmatch(cell); len(submatch) > 1 {
+			settings.VitessCells[i] = os.Getenv(submatch[1])
+		}
 	}
 
 	for _, clusterSettings := range settings.Clusters {

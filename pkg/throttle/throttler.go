@@ -41,7 +41,6 @@ const skippedHostsSnapshotInterval = 5 * time.Second
 const nonDeprioritizedAppMapExpiration = time.Second
 const nonDeprioritizedAppMapInterval = 100 * time.Millisecond
 
-const DefaultThrottleTTLMinutes = 60
 const DefaultSkipTTLMinutes = 60
 const DefaultThrottleRatio = 1.0
 
@@ -365,9 +364,10 @@ func (throttler *Throttler) refreshMySQLInventory() error {
 				}
 				log.Debugf("Read %+v hosts from ProxySQL %s, hostgroup id: %d (%s)", len(servers), dsn, clusterSettings.ProxySQLSettings.HostgroupID, clusterName)
 				clusterProbes := &mysql.ClusterProbes{
-					ClusterName:      clusterName,
-					IgnoreHostsCount: clusterSettings.IgnoreHostsCount,
-					InstanceProbes:   mysql.NewProbes(),
+					ClusterName:          clusterName,
+					IgnoreHostsCount:     clusterSettings.IgnoreHostsCount,
+					IgnoreHostsThreshold: clusterSettings.IgnoreHostsThreshold,
+					InstanceProbes:       mysql.NewProbes(),
 				}
 				for _, server := range servers {
 					key := mysql.InstanceKey{Hostname: server.Host, Port: int(server.Port)}
@@ -389,9 +389,10 @@ func (throttler *Throttler) refreshMySQLInventory() error {
 					keyspace, shard, strings.Join(vitess.ParseCells(clusterSettings.VitessSettings), ","),
 				)
 				clusterProbes := &mysql.ClusterProbes{
-					ClusterName:      clusterName,
-					IgnoreHostsCount: clusterSettings.IgnoreHostsCount,
-					InstanceProbes:   mysql.NewProbes(),
+					ClusterName:          clusterName,
+					IgnoreHostsCount:     clusterSettings.IgnoreHostsCount,
+					IgnoreHostsThreshold: clusterSettings.IgnoreHostsThreshold,
+					InstanceProbes:       mysql.NewProbes(),
 				}
 				for _, tablet := range tablets {
 					key := mysql.InstanceKey{Hostname: tablet.MysqlHostname, Port: int(tablet.MysqlPort)}
@@ -501,7 +502,7 @@ func (throttler *Throttler) expireThrottledApps() {
 	now := time.Now()
 	for appName, item := range throttler.throttledApps.Items() {
 		appThrottle := item.Object.(*base.AppThrottle)
-		if appThrottle.ExpireAt.Before(now) {
+		if !appThrottle.ExpireAt.IsZero() && appThrottle.ExpireAt.Before(now) {
 			throttler.UnthrottleApp(appName)
 		}
 	}
@@ -517,20 +518,23 @@ func (throttler *Throttler) ThrottleApp(appName string, expireAt time.Time, rati
 		appThrottle = object.(*base.AppThrottle)
 		if !expireAt.IsZero() {
 			appThrottle.ExpireAt = expireAt
+		} else {
+			appThrottle.ExpireAt = time.Time{}
 		}
 		if ratio >= 0 {
 			appThrottle.Ratio = ratio
 		}
 	} else {
-		if expireAt.IsZero() {
-			expireAt = now.Add(DefaultThrottleTTLMinutes * time.Minute)
-		}
 		if ratio < 0 {
 			ratio = DefaultThrottleRatio
 		}
 		appThrottle = base.NewAppThrottle(expireAt, ratio)
 	}
-	if now.Before(appThrottle.ExpireAt) {
+
+	if expireAt.IsZero() {
+		//If expires at is zero, update the store to never expire the throttle
+		throttler.throttledApps.Set(appName, appThrottle, -1)
+	} else if now.Before(appThrottle.ExpireAt) {
 		throttler.throttledApps.Set(appName, appThrottle, cache.DefaultExpiration)
 	} else {
 		throttler.UnthrottleApp(appName)
@@ -548,7 +552,7 @@ func (throttler *Throttler) IsAppThrottled(appName, storeName string) bool {
 	for _, key := range keys {
 		if object, found := throttler.throttledApps.Get(key); found {
 			appThrottle := object.(*base.AppThrottle)
-			if appThrottle.ExpireAt.Before(time.Now()) {
+			if !appThrottle.ExpireAt.IsZero() && appThrottle.ExpireAt.Before(time.Now()) {
 				// throttling cleanup hasn't purged yet, but it is expired
 				continue
 			}

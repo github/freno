@@ -24,7 +24,7 @@ service_id varchar(128) NOT NULL,
 CREATE TABLE throttled_apps (
   app_name varchar(128) NOT NULL,
 	throttled_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  expires_at TIMESTAMP NOT NULL,
+  expires_at TIMESTAMP,
 	ratio DOUBLE,
   PRIMARY KEY (app_name)
 );
@@ -77,9 +77,7 @@ func NewMySQLBackend(throttler *throttle.Throttler) (*MySQLBackend, error) {
 	if config.Settings().BackendMySQLHost == "" {
 		return nil, nil
 	}
-	dbUri := fmt.Sprintf("%s:%s@tcp(%s:%d)/%s?interpolateParams=true&charset=utf8mb4,utf8,latin1&timeout=500ms",
-		config.Settings().BackendMySQLUser, config.Settings().BackendMySQLPassword, config.Settings().BackendMySQLHost, config.Settings().BackendMySQLPort, config.Settings().BackendMySQLSchema,
-	)
+	dbUri := getBackendDBUri()
 	db, _, err := sqlutils.GetDB(dbUri)
 	if err != nil {
 		return nil, err
@@ -106,6 +104,23 @@ func NewMySQLBackend(throttler *throttle.Throttler) (*MySQLBackend, error) {
 	}
 	go backend.continuousOperations()
 	return backend, nil
+}
+
+// helper function to get the DB URI
+func getBackendDBUri() string {
+	dsnCharsetCollation := "charset=utf8mb4,utf8,latin1"
+	if config.Settings().BackendMySQLCollation != "" {
+		// Set collation instead of charset, if BackendMySQLCollation is specified
+		dsnCharsetCollation = fmt.Sprintf("collation=%s", config.Settings().BackendMySQLCollation)
+	}
+	return fmt.Sprintf("%s:%s@tcp(%s:%d)/%s?interpolateParams=true&%s&timeout=500ms",
+		config.Settings().BackendMySQLUser,
+		config.Settings().BackendMySQLPassword,
+		config.Settings().BackendMySQLHost,
+		config.Settings().BackendMySQLPort,
+		config.Settings().BackendMySQLSchema,
+		dsnCharsetCollation,
+	)
 }
 
 // Monitor is a utility function to routinely observe leadership state.
@@ -331,7 +346,7 @@ func (backend *MySQLBackend) readThrottledApps() error {
 	query := `
 		select
 			app_name,
-			timestampdiff(second, now(), expires_at) as ttl_seconds,
+			timestampdiff(second, now(), coalesce(expires_at,now())) as ttl_seconds,
 			ratio
 		from
 			throttled_apps
@@ -342,6 +357,9 @@ func (backend *MySQLBackend) readThrottledApps() error {
 		ttlSeconds := m.GetInt64("ttl_seconds")
 		ratio, _ := strconv.ParseFloat(m.GetString("ratio"), 64)
 		expiresAt := time.Now().Add(time.Duration(ttlSeconds) * time.Second)
+		if ttlSeconds == 0 {
+			expiresAt = time.Time{}
+		}
 
 		go log.Debugf("read-throttled-apps: app=%s, ttlSeconds%+v, expiresAt=%+v, ratio=%+v", appName, ttlSeconds, expiresAt, ratio)
 		go backend.throttler.ThrottleApp(appName, expiresAt, ratio)
@@ -383,18 +401,19 @@ func (backend *MySQLBackend) ThrottleApp(appName string, ttlMinutes int64, expir
 	  `
 		args = sqlutils.Args(appName, ttlMinutes, ratio)
 	} else {
-		// TTL=0 ; if app is already throttled, keep existing TTL and only update ratio.
-		// if app does not exist use DefaultThrottleTTL
+		// TTL=0 ; if app is already throttled, update throttle to infinity and update ratio.
+		// if app does not exist, TTL should be infinite
 		query = `
 	    insert into throttled_apps (
-	        app_name, throttled_at, expires_at, ratio
+	        app_name, throttled_at, ratio
 	      ) values (
-	        ?, now(), now() + interval ? minute, ?
+	        ?, now(), ?
 	      )
 			on duplicate key update
-				ratio=values(ratio)
+				ratio=values(ratio),
+				expires_at=null
 		`
-		args = sqlutils.Args(appName, throttle.DefaultThrottleTTLMinutes, ratio)
+		args = sqlutils.Args(appName, ratio)
 	}
 	_, err := sqlutils.ExecNoPrepare(backend.db, query, args...)
 	backend.throttler.ThrottleApp(appName, expireAt, ratio)
