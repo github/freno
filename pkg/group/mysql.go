@@ -113,7 +113,7 @@ func getBackendDBUri() string {
 		// Set collation instead of charset, if BackendMySQLCollation is specified
 		dsnCharsetCollation = fmt.Sprintf("collation=%s", config.Settings().BackendMySQLCollation)
 	}
-	return fmt.Sprintf("%s:%s@tcp(%s:%d)/%s?interpolateParams=true&%s&timeout=500ms",
+	return fmt.Sprintf("%s:%s@tcp(%s:%d)/%s?interpolateParams=true&%s&timeout=1s",
 		config.Settings().BackendMySQLUser,
 		config.Settings().BackendMySQLPassword,
 		config.Settings().BackendMySQLHost,
