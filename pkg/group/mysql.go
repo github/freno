@@ -69,7 +69,7 @@ type MySQLBackend struct {
 const maxConnections = 3
 const electionExpireSeconds = 5
 
-const electionInterval = time.Second
+const electionInterval = 2 * time.Second
 const healthInterval = 2 * electionInterval
 const stateInterval = 10 * time.Second
 
