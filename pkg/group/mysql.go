@@ -67,7 +67,7 @@ type MySQLBackend struct {
 }
 
 const maxConnections = 3
-const electionExpireSeconds = 5
+const electionExpireSeconds = 10
 
 const electionInterval = 2 * time.Second
 const healthInterval = 2 * electionInterval
@@ -113,7 +113,7 @@ func getBackendDBUri() string {
 		// Set collation instead of charset, if BackendMySQLCollation is specified
 		dsnCharsetCollation = fmt.Sprintf("collation=%s", config.Settings().BackendMySQLCollation)
 	}
-	return fmt.Sprintf("%s:%s@tcp(%s:%d)/%s?interpolateParams=true&%s&timeout=2s",
+	return fmt.Sprintf("%s:%s@tcp(%s:%d)/%s?interpolateParams=true&%s&timeout=8s",
 		config.Settings().BackendMySQLUser,
 		config.Settings().BackendMySQLPassword,
 		config.Settings().BackendMySQLHost,
