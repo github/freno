@@ -67,7 +67,10 @@ type APIImpl struct {
 
 // NewAPIImpl creates a new instance of the API implementation
 func NewAPIImpl(throttlerCheck *throttle.ThrottlerCheck, consensusService group.ConsensusService) *APIImpl {
-	bypassEnabled := (os.Getenv("FRENO_BYPASS_ENABLED") != "")
+	bypassEnabled, err := strconv.ParseBool(os.Getenv("FRENO_BYPASS_ENABLED"))
+	if err != nil {
+		bypassEnabled = false
+	}
 	api := &APIImpl{
 		throttlerCheck:   throttlerCheck,
 		consensusService: consensusService,
