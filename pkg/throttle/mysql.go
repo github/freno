@@ -16,6 +16,7 @@ func aggregateMySQLProbes(
 	ignoreHostsCount int,
 	ignoreDialTcpErrors bool,
 	ignoreHostsThreshold float64,
+	bypassOnNohosts bool,
 ) (worstMetric base.MetricResult) {
 	// probes is known not to change. It can be *replaced*, but not changed.
 	// so it's safe to iterate it
@@ -46,6 +47,9 @@ func aggregateMySQLProbes(
 		probeValues = append(probeValues, value)
 	}
 	if len(probeValues) == 0 {
+		if bypassOnNohosts {
+			return base.NewSimpleMetricResult(0.0)
+		}
 		return base.NoHostsMetricResult
 	}
 
