@@ -78,6 +78,8 @@ type Throttler struct {
 
 	nonLowPriorityAppRequestsThrottled *cache.Cache
 	httpClient                         *http.Client
+
+	BypassOnNoHostsFound bool
 }
 
 func NewThrottler() *Throttler {
@@ -331,6 +333,10 @@ func (throttler *Throttler) refreshMySQLInventory() error {
 					}
 				}
 				if len(totalHosts) == 0 {
+					if throttler.bypassOnNoHostsFound {
+						log.Debugf("No hosts for pool: %+v, but bypass is enabled", poolName)
+						return nil
+					}
 					return log.Errorf("Unable to get any HAproxy hosts for pool: %+v", poolName)
 				}
 

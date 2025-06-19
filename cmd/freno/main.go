@@ -11,6 +11,8 @@ import (
 	"github.com/github/freno/pkg/http"
 	"github.com/github/freno/pkg/throttle"
 	"github.com/outbrain/golib/log"
+	"os"
+	"strconv"
 )
 
 // AppVersion has to be filled by ldflags:
@@ -120,6 +122,12 @@ func httpServe() error {
 	throttler := throttle.NewThrottler()
 	log.Infof("Starting consensus service")
 	log.Infof("- forced leadership: %+v", group.ForceLeadership)
+
+	bypassEnabled, err := strconv.ParseBool(os.Getenv("FRENO_BYPASS_ENABLED"))
+	if err != nil {
+		bypassEnabled = false
+	}
+	throttler.BypassOnNoHostsFound = bypassEnabled
 	consensusServiceProvider, err := group.NewConsensusServiceProvider(throttler)
 	if err != nil {
 		return err
