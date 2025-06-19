@@ -333,7 +333,7 @@ func (throttler *Throttler) refreshMySQLInventory() error {
 					}
 				}
 				if len(totalHosts) == 0 {
-					if throttler.bypassOnNoHostsFound {
+					if throttler.BypassOnNoHostsFound {
 						log.Debugf("No hosts for pool: %+v, but bypass is enabled", poolName)
 						return nil
 					}
