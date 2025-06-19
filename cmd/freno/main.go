@@ -125,7 +125,11 @@ func httpServe() error {
 
 	bypassEnabled, err := strconv.ParseBool(os.Getenv("FRENO_BYPASS_ENABLED"))
 	if err != nil {
+		log.Infof("error parsing FRENO_BYPASS_ENABLED: %s", os.Getenv("FRENO_BYPASS_ENABLED"))
 		bypassEnabled = false
+	}
+	if bypassEnabled {
+		log.Info("- bypass on no hosts is enabled!")
 	}
 	throttler.BypassOnNoHostsFound = bypassEnabled
 	consensusServiceProvider, err := group.NewConsensusServiceProvider(throttler)

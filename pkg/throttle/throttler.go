@@ -334,7 +334,7 @@ func (throttler *Throttler) refreshMySQLInventory() error {
 				}
 				if len(totalHosts) == 0 {
 					if throttler.BypassOnNoHostsFound {
-						log.Debugf("No hosts for pool: %+v, but bypass is enabled", poolName)
+						log.Infof("No hosts for pool: %+v, but bypass is enabled", poolName)
 						return nil
 					}
 					return log.Errorf("Unable to get any HAproxy hosts for pool: %+v", poolName)
