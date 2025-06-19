@@ -62,19 +62,13 @@ type APIImpl struct {
 	throttlerCheck   *throttle.ThrottlerCheck
 	consensusService group.ConsensusService
 	hostname         string
-	bypassEnabled    bool
 }
 
 // NewAPIImpl creates a new instance of the API implementation
 func NewAPIImpl(throttlerCheck *throttle.ThrottlerCheck, consensusService group.ConsensusService) *APIImpl {
-	bypassEnabled, err := strconv.ParseBool(os.Getenv("FRENO_BYPASS_ENABLED"))
-	if err != nil {
-		bypassEnabled = false
-	}
 	api := &APIImpl{
 		throttlerCheck:   throttlerCheck,
 		consensusService: consensusService,
-		bypassEnabled:    bypassEnabled,
 	}
 	if hostname, err := os.Hostname(); err == nil {
 		api.hostname = hostname
@@ -170,12 +164,6 @@ func (api *APIImpl) check(w http.ResponseWriter, r *http.Request, ps httprouter.
 		remoteAddr = strings.Split(remoteAddr, ":")[0]
 	}
 	flags.LowPriority = (r.URL.Query().Get("p") == "low")
-
-	if api.bypassEnabled {
-		checkResult := throttle.NewCheckResult(http.StatusOK, 0, 0, nil)
-		api.respondToCheckRequest(w, r, checkResult)
-		return
-	}
 
 	checkResult := api.throttlerCheck.Check(appName, storeType, storeName, remoteAddr, flags)
 	if checkResult.StatusCode == http.StatusNotFound && flags.OKIfNotExists {
