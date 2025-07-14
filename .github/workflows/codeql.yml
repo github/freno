@@ -10,15 +10,18 @@ jobs:
 
     strategy:
       fail-fast: false
+      language: [ 'actions', 'go' ]
 
     runs-on: ubuntu-latest # windows-latest and ubuntu-latest are supported. macos-latest is not supported at this time. 
 
     steps:
     - name: Checkout repository
-      uses: actions/checkout@v2
+      uses: actions/checkout@v4
         
     - name: Initialize CodeQL 
-      uses: github/codeql-action/init@v2
+      uses: github/codeql-action/init@v3
+      with:
+          languages: ${{ matrix.language }}
     
     - name: Perform CodeQL Analysis
-      uses: github/codeql-action/analyze@v2
+      uses: github/codeql-action/analyze@v3
