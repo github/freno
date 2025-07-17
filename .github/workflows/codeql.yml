@@ -10,7 +10,8 @@ jobs:
 
     strategy:
       fail-fast: false
-      language: [ 'actions', 'go' ]
+      matrix:
+        language: [ 'actions', 'go' ]
 
     runs-on: ubuntu-latest # windows-latest and ubuntu-latest are supported. macos-latest is not supported at this time. 
 
