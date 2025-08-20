@@ -7,6 +7,8 @@ import (
 
 	"fmt"
 
+	"errors"
+
 	"github.com/github/freno/pkg/base"
 	metrics "github.com/rcrowley/go-metrics"
 )
@@ -65,6 +67,9 @@ func (check *ThrottlerCheck) checkAppMetricResult(appName string, storeType stri
 	} else if err == base.NoSuchMetricError {
 		// not collected yet, or metric does not exist
 		statusCode = http.StatusNotFound // 404
+	} else if errors.Is(err, base.NoHostsError) {
+		// If no hosts we report 0 for the metric.
+		statusCode = http.StatusOK // 200
 	} else if err != nil {
 		// any error
 		statusCode = http.StatusInternalServerError // 500
