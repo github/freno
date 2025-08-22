@@ -17,8 +17,12 @@ require (
 	vitess.io/vitess v2.1.1+incompatible
 )
 
+require github.com/stretchr/testify v1.3.0
+
 require (
+	github.com/davecgh/go-spew v1.1.0 // indirect
 	github.com/golang/protobuf v1.2.0 // indirect
 	github.com/hashicorp/go-immutable-radix v1.0.0 // indirect
 	github.com/hashicorp/golang-lru v0.5.0 // indirect
+	github.com/pmezard/go-difflib v1.0.0 // indirect
 )

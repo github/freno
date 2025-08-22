@@ -17,7 +17,7 @@ type MetricResult interface {
 type MetricResultFunc func() (metricResult MetricResult, threshold float64)
 
 var ThresholdExceededError = errors.New("Threshold exceeded")
-var noHostsError = errors.New("No hosts found")
+var NoHostsError = errors.New("No hosts found")
 var noResultYetError = errors.New("Metric not collected yet")
 var NoSuchMetricError = errors.New("No such metric")
 
@@ -31,7 +31,7 @@ func IsDialTcpError(e error) bool {
 type noHostsMetricResult struct{}
 
 func (metricResult *noHostsMetricResult) Get() (float64, error) {
-	return 0, noHostsError
+	return 0, NoHostsError
 }
 
 var NoHostsMetricResult = &noHostsMetricResult{}

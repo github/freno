@@ -7,6 +7,7 @@ package mysql
 
 import (
 	"fmt"
+
 	"github.com/github/freno/pkg/base"
 )
 

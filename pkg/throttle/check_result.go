@@ -1,8 +1,9 @@
 package throttle
 
 import (
-	"github.com/github/freno/pkg/base"
 	"net/http"
+
+	"github.com/github/freno/pkg/base"
 )
 
 // CheckResult is the result for an app inquiring on a metric. It also exports as JSON via the API
