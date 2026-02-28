@@ -1,0 +1,12 @@
+#!/bin/bash
+
+set -ex
+
+echo "Verifying code is formatted via 'go fmt'"
+go fmt  ./...
+
+echo "Building"
+script/build
+
+echo "Running unit tests"
+go test -covermode=atomic -race ./pkg/...
