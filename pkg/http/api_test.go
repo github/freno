@@ -2,13 +2,25 @@ package http
 
 import (
 	"encoding/json"
+	"expvar"
 	"net/http"
 	"net/http/httptest"
 	"reflect"
 	"testing"
 
 	"github.com/github/freno/pkg/config"
+	"github.com/github/freno/pkg/group"
+	metrics "github.com/rcrowley/go-metrics"
 )
+
+type metricsConsensusService struct {
+	group.ConsensusService
+	isLeader bool
+}
+
+func (s *metricsConsensusService) IsLeader() bool {
+	return s.isLeader
+}
 
 func TestLbCheck(t *testing.T) {
 	api := NewAPIImpl(nil, nil)
@@ -37,6 +49,7 @@ func TestRoutes(t *testing.T) {
 	}{
 		{http.MethodGet, "/lb-check", http.StatusOK},
 		{http.MethodGet, "/config/memcache", http.StatusOK},
+		{http.MethodGet, "/debug/metrics", http.StatusOK},
 	}
 	for _, route := range expectedRoutes {
 		r, _ := http.NewRequest(route.verb, route.path, nil)
@@ -99,5 +112,49 @@ func TestMemcacheConfigWhenDefault(t *testing.T) {
 
 	if !reflect.DeepEqual(expected, actual) {
 		t.Errorf("Expected MemcacheConfig body to be %s, but it's %s", expected, body)
+	}
+}
+
+func TestMetricsFiltersAggregateAndProbeMetricsFromFollowers(t *testing.T) {
+	const (
+		aggregatedMetricName = "aggregated.mysql.metrics-export-test"
+		probeMetricName      = "probes.total.metrics-export-test"
+		processMetricName    = "consensus.metrics-export-test"
+	)
+
+	metricNames := []string{aggregatedMetricName, probeMetricName, processMetricName}
+	for _, metricName := range metricNames {
+		metrics.DefaultRegistry.Unregister(metricName)
+		defer metrics.DefaultRegistry.Unregister(metricName)
+	}
+
+	metrics.GetOrRegisterGaugeFloat64(aggregatedMetricName, nil).Update(42)
+	metrics.GetOrRegisterCounter(probeMetricName, nil).Inc(7)
+	metrics.GetOrRegisterGauge(processMetricName, nil).Update(1)
+
+	readMetrics := func(isLeader bool) map[string]interface{} {
+		recorder := httptest.NewRecorder()
+		api := NewAPIImpl(nil, &metricsConsensusService{isLeader: isLeader})
+		api.Metrics(recorder, httptest.NewRequest(http.MethodGet, "/debug/metrics", nil), nil)
+		result := make(map[string]interface{})
+		if err := json.Unmarshal(recorder.Body.Bytes(), &result); err != nil {
+			t.Fatal(err)
+		}
+		return result
+	}
+
+	leaderMetrics := readMetrics(true)
+	metrics.DefaultRegistry.Unregister(aggregatedMetricName)
+	metrics.DefaultRegistry.Unregister(probeMetricName)
+	if expvar.Get(aggregatedMetricName) == nil || expvar.Get(probeMetricName) == nil {
+		t.Fatal("Expected aggregate and probe metrics to remain in expvar after unregister")
+	}
+
+	followerMetrics := readMetrics(false)
+	if leaderMetrics[aggregatedMetricName] == nil || leaderMetrics[probeMetricName] == nil || leaderMetrics[processMetricName] == nil {
+		t.Errorf("Unexpected leader metrics: %v", leaderMetrics)
+	}
+	if followerMetrics[aggregatedMetricName] != nil || followerMetrics[probeMetricName] != nil || followerMetrics[processMetricName] == nil {
+		t.Errorf("Unexpected follower metrics: %v", followerMetrics)
 	}
 }
