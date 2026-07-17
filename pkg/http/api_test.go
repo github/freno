@@ -136,6 +136,9 @@ func TestMetricsFiltersAggregateAndProbeMetricsFromFollowers(t *testing.T) {
 		recorder := httptest.NewRecorder()
 		api := NewAPIImpl(nil, &metricsConsensusService{isLeader: isLeader})
 		api.Metrics(recorder, httptest.NewRequest(http.MethodGet, "/debug/metrics", nil), nil)
+		if contentType := recorder.Header().Get("Content-Type"); contentType != "application/json; charset=utf-8" {
+			t.Errorf("Unexpected content type: %s", contentType)
+		}
 		result := make(map[string]interface{})
 		if err := json.Unmarshal(recorder.Body.Bytes(), &result); err != nil {
 			t.Fatal(err)
