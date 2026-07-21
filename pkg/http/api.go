@@ -2,7 +2,9 @@ package http
 
 import (
 	"encoding/json"
+	"expvar"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/pprof"
 	"os"
@@ -42,11 +44,13 @@ type API interface {
 	RecentApps(w http.ResponseWriter, r *http.Request, _ httprouter.Params)
 	Help(w http.ResponseWriter, r *http.Request, _ httprouter.Params)
 	MemcacheConfig(w http.ResponseWriter, r *http.Request, _ httprouter.Params)
+	Metrics(w http.ResponseWriter, r *http.Request, _ httprouter.Params)
 }
 
 var endpoints = []string{} // known API URIs
 
 var okIfNotExistsFlags = &throttle.CheckFlags{OKIfNotExists: true}
+var metricsHandler = exp.ExpHandler(metrics.DefaultRegistry)
 
 type GeneralResponse struct {
 	StatusCode int
@@ -355,9 +359,26 @@ func register(router *httprouter.Router, path string, f httprouter.Handle) {
 	endpoints = append(endpoints, path)
 }
 
-func metricsHandle(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
-	handler := exp.ExpHandler(metrics.DefaultRegistry)
-	handler.ServeHTTP(w, r)
+type discardWriter struct{ io.Writer }
+
+func (discardWriter) Header() http.Header { return make(http.Header) }
+func (discardWriter) WriteHeader(int)     {}
+
+// Metrics exports process metrics, excluding aggregate and probe metrics on followers.
+// Filtering happens here because published expvar values cannot be removed.
+func (api *APIImpl) Metrics(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+	metricsHandler.ServeHTTP(discardWriter{Writer: io.Discard}, r)
+	isLeader := api.consensusService != nil && api.consensusService.IsLeader()
+
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	metricValues := make(map[string]json.RawMessage)
+	expvar.Do(func(metric expvar.KeyValue) {
+		if !isLeader && (strings.HasPrefix(metric.Key, "aggregated.") || strings.HasPrefix(metric.Key, "probes.")) {
+			return
+		}
+		metricValues[metric.Key] = json.RawMessage(metric.Value.String())
+	})
+	json.NewEncoder(w).Encode(metricValues)
 }
 
 func (api *APIImpl) SkipHost(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
@@ -431,8 +452,8 @@ func ConfigureRoutes(api API) *httprouter.Router {
 	register(router, "/skipped-hosts", api.SkippedHosts)
 	register(router, "/recover-host/:hostName", api.RecoverHost)
 
-	register(router, "/debug/vars", metricsHandle)
-	register(router, "/debug/metrics", metricsHandle)
+	register(router, "/debug/vars", api.Metrics)
+	register(router, "/debug/metrics", api.Metrics)
 
 	if config.Settings().EnableProfiling {
 		router.HandlerFunc(http.MethodGet, "/debug/pprof/", pprof.Index)
