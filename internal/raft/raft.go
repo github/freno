@@ -1485,7 +1485,7 @@ func (r *Raft) requestVote(rpc RPC, req *RequestVoteRequest) {
 	// Check if we've voted in this election before
 	if lastVoteTerm == req.Term && lastVoteCandBytes != nil {
 		r.logger.Printf("[INFO] raft: Duplicate RequestVote for same term: %d", req.Term)
-		if bytes.Compare(lastVoteCandBytes, req.Candidate) == 0 {
+		if bytes.Equal(lastVoteCandBytes, req.Candidate) {
 			r.logger.Printf("[WARN] raft: Duplicate RequestVote from candidate: %s", req.Candidate)
 			resp.Granted = true
 		}
