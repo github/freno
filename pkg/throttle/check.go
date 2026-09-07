@@ -1,15 +1,14 @@
 package throttle
 
 import (
+	"errors"
+	"fmt"
 	"net/http"
 	"strings"
 	"time"
 
-	"fmt"
-
-	"errors"
-
 	"github.com/github/freno/pkg/base"
+	"github.com/github/freno/pkg/config"
 	metrics "github.com/rcrowley/go-metrics"
 )
 
@@ -101,12 +100,27 @@ func (check *ThrottlerCheck) checkAppMetricResult(appName string, storeType stri
 
 // CheckAppStoreMetric
 func (check *ThrottlerCheck) Check(appName string, storeType string, storeName string, remoteAddr string, flags *CheckFlags) (checkResult *CheckResult) {
+	requestedStoreName := storeName
 	var metricResultFunc base.MetricResultFunc
 	switch storeType {
 	case "mysql":
 		{
-			metricResultFunc = func() (metricResult base.MetricResult, threshold float64) {
-				return check.throttler.getMySQLClusterMetrics(storeName)
+			mysqlSettings := config.Settings().Stores.MySQL
+			_, configured := mysqlSettings.Clusters[storeName]
+			if !configured && !flags.OKIfNotExists {
+				if fallbackCluster := mysqlSettings.FallbackCluster; fallbackCluster != "" {
+					storeName = fallbackCluster
+					_, configured = mysqlSettings.Clusters[storeName]
+				}
+			}
+			if configured {
+				metricResultFunc = func() (metricResult base.MetricResult, threshold float64) {
+					return check.throttler.getMySQLClusterMetrics(storeName)
+				}
+			} else {
+				metricResultFunc = func() (metricResult base.MetricResult, threshold float64) {
+					return base.NoSuchMetric, 0
+				}
 			}
 		}
 	}
@@ -120,22 +134,22 @@ func (check *ThrottlerCheck) Check(appName string, storeType string, storeName s
 		metrics.GetOrRegisterCounter("check.any.total", nil).Inc(1)
 		metrics.GetOrRegisterCounter(fmt.Sprintf("check.%s.total", appName), nil).Inc(1)
 
-		metrics.GetOrRegisterCounter(fmt.Sprintf("check.any.%s.%s.total", storeType, storeName), nil).Inc(1)
-		metrics.GetOrRegisterCounter(fmt.Sprintf("check.%s.%s.%s.total", appName, storeType, storeName), nil).Inc(1)
+		metrics.GetOrRegisterCounter(fmt.Sprintf("check.any.%s.%s.total", storeType, requestedStoreName), nil).Inc(1)
+		metrics.GetOrRegisterCounter(fmt.Sprintf("check.%s.%s.%s.total", appName, storeType, requestedStoreName), nil).Inc(1)
 
 		if statusCode != http.StatusOK {
 			metrics.GetOrRegisterCounter("check.any.error", nil).Inc(1)
 			metrics.GetOrRegisterCounter(fmt.Sprintf("check.%s.error", appName), nil).Inc(1)
 
-			metrics.GetOrRegisterCounter(fmt.Sprintf("check.any.%s.%s.error", storeType, storeName), nil).Inc(1)
-			metrics.GetOrRegisterCounter(fmt.Sprintf("check.%s.%s.%s.error", appName, storeType, storeName), nil).Inc(1)
+			metrics.GetOrRegisterCounter(fmt.Sprintf("check.any.%s.%s.error", storeType, requestedStoreName), nil).Inc(1)
+			metrics.GetOrRegisterCounter(fmt.Sprintf("check.%s.%s.%s.error", appName, storeType, requestedStoreName), nil).Inc(1)
 
 			if statusCode == http.StatusInternalServerError {
 				metrics.GetOrRegisterCounter("check.any.internal-error", nil).Inc(1)
 				metrics.GetOrRegisterCounter(fmt.Sprintf("check.%s.internal-error", appName), nil).Inc(1)
 
-				metrics.GetOrRegisterCounter(fmt.Sprintf("check.any.%s.%s.internal-error", storeType, storeName), nil).Inc(1)
-				metrics.GetOrRegisterCounter(fmt.Sprintf("check.%s.%s.%s.internal-error", appName, storeType, storeName), nil).Inc(1)
+				metrics.GetOrRegisterCounter(fmt.Sprintf("check.any.%s.%s.internal-error", storeType, requestedStoreName), nil).Inc(1)
+				metrics.GetOrRegisterCounter(fmt.Sprintf("check.%s.%s.%s.internal-error", appName, storeType, requestedStoreName), nil).Inc(1)
 			}
 		}
 

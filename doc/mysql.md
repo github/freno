@@ -45,6 +45,7 @@ You will find the top-level configuration:
     "us-east-1",
     "us-east-2"
   ],
+  "FallbackCluster": "",
   "Clusters": {
   }
 }
@@ -75,6 +76,7 @@ These params apply in general to all MySQL clusters, unless specified differentl
   You may override `HttpCheckPath` on specific clusters.
 - `IgnoreHosts`: array of substrings. A host is completely ignored by `freno` if it contains a substring listed in `IgnoreHosts`.
   Like other values, this value can be overridden per-cluster. A non-empty `IgnoreHosts` in a specific cluster will replace the `MySQL` scope definition, for that cluster. An empty `IgnoreHosts` in a cluster scope will not un-ignore the patterns specified in `MySQL` scope. If you want to un-ignore the `MySQL` scope use some thing like `"IgnoreHosts": ["--no-such-pattern--"],`, known to never match any of your hosts.
+- `FallbackCluster`: optional configured cluster used by `/check` and `/check-read` when the requested MySQL cluster name is not configured. The value must exactly match a key in `Clusters`. Exact configured names always take precedence, including when their metric or threshold is unavailable.
 
 Looking at clusters configuration:
 
@@ -112,7 +114,7 @@ Looking at clusters configuration:
 }
 ```
 
-This introduces two clusters: `prod4` and `local`. `freno` will only serve requests for these two clusters. Any other request (e.g. `/check/archive/mysql/prod7`) will be answered with `HTTP 500` -- an unknown metric
+This introduces the `prod4`, `sharded`, and `local` clusters. Without `FallbackCluster`, `freno` only serves requests for configured clusters; any other request (e.g. `/check/archive/mysql/prod7`) is answered with `HTTP 404`. With `"FallbackCluster": "prod4"`, ordinary `/check` and `/check-read` requests for unknown MySQL cluster names use `prod4`'s metric, threshold, and throttling state.
 
 Noteworthy:
 

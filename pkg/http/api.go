@@ -49,7 +49,6 @@ type API interface {
 
 var endpoints = []string{} // known API URIs
 
-var okIfNotExistsFlags = &throttle.CheckFlags{OKIfNotExists: true}
 var metricsHandler = exp.ExpHandler(metrics.DefaultRegistry)
 
 type GeneralResponse struct {
@@ -167,11 +166,14 @@ func (api *APIImpl) check(w http.ResponseWriter, r *http.Request, ps httprouter.
 		remoteAddr = r.RemoteAddr
 		remoteAddr = strings.Split(remoteAddr, ":")[0]
 	}
-	flags.LowPriority = (r.URL.Query().Get("p") == "low")
+	requestFlags := *flags
+	requestFlags.LowPriority = (r.URL.Query().Get("p") == "low")
 
-	checkResult := api.throttlerCheck.Check(appName, storeType, storeName, remoteAddr, flags)
-	if checkResult.StatusCode == http.StatusNotFound && flags.OKIfNotExists {
-		checkResult.StatusCode = http.StatusOK // 200
+	checkResult := api.throttlerCheck.Check(appName, storeType, storeName, remoteAddr, &requestFlags)
+	if checkResult.StatusCode == http.StatusNotFound && requestFlags.OKIfNotExists {
+		result := *checkResult
+		result.StatusCode = http.StatusOK // 200
+		checkResult = &result
 	}
 
 	api.respondToCheckRequest(w, r, checkResult)
@@ -185,7 +187,7 @@ func (api *APIImpl) WriteCheck(w http.ResponseWriter, r *http.Request, ps httpro
 // WriteCheckIfExists checks for a metric, but reports an OK if the metric does not exist.
 // If the metric does exist, then all usual checks are made.
 func (api *APIImpl) WriteCheckIfExists(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
-	api.check(w, r, ps, okIfNotExistsFlags)
+	api.check(w, r, ps, &throttle.CheckFlags{OKIfNotExists: true})
 }
 
 func (api *APIImpl) readCheck(w http.ResponseWriter, r *http.Request, ps httprouter.Params, flags *throttle.CheckFlags) {
