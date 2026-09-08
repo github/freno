@@ -85,6 +85,33 @@ func TestReload(t *testing.T) {
 	}
 }
 
+func TestMySQLFallbackCluster(t *testing.T) {
+	tests := []struct {
+		name            string
+		fallbackCluster string
+		clusters        map[string]*MySQLClusterConfigurationSettings
+		wantErr         string
+	}{
+		{name: "omitted"},
+		{name: "empty", clusters: map[string]*MySQLClusterConfigurationSettings{"primary": {}}},
+		{name: "configured", fallbackCluster: "primary", clusters: map[string]*MySQLClusterConfigurationSettings{"primary": {}}},
+		{name: "missing", fallbackCluster: "missing", clusters: map[string]*MySQLClusterConfigurationSettings{"primary": {}}, wantErr: `Stores.MySQL.FallbackCluster "missing" does not name a configured cluster`},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			settings := MySQLConfigurationSettings{FallbackCluster: test.fallbackCluster, Clusters: test.clusters}
+			err := settings.postReadAdjustments()
+			if test.wantErr == "" && err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if test.wantErr != "" && (err == nil || err.Error() != test.wantErr) {
+				t.Fatalf("error = %v, want %q", err, test.wantErr)
+			}
+		})
+	}
+}
+
 func dump(path string, contents *ConfigurationSettings) error {
 	json, _ := json.Marshal(contents)
 	err := ioutil.WriteFile(path, json, 0644)

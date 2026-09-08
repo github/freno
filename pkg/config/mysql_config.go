@@ -5,6 +5,7 @@ package config
 //
 
 import (
+	"fmt"
 	"os"
 )
 
@@ -65,13 +66,19 @@ type MySQLConfigurationSettings struct {
 	VitessCells          []string // Name of the Vitess cells for polling tablet hosts
 	Collation            string   // MySQL collation to use for stores, replaces charset if specified
 
-	Clusters map[string](*MySQLClusterConfigurationSettings) // cluster name -> cluster config
+	FallbackCluster string
+	Clusters        map[string](*MySQLClusterConfigurationSettings) // cluster name -> cluster config
 }
 
 // Hook to implement adjustments after reading each configuration file.
 func (settings *MySQLConfigurationSettings) postReadAdjustments() error {
 	if settings.Port == 0 {
 		settings.Port = DefaultMySQLPort
+	}
+	if settings.FallbackCluster != "" {
+		if _, ok := settings.Clusters[settings.FallbackCluster]; !ok {
+			return fmt.Errorf("Stores.MySQL.FallbackCluster %q does not name a configured cluster", settings.FallbackCluster)
+		}
 	}
 	// Username & password may be given as plaintext in the config file, or can be delivered
 	// via environment variables. We accept user & password in the form "${SOME_ENV_VARIABLE}"
