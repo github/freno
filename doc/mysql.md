@@ -56,7 +56,7 @@ These params apply in general to all MySQL clusters, unless specified differentl
 - `User`, `Password`: these can be specified as plaintext, or in a `${some_env_variable}` format, in which case `freno` will look up its environment for specified variable. (e.g. to match the above config, a `shell` script invoking `freno` can `export mysql_password_env_variable=flyingcircus`)
 - `MetricQuery`:
   - Note: returned value is expected to be `[0..)` (`0` or more), where lower values are "better" and higher values are "worse".
-  - if not provided, `freno` will assume you're interested in replication lag, and will issue a `SHOW SLAVE STATUS` to extract `Seconds_behind_master`
+  - if not provided, `freno` will assume you're interested in replication lag, and will issue `SHOW REPLICA STATUS` (MySQL 8.0.22+) or fall back to `SHOW SLAVE STATUS` on older versions, extracting the seconds-behind value
   - We strongly recommend using a custom heartbeat mechanism such as `pt-heartbeat`, with subsecond resolution. The sample query above works well with `pt-heartbeat` subsecond timestamps.
   - Strictly speaking, you don't have to provide a replication-lag metric. This could be any query that reports any metric. However you're likely interested in replication lag to start with.
   - Note: the default time unit for replication lag is _seconds_
