@@ -8,7 +8,7 @@ import (
 )
 
 // NewInmemAddr returns a new in-memory addr with
-// a randomly generate UUID as the ID.
+// a randomly generated UUID as the ID.
 func NewInmemAddr() string {
 	return generateUUID()
 }

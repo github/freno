@@ -31,7 +31,7 @@ type Config struct {
 
 	// If we are a member of a cluster, and RemovePeer is invoked for the
 	// local node, then we forget all peers and transition into the follower state.
-	// If ShutdownOnRemove is is set, we additional shutdown Raft. Otherwise,
+	// If ShutdownOnRemove is set, we additionally shutdown Raft. Otherwise,
 	// we can become a leader of a cluster containing only this node.
 	ShutdownOnRemove bool
 
