@@ -1390,7 +1390,7 @@ func TestRaft_ManualSnapshot(t *testing.T) {
 	defer c.Close()
 
 	leader := c.Leader()
-	// with nothing commited, asking for a snapshot should return an error
+	// with nothing committed, asking for a snapshot should return an error
 	ssErr := leader.Snapshot().Error()
 	if ssErr != ErrNothingNewToSnapshot {
 		t.Errorf("Attempt to manualy create snapshot should of errored because there's nothing to do: %v", ssErr)
