@@ -146,7 +146,7 @@ CHECK:
 		}
 		for idx, log := range first.fsm.logs {
 			other := env.fsm.logs[idx]
-			if bytes.Compare(log, other) != 0 {
+			if !bytes.Equal(log, other) {
 				err = fmt.Errorf("log %d mismatch %v %v", idx, log, other)
 				goto ERR
 			}
