@@ -7,6 +7,7 @@ import (
 
 	"github.com/github/freno/pkg/base"
 	"github.com/github/freno/pkg/config"
+	metrics "github.com/rcrowley/go-metrics"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -247,6 +248,7 @@ func TestCheckMySQLRequiredClusters(t *testing.T) {
 		assert.Equal(t, http.StatusTooManyRequests, result.StatusCode)
 		assert.Equal(t, 60.0, result.Value)
 		assert.Equal(t, 50.0, result.Threshold)
+		assert.Equal(t, "mysql/primary", result.MetricName)
 	})
 
 	t.Run("ProxySQL cluster blocks admission", func(t *testing.T) {
@@ -275,6 +277,7 @@ func TestCheckMySQLRequiredClusters(t *testing.T) {
 		result := check.Check("transitions", "mysql", "replicas", "", &CheckFlags{OKIfNotExists: true})
 		assert.Equal(t, http.StatusInternalServerError, result.StatusCode)
 		assert.EqualError(t, result.Error, `required MySQL cluster metric "primary" is unavailable`)
+		assert.Equal(t, "mysql/primary", result.MetricName)
 	})
 }
 
@@ -336,4 +339,32 @@ func TestStabilizeMySQLMetricResetsRecoveryWindow(t *testing.T) {
 	result := throttler.stabilizeMySQLMetric("primary", base.NewSimpleMetricResult(40), start.Add(7*time.Second))
 	_, err := result.Get()
 	assert.Equal(t, base.RecoveryNotCompleteError, err)
+}
+
+func TestStabilizeMySQLMetricRequiresHealthyWindowAfterStartup(t *testing.T) {
+	originalSettings := config.Settings().Stores.MySQL
+	defer func() {
+		config.Settings().Stores.MySQL = originalSettings
+	}()
+
+	config.Settings().Stores.MySQL = config.MySQLConfigurationSettings{
+		Clusters: map[string]*config.MySQLClusterConfigurationSettings{
+			"primary": {
+				ThrottleThreshold:      50.0,
+				RecoveryDurationMillis: 5000,
+			},
+		},
+	}
+
+	throttler := NewThrottler()
+	start := time.Date(2026, time.September, 23, 12, 0, 0, 0, time.UTC)
+
+	result := throttler.stabilizeMySQLMetric("primary", base.NewSimpleMetricResult(30), start)
+	_, err := result.Get()
+	assert.Equal(t, base.RecoveryNotCompleteError, err)
+
+	result = throttler.stabilizeMySQLMetric("primary", base.NewSimpleMetricResult(30), start.Add(5*time.Second))
+	_, err = result.Get()
+	assert.Nil(t, err)
+	assert.Equal(t, int64(0), metrics.Get("recovery.mysql.primary.active").(metrics.Gauge).Value())
 }

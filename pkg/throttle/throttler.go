@@ -486,16 +486,21 @@ func (throttler *Throttler) stabilizeMySQLMetric(clusterName string, metricResul
 
 	state, ok := throttler.mysqlRecoveryState[clusterName]
 	if !ok {
-		state = &mysqlClusterRecoveryState{}
+		// A new process or leader has no recovery history. Require a complete
+		// healthy window before admitting work rather than assuming the metric
+		// was healthy before this process began observing it.
+		state = &mysqlClusterRecoveryState{throttled: true}
 		throttler.mysqlRecoveryState[clusterName] = state
 	}
 
 	if err != nil || value > clusterSettings.ThrottleThreshold {
 		state.throttled = true
 		state.healthySince = time.Time{}
+		metrics.GetOrRegisterGauge(fmt.Sprintf("recovery.mysql.%s.active", clusterName), nil).Update(1)
 		return metricResult
 	}
 	if !state.throttled {
+		metrics.GetOrRegisterGauge(fmt.Sprintf("recovery.mysql.%s.active", clusterName), nil).Update(0)
 		return metricResult
 	}
 
@@ -505,20 +510,24 @@ func (throttler *Throttler) stabilizeMySQLMetric(clusterName string, metricResul
 	}
 	if value > recoveryThreshold {
 		state.healthySince = time.Time{}
+		metrics.GetOrRegisterGauge(fmt.Sprintf("recovery.mysql.%s.active", clusterName), nil).Update(1)
 		return base.NewErrorMetricResult(value, base.RecoveryNotCompleteError)
 	}
 	if state.healthySince.IsZero() {
 		state.healthySince = now
+		metrics.GetOrRegisterGauge(fmt.Sprintf("recovery.mysql.%s.active", clusterName), nil).Update(1)
 		return base.NewErrorMetricResult(value, base.RecoveryNotCompleteError)
 	}
 
 	recoveryDuration := time.Duration(clusterSettings.RecoveryDurationMillis) * time.Millisecond
 	if now.Sub(state.healthySince) < recoveryDuration {
+		metrics.GetOrRegisterGauge(fmt.Sprintf("recovery.mysql.%s.active", clusterName), nil).Update(1)
 		return base.NewErrorMetricResult(value, base.RecoveryNotCompleteError)
 	}
 
 	state.throttled = false
 	state.healthySince = time.Time{}
+	metrics.GetOrRegisterGauge(fmt.Sprintf("recovery.mysql.%s.active", clusterName), nil).Update(0)
 	return metricResult
 }
 

@@ -103,7 +103,9 @@ func (check *ThrottlerCheck) checkAppMetricResult(appName string, storeType stri
 		// all good!
 		statusCode = http.StatusOK // 200
 	}
-	return NewCheckResult(statusCode, value, threshold, err)
+	checkResult = NewCheckResult(statusCode, value, threshold, err)
+	checkResult.MetricName = metricName
+	return checkResult
 }
 
 func (check *ThrottlerCheck) checkMySQLCluster(
@@ -134,10 +136,12 @@ func (check *ThrottlerCheck) checkMySQLCluster(
 			continue
 		}
 		if requiredResult.StatusCode == http.StatusNotFound {
-			return NewErrorCheckResult(
+			checkResult := NewErrorCheckResult(
 				http.StatusInternalServerError,
 				fmt.Errorf("required MySQL cluster metric %q is unavailable", requiredCluster),
 			)
+			checkResult.MetricName = fmt.Sprintf("mysql/%s", requiredCluster)
+			return checkResult
 		}
 		return requiredResult
 	}

@@ -203,7 +203,9 @@ The ProxySQL query above is illustrative: deployments must provide a scalar quer
 - `FailOnNoHosts` changes the legacy no-host response from `HTTP 200` to `HTTP 500`. Enable it for primary and ProxySQL safety probes, where an empty roster cannot prove that work is safe.
 - `RecoveryThreshold` is the lower threshold that begins recovery after a cluster has throttled. It must not exceed `ThrottleThreshold`.
 - `RecoveryDurationMillis` is the continuous time the metric must remain at or below `RecoveryThreshold` before checks return `HTTP 200` again. A new error or threshold violation resets the recovery window.
+- A new process or leader starts configured recovery metrics in the recovering state. It must observe a complete healthy window before admitting work.
 - Metric sampling remains centralized in the `freno` leader and uses the existing metric cache. Application checks read the aggregated decision rather than querying the primary or ProxySQL for every batch.
+- Check responses include `MetricName`, identifying the replica, primary, or ProxySQL metric that blocked a composite decision. `recovery.mysql.<cluster>.active` reports whether the recovery latch is active.
 
 Configuration loading rejects missing `RequiredClusters` references and dependency cycles.
 
