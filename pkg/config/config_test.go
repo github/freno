@@ -203,6 +203,50 @@ func TestMySQLRecoveryConfiguration(t *testing.T) {
 	}
 }
 
+func TestVitessTabletTypeConfiguration(t *testing.T) {
+	tests := []struct {
+		name       string
+		tabletType string
+		want       string
+		wantErr    string
+	}{
+		{name: "default replica", want: "REPLICA"},
+		{name: "replica", tabletType: "replica", want: "REPLICA"},
+		{name: "master", tabletType: "master", want: "MASTER"},
+		{name: "primary alias", tabletType: "primary", want: "MASTER"},
+		{name: "invalid", tabletType: "rdonly", wantErr: `Stores.MySQL.Clusters.vitess.VitessSettings: unsupported Vitess tablet type "rdonly"`},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			settings := MySQLConfigurationSettings{
+				Clusters: map[string]*MySQLClusterConfigurationSettings{
+					"vitess": {
+						VitessSettings: VitessConfigurationSettings{
+							API:        "https://vtctld.example.com/api",
+							Keyspace:   "test",
+							TabletType: test.tabletType,
+						},
+					},
+				},
+			}
+			err := settings.postReadAdjustments()
+			if test.wantErr == "" && err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if test.wantErr != "" {
+				if err == nil || err.Error() != test.wantErr {
+					t.Fatalf("error = %v, want %q", err, test.wantErr)
+				}
+				return
+			}
+			if got := settings.Clusters["vitess"].VitessSettings.TabletType; got != test.want {
+				t.Fatalf("TabletType = %q, want %q", got, test.want)
+			}
+		})
+	}
+}
+
 func dump(path string, contents *ConfigurationSettings) error {
 	json, _ := json.Marshal(contents)
 	err := ioutil.WriteFile(path, json, 0644)

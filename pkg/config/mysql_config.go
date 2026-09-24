@@ -112,6 +112,11 @@ func (settings *MySQLConfigurationSettings) postReadAdjustments() error {
 		if err := clusterSettings.postReadAdjustments(); err != nil {
 			return err
 		}
+		if !clusterSettings.VitessSettings.IsEmpty() {
+			if err := clusterSettings.VitessSettings.postReadAdjustments(); err != nil {
+				return fmt.Errorf("Stores.MySQL.Clusters.%s.VitessSettings: %w", clusterName, err)
+			}
+		}
 		if clusterSettings.User == "" {
 			clusterSettings.User = settings.User
 		}

@@ -96,7 +96,8 @@ Looking at clusters configuration:
     ],
     "VitessSettings": {
       "API": "https://vtctld.example.com/api/",
-      "Keyspace": "my_sharded_ks"
+      "Keyspace": "my_sharded_ks",
+      "TabletType": "REPLICA"
     }
   },
   "local": {
@@ -120,6 +121,7 @@ Noteworthy:
 
 - `prod4` chooses to (but doesn't have to) override the `ThrottleThreshold` to `0.8` seconds
 - `prod4` list of servers is dictated by `HAProxy`. `freno` will routinely and dynamically poll given HAProxy server for list of hosts. These will include any hosts not in `NOLB`.
+- `sharded` discovers `REPLICA` tablets by default. Set `TabletType` to `MASTER` (or `PRIMARY`) for a separately configured primary safety metric.
 - `local` cluster chooses to override `User`, `Password` and `IgnoreHostsCount`.
 - `local` cluster defines a static list of hosts.
 

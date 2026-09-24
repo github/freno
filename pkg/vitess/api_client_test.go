@@ -141,6 +141,25 @@ func TestParseTablets(t *testing.T) {
 		}
 	})
 
+	t.Run("primary", func(t *testing.T) {
+		tablets, err := ParseTablets(config.VitessConfigurationSettings{
+			API:        vitessApi.URL,
+			Keyspace:   "test",
+			Shard:      "00",
+			TabletType: "MASTER",
+		})
+		if err != nil {
+			t.Fatalf("Expected no error, got %q", err)
+		}
+
+		if len(tablets) != 1 {
+			t.Fatalf("Expected 1 tablet, got %d", len(tablets))
+		}
+		if tablets[0].Type != topodata.TabletType_MASTER {
+			t.Fatalf("Expected master tablet, got %s", tablets[0].Type.String())
+		}
+	})
+
 	t.Run("not-found", func(t *testing.T) {
 		tablets, err := ParseTablets(config.VitessConfigurationSettings{
 			API:      vitessApi.URL,
