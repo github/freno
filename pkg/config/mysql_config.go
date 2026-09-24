@@ -7,22 +7,27 @@ package config
 import (
 	"fmt"
 	"os"
+	"sort"
 )
 
 const DefaultMySQLPort = 3306
 
 type MySQLClusterConfigurationSettings struct {
-	User                 string   // override MySQLConfigurationSettings's, or leave empty to inherit those settings
-	Password             string   // override MySQLConfigurationSettings's, or leave empty to inherit those settings
-	MetricQuery          string   // override MySQLConfigurationSettings's, or leave empty to inherit those settings
-	CacheMillis          int      // override MySQLConfigurationSettings's, or leave empty to inherit those settings
-	ThrottleThreshold    float64  // override MySQLConfigurationSettings's, or leave empty to inherit those settings
-	Port                 int      // Specify if different than 3306 or if different than specified by MySQLConfigurationSettings
-	IgnoreHostsCount     int      // Number of hosts that can be skipped/ignored even on error or on exceeding theesholds
-	IgnoreHostsThreshold float64  // Threshold beyond which IgnoreHostsCount applies (default: 0)
-	HttpCheckPort        int      // Specify if different than specified by MySQLConfigurationSettings. -1 to disable HTTP check
-	HttpCheckPath        string   // Specify if different than specified by MySQLConfigurationSettings
-	IgnoreHosts          []string // override MySQLConfigurationSettings's, or leave empty to inherit those settings
+	User                   string   // override MySQLConfigurationSettings's, or leave empty to inherit those settings
+	Password               string   // override MySQLConfigurationSettings's, or leave empty to inherit those settings
+	MetricQuery            string   // override MySQLConfigurationSettings's, or leave empty to inherit those settings
+	CacheMillis            int      // override MySQLConfigurationSettings's, or leave empty to inherit those settings
+	ThrottleThreshold      float64  // override MySQLConfigurationSettings's, or leave empty to inherit those settings
+	RecoveryThreshold      *float64 // optional threshold that must be met before a throttled cluster begins recovery
+	RecoveryDurationMillis int      // continuous recovery duration required before writes resume
+	FailOnNoHosts          bool     // reject checks when no eligible hosts remain instead of preserving legacy fail-open behavior
+	RequiredClusters       []string // additional MySQL cluster metrics that must pass for this cluster to pass
+	Port                   int      // Specify if different than 3306 or if different than specified by MySQLConfigurationSettings
+	IgnoreHostsCount       int      // Number of hosts that can be skipped/ignored even on error or on exceeding theesholds
+	IgnoreHostsThreshold   float64  // Threshold beyond which IgnoreHostsCount applies (default: 0)
+	HttpCheckPort          int      // Specify if different than specified by MySQLConfigurationSettings. -1 to disable HTTP check
+	HttpCheckPath          string   // Specify if different than specified by MySQLConfigurationSettings
+	IgnoreHosts            []string // override MySQLConfigurationSettings's, or leave empty to inherit those settings
 
 	HAProxySettings     HAProxyConfigurationSettings  // If list of servers is to be acquired via HAProxy, provide this field
 	ProxySQLSettings    ProxySQLConfigurationSettings // If list of servers is to be acquired via ProxySQL, provide this field
@@ -75,6 +80,9 @@ func (settings *MySQLConfigurationSettings) postReadAdjustments() error {
 	if settings.Port == 0 {
 		settings.Port = DefaultMySQLPort
 	}
+	if settings.Clusters == nil {
+		settings.Clusters = make(map[string]*MySQLClusterConfigurationSettings)
+	}
 	if settings.FallbackCluster != "" {
 		if _, ok := settings.Clusters[settings.FallbackCluster]; !ok {
 			return fmt.Errorf("Stores.MySQL.FallbackCluster %q does not name a configured cluster", settings.FallbackCluster)
@@ -97,9 +105,17 @@ func (settings *MySQLConfigurationSettings) postReadAdjustments() error {
 		}
 	}
 
-	for _, clusterSettings := range settings.Clusters {
+	for clusterName, clusterSettings := range settings.Clusters {
+		if clusterSettings == nil {
+			return fmt.Errorf("Stores.MySQL.Clusters.%s must not be null", clusterName)
+		}
 		if err := clusterSettings.postReadAdjustments(); err != nil {
 			return err
+		}
+		if !clusterSettings.VitessSettings.IsEmpty() {
+			if err := clusterSettings.VitessSettings.postReadAdjustments(); err != nil {
+				return fmt.Errorf("Stores.MySQL.Clusters.%s.VitessSettings: %w", clusterName, err)
+			}
 		}
 		if clusterSettings.User == "" {
 			clusterSettings.User = settings.User
@@ -147,6 +163,70 @@ func (settings *MySQLConfigurationSettings) postReadAdjustments() error {
 		}
 		if !clusterSettings.VitessSettings.IsEmpty() && len(clusterSettings.VitessSettings.Cells) < 1 {
 			clusterSettings.VitessSettings.Cells = settings.VitessCells
+		}
+		if clusterSettings.RecoveryDurationMillis < 0 {
+			return fmt.Errorf("Stores.MySQL.Clusters.%s.RecoveryDurationMillis must not be negative", clusterName)
+		}
+		if clusterSettings.RecoveryDurationMillis > 0 {
+			recoveryThreshold := clusterSettings.ThrottleThreshold
+			if clusterSettings.RecoveryThreshold != nil {
+				recoveryThreshold = *clusterSettings.RecoveryThreshold
+			}
+			if recoveryThreshold > clusterSettings.ThrottleThreshold {
+				return fmt.Errorf(
+					"Stores.MySQL.Clusters.%s.RecoveryThreshold must not exceed ThrottleThreshold",
+					clusterName,
+				)
+			}
+		}
+	}
+	return settings.validateRequiredClusters()
+}
+
+func (settings *MySQLConfigurationSettings) validateRequiredClusters() error {
+	const (
+		unvisited = iota
+		visiting
+		visited
+	)
+	states := make(map[string]int)
+
+	var visit func(string) error
+	visit = func(clusterName string) error {
+		switch states[clusterName] {
+		case visiting:
+			return fmt.Errorf("Stores.MySQL.Clusters contains a RequiredClusters cycle involving %q", clusterName)
+		case visited:
+			return nil
+		}
+
+		states[clusterName] = visiting
+		for _, requiredCluster := range settings.Clusters[clusterName].RequiredClusters {
+			if _, ok := settings.Clusters[requiredCluster]; !ok {
+				return fmt.Errorf(
+					"Stores.MySQL.Clusters.%s.RequiredClusters references unknown cluster %q",
+					clusterName,
+					requiredCluster,
+				)
+			}
+			if err := visit(requiredCluster); err != nil {
+				return err
+			}
+		}
+		states[clusterName] = visited
+		return nil
+	}
+
+	clusterNames := make([]string, 0, len(settings.Clusters))
+	for clusterName := range settings.Clusters {
+		clusterNames = append(clusterNames, clusterName)
+	}
+	sort.Strings(clusterNames)
+	for _, clusterName := range clusterNames {
+		if states[clusterName] == unvisited {
+			if err := visit(clusterName); err != nil {
+				return err
+			}
 		}
 	}
 	return nil

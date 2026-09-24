@@ -61,9 +61,10 @@ func (t Tablet) IsServeable() bool {
 	return true
 }
 
-// IsValidReplica returns a bool reflecting if a tablet type is REPLICA
-func (t Tablet) IsValidReplica() bool {
-	if t.Type != topodata.TabletType_REPLICA {
+// IsValidType returns whether a tablet has the requested type and is eligible
+// for direct metric collection.
+func (t Tablet) IsValidType(tabletType topodata.TabletType) bool {
+	if t.Type != tabletType {
 		return false
 	}
 	return t.IsServeable()
@@ -101,19 +102,27 @@ func ParseCells(settings config.VitessConfigurationSettings) (cells []string) {
 	return cells
 }
 
-// filterReplicaTablets parses a list of tablets, returning replica tablets only
-func filterReplicaTablets(settings config.VitessConfigurationSettings, tablets []Tablet) (replicas []Tablet) {
+func configuredTabletType(settings config.VitessConfigurationSettings) topodata.TabletType {
+	if settings.TabletType == "MASTER" {
+		return topodata.TabletType_MASTER
+	}
+	return topodata.TabletType_REPLICA
+}
+
+// filterTablets parses a list of tablets, returning only the configured type.
+func filterTablets(settings config.VitessConfigurationSettings, tablets []Tablet) (filtered []Tablet) {
 	validCells := ParseCells(settings)
+	tabletType := configuredTabletType(settings)
 	for _, tablet := range tablets {
-		if tablet.HasValidCell(validCells) && tablet.IsValidReplica() {
-			replicas = append(replicas, tablet)
+		if tablet.HasValidCell(validCells) && tablet.IsValidType(tabletType) {
+			filtered = append(filtered, tablet)
 		}
 	}
-	return replicas
+	return filtered
 }
 
 // ParseTablets reads from vitess /api/keyspace/<keyspace>/tablets/[shard] and returns a
-// listing (mysql_hostname, mysql_port, type) of REPLICA tablets
+// listing (mysql_hostname, mysql_port, type) of the configured tablet type.
 func ParseTablets(settings config.VitessConfigurationSettings) (tablets []Tablet, err error) {
 	if settings.TimeoutSecs == 0 {
 		httpClient.Timeout = defaultTimeout
@@ -137,5 +146,5 @@ func ParseTablets(settings config.VitessConfigurationSettings) (tablets []Tablet
 		return tablets, err
 	}
 	err = json.Unmarshal(body, &tablets)
-	return filterReplicaTablets(settings, tablets), err
+	return filterTablets(settings, tablets), err
 }

@@ -96,7 +96,8 @@ Looking at clusters configuration:
     ],
     "VitessSettings": {
       "API": "https://vtctld.example.com/api/",
-      "Keyspace": "my_sharded_ks"
+      "Keyspace": "my_sharded_ks",
+      "TabletType": "REPLICA"
     }
   },
   "local": {
@@ -120,6 +121,7 @@ Noteworthy:
 
 - `prod4` chooses to (but doesn't have to) override the `ThrottleThreshold` to `0.8` seconds
 - `prod4` list of servers is dictated by `HAProxy`. `freno` will routinely and dynamically poll given HAProxy server for list of hosts. These will include any hosts not in `NOLB`.
+- `sharded` discovers `REPLICA` tablets by default. Set `TabletType` to `MASTER` (or `PRIMARY`) for a separately configured primary safety metric.
 - `local` cluster chooses to override `User`, `Password` and `IgnoreHostsCount`.
 - `local` cluster defines a static list of hosts.
 
@@ -148,3 +150,80 @@ Noteworthy:
 `freno` explicitly recognizes `show global ...` statements and reads the result's numeric value.
 
 Otherwise you may provide any query that returns a single row, single numeric column.
+
+### Composing replica, primary, and ProxySQL protection
+
+A cluster can require additional cluster metrics to pass before `freno` permits work. This allows the normal replica-lag check to depend on separately sampled primary-load and ProxySQL-capacity checks:
+
+```json
+"Clusters": {
+  "prod4": {
+    "RequiredClusters": [
+      "prod4-primary",
+      "prod4-proxysql"
+    ],
+    "HAProxySettings": {
+      "Host": "my.haproxy.mydomain.com",
+      "Port": 1001,
+      "PoolName": "my_prod4_pool"
+    }
+  },
+  "prod4-primary": {
+    "MetricQuery": "show global status like 'Threads_running'",
+    "CacheMillis": 500,
+    "ThrottleThreshold": 50,
+    "RecoveryThreshold": 35,
+    "RecoveryDurationMillis": 5000,
+    "FailOnNoHosts": true,
+    "StaticHostsSettings": {
+      "Hosts": [
+        "my.prod4.primary.vip.example.com:3306"
+      ]
+    }
+  },
+  "prod4-proxysql": {
+    "User": "${proxysql_stats_user}",
+    "Password": "${proxysql_stats_password}",
+    "MetricQuery": "select connection_pressure_percent from operational_metrics.proxysql_capacity limit 1",
+    "CacheMillis": 500,
+    "ThrottleThreshold": 80,
+    "RecoveryThreshold": 60,
+    "RecoveryDurationMillis": 5000,
+    "FailOnNoHosts": true,
+    "StaticHostsSettings": {
+      "Hosts": [
+        "my.prod4.proxysql.example.com:6032"
+      ]
+    }
+  }
+}
+```
+
+The ProxySQL query above is illustrative: deployments must provide a scalar query or operational view whose value increases as usable connection capacity is consumed.
+
+- `RequiredClusters` lists additional configured metrics that must return `HTTP 200`. Missing required runtime metrics fail closed.
+- `FailOnNoHosts` changes the legacy no-host response from `HTTP 200` to `HTTP 500`. Enable it for primary and ProxySQL safety probes, where an empty roster cannot prove that work is safe.
+- `RecoveryThreshold` is the lower threshold that begins recovery after a cluster has throttled. It must not exceed `ThrottleThreshold`.
+- `RecoveryDurationMillis` is the continuous time the metric must remain at or below `RecoveryThreshold` before checks return `HTTP 200` again. A new error or threshold violation resets the recovery window.
+- A new process or leader starts configured recovery metrics in the recovering state. It must observe a complete healthy window before admitting work.
+- Metric sampling remains centralized in the `freno` leader and uses the existing metric cache. Application checks read the aggregated decision rather than querying the primary or ProxySQL for every batch.
+- Check responses include `MetricName`, identifying the replica, primary, or ProxySQL metric that blocked a composite decision. `recovery.mysql.<cluster>.active` reports whether the recovery latch is active.
+
+Configuration loading rejects missing `RequiredClusters` references and dependency cycles.
+
+### A1 repair mapping
+
+| A1 repair item | Freno implementation in this change | Remaining work |
+| --- | --- | --- |
+| Default transitions to one worker | Not a Freno responsibility. | Enforce in the transitions framework. |
+| Audit custom worker configurations | Not a Freno responsibility. | Audit and constrain custom transitions in the application. |
+| Identify Freno traffic as transitions | Existing Freno API already accepts the application name and emits per-app/per-store counters. | Complete caller rollout with `app=transitions` and monitor that identity. |
+| Mark transition writes as low priority | Existing `p=low` behavior remains compatible with composite checks. | Complete application rollout. |
+| Page on primary and ProxySQL connection failures | `FailOnNoHosts` and missing-required-metric handling prevent an unobservable probe failure from allowing work. | Add Datadog paging for probe and connectivity failures. |
+| Page on sustained primary `Threads_running` | A cached primary metric can now be required by the replica-lag decision; recovery hysteresis prevents immediate release. | Configure cluster thresholds and add the sustained Datadog monitor. |
+| Page before connection exhaustion | A cached ProxySQL capacity metric can now be required by the admission decision. | Define the production capacity query, reserve threshold, and Datadog monitor. |
+| Detect rising concurrency with falling completions | A derived scalar metric can be configured as another required cluster check. | Define and validate the correlation query and alert thresholds. |
+| Alert on sustained Freno rejection | Composite safety failures return normal Freno rejection/error status and existing counters remain available by app and store. | Add the rejection-ratio and minimum-volume Datadog monitor grouped by cluster and `app=transitions`. |
+| Provide a cluster-wide emergency pause | Existing app/store throttling remains the emergency control and is evaluated for each required metric. | Operationalize a deterministic transitions-plus-cluster command and runbook. |
+
+These changes provide admission enforcement; they do not create Datadog monitors, change transition worker defaults, or bound replica-to-primary fallback inside the application.

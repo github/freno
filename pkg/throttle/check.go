@@ -67,8 +67,16 @@ func (check *ThrottlerCheck) checkAppMetricResult(appName string, storeType stri
 		// not collected yet, or metric does not exist
 		statusCode = http.StatusNotFound // 404
 	} else if errors.Is(err, base.NoHostsError) {
-		// If no hosts we report 0 for the metric.
+		// Preserve legacy fail-open behavior unless the cluster explicitly requires
+		// an eligible host to prove that it is safe.
 		statusCode = http.StatusOK // 200
+		if storeType == "mysql" {
+			if clusterSettings, ok := config.Settings().Stores.MySQL.Clusters[storeName]; ok && clusterSettings.FailOnNoHosts {
+				statusCode = http.StatusInternalServerError // 500
+			}
+		}
+	} else if errors.Is(err, base.RecoveryNotCompleteError) {
+		statusCode = http.StatusTooManyRequests // 429
 	} else if err != nil {
 		// any error
 		statusCode = http.StatusInternalServerError // 500
@@ -95,7 +103,49 @@ func (check *ThrottlerCheck) checkAppMetricResult(appName string, storeType stri
 		// all good!
 		statusCode = http.StatusOK // 200
 	}
-	return NewCheckResult(statusCode, value, threshold, err)
+	checkResult = NewCheckResult(statusCode, value, threshold, err)
+	checkResult.MetricName = metricName
+	return checkResult
+}
+
+func (check *ThrottlerCheck) checkMySQLCluster(
+	appName string,
+	clusterName string,
+	flags *CheckFlags,
+	checkedClusters map[string]bool,
+) *CheckResult {
+	if checkedClusters[clusterName] {
+		return nil
+	}
+	checkedClusters[clusterName] = true
+
+	metricResultFunc := func() (metricResult base.MetricResult, threshold float64) {
+		return check.throttler.getMySQLClusterMetrics(clusterName)
+	}
+	rootResult := check.checkAppMetricResult(appName, "mysql", clusterName, metricResultFunc, flags)
+	if rootResult.StatusCode != http.StatusOK {
+		return rootResult
+	}
+
+	clusterSettings := config.Settings().Stores.MySQL.Clusters[clusterName]
+	for _, requiredCluster := range clusterSettings.RequiredClusters {
+		requiredFlags := *flags
+		requiredFlags.OverrideThreshold = 0
+		requiredResult := check.checkMySQLCluster(appName, requiredCluster, &requiredFlags, checkedClusters)
+		if requiredResult == nil || requiredResult.StatusCode == http.StatusOK {
+			continue
+		}
+		if requiredResult.StatusCode == http.StatusNotFound {
+			checkResult := NewErrorCheckResult(
+				http.StatusInternalServerError,
+				fmt.Errorf("required MySQL cluster metric %q is unavailable", requiredCluster),
+			)
+			checkResult.MetricName = fmt.Sprintf("mysql/%s", requiredCluster)
+			return checkResult
+		}
+		return requiredResult
+	}
+	return rootResult
 }
 
 // CheckAppStoreMetric
@@ -114,9 +164,7 @@ func (check *ThrottlerCheck) Check(appName string, storeType string, storeName s
 				}
 			}
 			if configured {
-				metricResultFunc = func() (metricResult base.MetricResult, threshold float64) {
-					return check.throttler.getMySQLClusterMetrics(storeName)
-				}
+				checkResult = check.checkMySQLCluster(appName, storeName, flags, make(map[string]bool))
 			} else {
 				metricResultFunc = func() (metricResult base.MetricResult, threshold float64) {
 					return base.NoSuchMetric, 0
@@ -125,10 +173,12 @@ func (check *ThrottlerCheck) Check(appName string, storeType string, storeName s
 		}
 	}
 	if metricResultFunc == nil {
-		return NoSuchMetricCheckResult
+		if checkResult == nil {
+			return NoSuchMetricCheckResult
+		}
+	} else {
+		checkResult = check.checkAppMetricResult(appName, storeType, storeName, metricResultFunc, flags)
 	}
-
-	checkResult = check.checkAppMetricResult(appName, storeType, storeName, metricResultFunc, flags)
 
 	go func(statusCode int) {
 		metrics.GetOrRegisterCounter("check.any.total", nil).Inc(1)
