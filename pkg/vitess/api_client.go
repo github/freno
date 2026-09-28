@@ -70,6 +70,11 @@ func (t Tablet) IsValidType(tabletType topodata.TabletType) bool {
 	return t.IsServeable()
 }
 
+// IsValidReplica preserves the original replica-specific API for package consumers.
+func (t Tablet) IsValidReplica() bool {
+	return t.IsValidType(topodata.TabletType_REPLICA)
+}
+
 var httpClient = http.Client{
 	Timeout: defaultTimeout,
 }

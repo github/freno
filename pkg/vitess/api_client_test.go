@@ -11,6 +11,18 @@ import (
 	"vitess.io/vitess/go/vt/proto/topodata"
 )
 
+func TestTabletIsValidReplica(t *testing.T) {
+	replica := Tablet{Type: topodata.TabletType_REPLICA}
+	primary := Tablet{Type: topodata.TabletType_MASTER}
+
+	if !replica.IsValidReplica() {
+		t.Fatal("expected replica tablet to remain valid through compatibility method")
+	}
+	if primary.IsValidReplica() {
+		t.Fatal("expected primary tablet not to pass replica validation")
+	}
+}
+
 func TestParseTablets(t *testing.T) {
 	vitessApi := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.String() {

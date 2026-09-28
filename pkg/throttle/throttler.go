@@ -155,7 +155,7 @@ func (throttler *Throttler) Operate() {
 		case <-leaderCheckTick:
 			{
 				// sparse
-				throttler.isLeader = throttler.isLeaderFunc()
+				throttler.updateLeadership(throttler.isLeaderFunc())
 			}
 		case <-mysqlCollectTick:
 			{
@@ -446,16 +446,24 @@ func (throttler *Throttler) aggregateMySQLMetrics() error {
 	if !throttler.isLeader {
 		return nil
 	}
+	aggregatedMetrics := make(map[string]base.MetricResult, len(throttler.mysqlInventory.ClustersProbes))
 	for clusterName, probes := range throttler.mysqlInventory.ClustersProbes {
-		metricName := fmt.Sprintf("mysql/%s", clusterName)
 		ignoreHostsCount := throttler.mysqlInventory.IgnoreHostsCount[clusterName]
 		ignoreHostsThreshold := throttler.mysqlInventory.IgnoreHostsThreshold[clusterName]
 		aggregatedMetric := aggregateMySQLProbes(probes, clusterName, throttler.mysqlInventory.InstanceKeyMetrics, throttler.mysqlInventory.ClusterInstanceHttpChecks, ignoreHostsCount, config.Settings().Stores.MySQL.IgnoreDialTcpErrors, ignoreHostsThreshold)
-		aggregatedMetric = throttler.stabilizeMySQLMetric(clusterName, aggregatedMetric, time.Now())
+		aggregatedMetrics[clusterName] = throttler.stabilizeMySQLMetric(clusterName, aggregatedMetric, time.Now())
+	}
+	for clusterName, aggregatedMetric := range aggregatedMetrics {
+		metricName := fmt.Sprintf("mysql/%s", clusterName)
 		go throttler.aggregatedMetrics.Set(metricName, aggregatedMetric, cache.DefaultExpiration)
 		if throttler.memcacheClient != nil {
-			go func() {
+			requiredClustersHealthy := throttler.requiredMySQLClustersHealthy(clusterName, aggregatedMetrics, make(map[string]bool))
+			go func(metricName string, aggregatedMetric base.MetricResult, requiredClustersHealthy bool) {
 				memcacheKey := fmt.Sprintf("%s/%s", throttler.memcachePath, metricName)
+				if !requiredClustersHealthy {
+					throttler.memcacheClient.Delete(memcacheKey)
+					return
+				}
 				value, err := aggregatedMetric.Get()
 				if err != nil {
 					throttler.memcacheClient.Delete(memcacheKey)
@@ -464,10 +472,46 @@ func (throttler *Throttler) aggregateMySQLMetrics() error {
 					entryVal := fmt.Sprintf("%d:%.6f", epochMillis, value)
 					throttler.memcacheClient.Set(&memcache.Item{Key: memcacheKey, Value: []byte(entryVal), Expiration: 1})
 				}
-			}()
+			}(metricName, aggregatedMetric, requiredClustersHealthy)
 		}
 	}
 	return nil
+}
+
+func (throttler *Throttler) requiredMySQLClustersHealthy(clusterName string, aggregatedMetrics map[string]base.MetricResult, checkedClusters map[string]bool) bool {
+	if checkedClusters[clusterName] {
+		return true
+	}
+	checkedClusters[clusterName] = true
+
+	clusterSettings, ok := config.Settings().Stores.MySQL.Clusters[clusterName]
+	if !ok {
+		return false
+	}
+	for _, requiredCluster := range clusterSettings.RequiredClusters {
+		requiredSettings, configured := config.Settings().Stores.MySQL.Clusters[requiredCluster]
+		requiredMetric, collected := aggregatedMetrics[requiredCluster]
+		if !configured || !collected {
+			return false
+		}
+		value, err := requiredMetric.Get()
+		if err != nil || value > requiredSettings.ThrottleThreshold {
+			return false
+		}
+		if !throttler.requiredMySQLClustersHealthy(requiredCluster, aggregatedMetrics, checkedClusters) {
+			return false
+		}
+	}
+	return true
+}
+
+func (throttler *Throttler) updateLeadership(isLeader bool) {
+	if isLeader && !throttler.isLeader {
+		throttler.mysqlRecoveryMutex.Lock()
+		throttler.mysqlRecoveryState = make(map[string]*mysqlClusterRecoveryState)
+		throttler.mysqlRecoveryMutex.Unlock()
+	}
+	throttler.isLeader = isLeader
 }
 
 func (throttler *Throttler) stabilizeMySQLMetric(clusterName string, metricResult base.MetricResult, now time.Time) base.MetricResult {

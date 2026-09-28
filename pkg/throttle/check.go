@@ -54,6 +54,9 @@ func (check *ThrottlerCheck) checkAppMetricResult(appName string, storeType stri
 		threshold = flags.OverrideThreshold
 	}
 	value, err := metricResult.Get()
+	if flags.ReadCheck && flags.OverrideThreshold > 0 && errors.Is(err, base.RecoveryNotCompleteError) && value <= threshold {
+		err = nil
+	}
 	if appName == "" {
 		return NewCheckResult(http.StatusExpectationFailed, value, threshold, fmt.Errorf("no app indicated"))
 	}
@@ -130,6 +133,7 @@ func (check *ThrottlerCheck) checkMySQLCluster(
 	clusterSettings := config.Settings().Stores.MySQL.Clusters[clusterName]
 	for _, requiredCluster := range clusterSettings.RequiredClusters {
 		requiredFlags := *flags
+		requiredFlags.ReadCheck = false
 		requiredFlags.OverrideThreshold = 0
 		requiredResult := check.checkMySQLCluster(appName, requiredCluster, &requiredFlags, checkedClusters)
 		if requiredResult == nil || requiredResult.StatusCode == http.StatusOK {

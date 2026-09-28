@@ -7,6 +7,7 @@ import (
 
 	"github.com/github/freno/pkg/base"
 	"github.com/github/freno/pkg/config"
+	"github.com/patrickmn/go-cache"
 	metrics "github.com/rcrowley/go-metrics"
 	"github.com/stretchr/testify/assert"
 )
@@ -271,6 +272,32 @@ func TestCheckMySQLRequiredClusters(t *testing.T) {
 		assert.Equal(t, 50.0, result.Threshold)
 	})
 
+	t.Run("read threshold override bypasses only the requested cluster recovery latch", func(t *testing.T) {
+		check, throttler := newCheck()
+		throttler.aggregatedMetrics.Set(
+			"mysql/replicas",
+			base.NewErrorMetricResult(45.0, base.RecoveryNotCompleteError),
+			cache.DefaultExpiration,
+		)
+		result := check.Check("transitions", "mysql", "replicas", "", &CheckFlags{
+			ReadCheck:         true,
+			OverrideThreshold: 100.0,
+		})
+		assert.Equal(t, http.StatusOK, result.StatusCode)
+
+		throttler.aggregatedMetrics.Set(
+			"mysql/primary",
+			base.NewErrorMetricResult(40.0, base.RecoveryNotCompleteError),
+			cache.DefaultExpiration,
+		)
+		result = check.Check("transitions", "mysql", "replicas", "", &CheckFlags{
+			ReadCheck:         true,
+			OverrideThreshold: 100.0,
+		})
+		assert.Equal(t, http.StatusTooManyRequests, result.StatusCode)
+		assert.Equal(t, "mysql/primary", result.MetricName)
+	})
+
 	t.Run("missing required metric fails closed", func(t *testing.T) {
 		check, throttler := newCheck()
 		throttler.aggregatedMetrics.Delete("mysql/primary")
@@ -367,4 +394,43 @@ func TestStabilizeMySQLMetricRequiresHealthyWindowAfterStartup(t *testing.T) {
 	_, err = result.Get()
 	assert.Nil(t, err)
 	assert.Equal(t, int64(0), metrics.Get("recovery.mysql.primary.active").(metrics.Gauge).Value())
+}
+
+func TestUpdateLeadershipResetsRecoveryStateOnRegain(t *testing.T) {
+	throttler := NewThrottler()
+	throttler.isLeader = true
+	throttler.mysqlRecoveryState["primary"] = &mysqlClusterRecoveryState{throttled: false}
+
+	throttler.updateLeadership(false)
+	assert.Len(t, throttler.mysqlRecoveryState, 1)
+
+	throttler.updateLeadership(true)
+	assert.Empty(t, throttler.mysqlRecoveryState)
+}
+
+func TestRequiredMySQLClustersHealthyForMemcache(t *testing.T) {
+	originalSettings := config.Settings().Stores.MySQL
+	defer func() {
+		config.Settings().Stores.MySQL = originalSettings
+	}()
+
+	config.Settings().Stores.MySQL = config.MySQLConfigurationSettings{
+		Clusters: map[string]*config.MySQLClusterConfigurationSettings{
+			"replicas": {RequiredClusters: []string{"primary"}},
+			"primary":  {ThrottleThreshold: 50.0},
+		},
+	}
+	throttler := NewThrottler()
+	aggregatedMetrics := map[string]base.MetricResult{
+		"replicas": base.NewSimpleMetricResult(1.0),
+		"primary":  base.NewSimpleMetricResult(40.0),
+	}
+
+	assert.True(t, throttler.requiredMySQLClustersHealthy("replicas", aggregatedMetrics, make(map[string]bool)))
+
+	aggregatedMetrics["primary"] = base.NewSimpleMetricResult(60.0)
+	assert.False(t, throttler.requiredMySQLClustersHealthy("replicas", aggregatedMetrics, make(map[string]bool)))
+
+	delete(aggregatedMetrics, "primary")
+	assert.False(t, throttler.requiredMySQLClustersHealthy("replicas", aggregatedMetrics, make(map[string]bool)))
 }
