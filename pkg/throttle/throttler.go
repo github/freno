@@ -2,6 +2,7 @@ package throttle
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"math/rand"
@@ -75,9 +76,16 @@ type Throttler struct {
 
 	throttledAppsMutex sync.Mutex
 	skippedHostsMutex  sync.Mutex
+	mysqlRecoveryMutex sync.Mutex
+	mysqlRecoveryState map[string]*mysqlClusterRecoveryState
 
 	nonLowPriorityAppRequestsThrottled *cache.Cache
 	httpClient                         *http.Client
+}
+
+type mysqlClusterRecoveryState struct {
+	throttled    bool
+	healthySince time.Time
 }
 
 func NewThrottler() *Throttler {
@@ -98,6 +106,7 @@ func NewThrottler() *Throttler {
 		recentApps:              cache.New(recentAppsExpiration, time.Minute),
 		metricsHealth:           cache.New(cache.NoExpiration, 0),
 		shareDomainMetricHealth: cache.New(5*sharedDomainCollectInterval, sharedDomainCollectInterval),
+		mysqlRecoveryState:      make(map[string]*mysqlClusterRecoveryState),
 
 		nonLowPriorityAppRequestsThrottled: cache.New(nonDeprioritizedAppMapExpiration, nonDeprioritizedAppMapInterval),
 
@@ -146,7 +155,7 @@ func (throttler *Throttler) Operate() {
 		case <-leaderCheckTick:
 			{
 				// sparse
-				throttler.isLeader = throttler.isLeaderFunc()
+				throttler.updateLeadership(throttler.isLeaderFunc())
 			}
 		case <-mysqlCollectTick:
 			{
@@ -437,15 +446,24 @@ func (throttler *Throttler) aggregateMySQLMetrics() error {
 	if !throttler.isLeader {
 		return nil
 	}
+	aggregatedMetrics := make(map[string]base.MetricResult, len(throttler.mysqlInventory.ClustersProbes))
 	for clusterName, probes := range throttler.mysqlInventory.ClustersProbes {
-		metricName := fmt.Sprintf("mysql/%s", clusterName)
 		ignoreHostsCount := throttler.mysqlInventory.IgnoreHostsCount[clusterName]
 		ignoreHostsThreshold := throttler.mysqlInventory.IgnoreHostsThreshold[clusterName]
 		aggregatedMetric := aggregateMySQLProbes(probes, clusterName, throttler.mysqlInventory.InstanceKeyMetrics, throttler.mysqlInventory.ClusterInstanceHttpChecks, ignoreHostsCount, config.Settings().Stores.MySQL.IgnoreDialTcpErrors, ignoreHostsThreshold)
+		aggregatedMetrics[clusterName] = throttler.stabilizeMySQLMetric(clusterName, aggregatedMetric, time.Now())
+	}
+	for clusterName, aggregatedMetric := range aggregatedMetrics {
+		metricName := fmt.Sprintf("mysql/%s", clusterName)
 		go throttler.aggregatedMetrics.Set(metricName, aggregatedMetric, cache.DefaultExpiration)
 		if throttler.memcacheClient != nil {
-			go func() {
+			requiredClustersHealthy := throttler.requiredMySQLClustersHealthy(clusterName, aggregatedMetrics, make(map[string]bool))
+			go func(metricName string, aggregatedMetric base.MetricResult, requiredClustersHealthy bool) {
 				memcacheKey := fmt.Sprintf("%s/%s", throttler.memcachePath, metricName)
+				if !requiredClustersHealthy {
+					throttler.memcacheClient.Delete(memcacheKey)
+					return
+				}
 				value, err := aggregatedMetric.Get()
 				if err != nil {
 					throttler.memcacheClient.Delete(memcacheKey)
@@ -454,10 +472,107 @@ func (throttler *Throttler) aggregateMySQLMetrics() error {
 					entryVal := fmt.Sprintf("%d:%.6f", epochMillis, value)
 					throttler.memcacheClient.Set(&memcache.Item{Key: memcacheKey, Value: []byte(entryVal), Expiration: 1})
 				}
-			}()
+			}(metricName, aggregatedMetric, requiredClustersHealthy)
 		}
 	}
 	return nil
+}
+
+func (throttler *Throttler) requiredMySQLClustersHealthy(clusterName string, aggregatedMetrics map[string]base.MetricResult, checkedClusters map[string]bool) bool {
+	if checkedClusters[clusterName] {
+		return true
+	}
+	checkedClusters[clusterName] = true
+
+	clusterSettings, ok := config.Settings().Stores.MySQL.Clusters[clusterName]
+	if !ok {
+		return false
+	}
+	for _, requiredCluster := range clusterSettings.RequiredClusters {
+		requiredSettings, configured := config.Settings().Stores.MySQL.Clusters[requiredCluster]
+		requiredMetric, collected := aggregatedMetrics[requiredCluster]
+		if !configured || !collected {
+			return false
+		}
+		value, err := requiredMetric.Get()
+		if err != nil || value > requiredSettings.ThrottleThreshold {
+			return false
+		}
+		if !throttler.requiredMySQLClustersHealthy(requiredCluster, aggregatedMetrics, checkedClusters) {
+			return false
+		}
+	}
+	return true
+}
+
+func (throttler *Throttler) updateLeadership(isLeader bool) {
+	if isLeader && !throttler.isLeader {
+		throttler.mysqlRecoveryMutex.Lock()
+		throttler.mysqlRecoveryState = make(map[string]*mysqlClusterRecoveryState)
+		throttler.mysqlRecoveryMutex.Unlock()
+	}
+	throttler.isLeader = isLeader
+}
+
+func (throttler *Throttler) stabilizeMySQLMetric(clusterName string, metricResult base.MetricResult, now time.Time) base.MetricResult {
+	clusterSettings, ok := config.Settings().Stores.MySQL.Clusters[clusterName]
+	if !ok || clusterSettings.RecoveryDurationMillis <= 0 {
+		return metricResult
+	}
+
+	value, err := metricResult.Get()
+	if errors.Is(err, base.NoHostsError) && !clusterSettings.FailOnNoHosts {
+		return metricResult
+	}
+
+	throttler.mysqlRecoveryMutex.Lock()
+	defer throttler.mysqlRecoveryMutex.Unlock()
+
+	state, ok := throttler.mysqlRecoveryState[clusterName]
+	if !ok {
+		// A new process or leader has no recovery history. Require a complete
+		// healthy window before admitting work rather than assuming the metric
+		// was healthy before this process began observing it.
+		state = &mysqlClusterRecoveryState{throttled: true}
+		throttler.mysqlRecoveryState[clusterName] = state
+	}
+
+	if err != nil || value > clusterSettings.ThrottleThreshold {
+		state.throttled = true
+		state.healthySince = time.Time{}
+		metrics.GetOrRegisterGauge(fmt.Sprintf("recovery.mysql.%s.active", clusterName), nil).Update(1)
+		return metricResult
+	}
+	if !state.throttled {
+		metrics.GetOrRegisterGauge(fmt.Sprintf("recovery.mysql.%s.active", clusterName), nil).Update(0)
+		return metricResult
+	}
+
+	recoveryThreshold := clusterSettings.ThrottleThreshold
+	if clusterSettings.RecoveryThreshold != nil {
+		recoveryThreshold = *clusterSettings.RecoveryThreshold
+	}
+	if value > recoveryThreshold {
+		state.healthySince = time.Time{}
+		metrics.GetOrRegisterGauge(fmt.Sprintf("recovery.mysql.%s.active", clusterName), nil).Update(1)
+		return base.NewErrorMetricResult(value, base.RecoveryNotCompleteError)
+	}
+	if state.healthySince.IsZero() {
+		state.healthySince = now
+		metrics.GetOrRegisterGauge(fmt.Sprintf("recovery.mysql.%s.active", clusterName), nil).Update(1)
+		return base.NewErrorMetricResult(value, base.RecoveryNotCompleteError)
+	}
+
+	recoveryDuration := time.Duration(clusterSettings.RecoveryDurationMillis) * time.Millisecond
+	if now.Sub(state.healthySince) < recoveryDuration {
+		metrics.GetOrRegisterGauge(fmt.Sprintf("recovery.mysql.%s.active", clusterName), nil).Update(1)
+		return base.NewErrorMetricResult(value, base.RecoveryNotCompleteError)
+	}
+
+	state.throttled = false
+	state.healthySince = time.Time{}
+	metrics.GetOrRegisterGauge(fmt.Sprintf("recovery.mysql.%s.active", clusterName), nil).Update(0)
+	return metricResult
 }
 
 func (throttler *Throttler) pushStatusToExpVar() {
