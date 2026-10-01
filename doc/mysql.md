@@ -211,19 +211,6 @@ The ProxySQL query above is illustrative: deployments must provide a scalar quer
 
 Configuration loading rejects missing `RequiredClusters` references and dependency cycles.
 
-### A1 repair mapping
+### Scope boundaries
 
-| A1 repair item | Freno implementation in this change | Remaining work |
-| --- | --- | --- |
-| Default transitions to one worker | Not a Freno responsibility. | Enforce in the transitions framework. |
-| Audit custom worker configurations | Not a Freno responsibility. | Audit and constrain custom transitions in the application. |
-| Identify Freno traffic as transitions | Existing Freno API already accepts the application name and emits per-app/per-store counters. | Complete caller rollout with `app=transitions` and monitor that identity. |
-| Mark transition writes as low priority | Existing `p=low` behavior remains compatible with composite checks. | Complete application rollout. |
-| Page on primary and ProxySQL connection failures | `FailOnNoHosts` and missing-required-metric handling prevent an unobservable probe failure from allowing work. | Add Datadog paging for probe and connectivity failures. |
-| Page on sustained primary `Threads_running` | A cached primary metric can now be required by the replica-lag decision; recovery hysteresis prevents immediate release. | Configure cluster thresholds and add the sustained Datadog monitor. |
-| Page before connection exhaustion | A cached ProxySQL capacity metric can now be required by the admission decision. | Define the production capacity query, reserve threshold, and Datadog monitor. |
-| Detect rising concurrency with falling completions | A derived scalar metric can be configured as another required cluster check. | Define and validate the correlation query and alert thresholds. |
-| Alert on sustained Freno rejection | Composite safety failures return normal Freno rejection/error status and existing counters remain available by app and store. | Add the rejection-ratio and minimum-volume Datadog monitor grouped by cluster and `app=transitions`. |
-| Provide a cluster-wide emergency pause | Existing app/store throttling remains the emergency control and is evaluated for each required metric. | Operationalize a deterministic transitions-plus-cluster command and runbook. |
-
-These changes provide admission enforcement; they do not create Datadog monitors, change transition worker defaults, or bound replica-to-primary fallback inside the application.
+These settings provide reusable admission checks and recovery behavior. Deployments remain responsible for choosing appropriate metrics and thresholds, configuring their host-discovery sources, monitoring probe health and rejection rates, and controlling application concurrency or fallback behavior.
