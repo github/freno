@@ -11,6 +11,7 @@ type CheckResult struct {
 	StatusCode int     `json:"StatusCode"`
 	Value      float64 `json:"Value"`
 	Threshold  float64 `json:"Threshold"`
+	MetricName string  `json:"MetricName,omitempty"`
 	Error      error   `json:"-"`
 	Message    string  `json:"Message"`
 }
