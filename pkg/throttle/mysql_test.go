@@ -265,3 +265,34 @@ func TestAggregateMySQLProbesWithHttpChecks(t *testing.T) {
 		test.S(t).ExpectNotNil(err)
 	}
 }
+
+func TestAggregateMySQLProbesWithMissingHttpChecks(t *testing.T) {
+clusterName := "c0"
+k1 := mysql.GetClusterInstanceKey(clusterName, &key1)
+k2 := mysql.GetClusterInstanceKey(clusterName, &key2)
+k3 := mysql.GetClusterInstanceKey(clusterName, &key3)
+
+results := mysql.InstanceMetricResultMap{
+k1: base.NewSimpleMetricResult(1.2),
+k2: base.NewSimpleMetricResult(2.5),
+k3: base.NewSimpleMetricResult(0.3),
+}
+
+// Test with missing HTTP check entry (will return 0 from map)
+checksWithMissing := mysql.ClusterInstanceHttpCheckResultMap{
+mysql.MySQLHttpCheckHashKey(clusterName, &key1): http.StatusOK,
+mysql.MySQLHttpCheckHashKey(clusterName, &key3): http.StatusOK,
+// key2 is missing - should be excluded
+}
+
+var probeSet mysql.Probes = map[mysql.InstanceKey](*mysql.Probe){}
+for ck := range results {
+probeSet[ck.Key] = &mysql.Probe{Key: ck.Key}
+}
+
+metric := aggregateMySQLProbes(&probeSet, clusterName, results, checksWithMissing, 0, false, 0)
+val, err := metric.Get()
+test.S(t).ExpectNil(err)
+// key2 (2.5) should be excluded due to missing HTTP check, worst should be 1.2
+test.S(t).ExpectEquals(val, 1.2)
+}
