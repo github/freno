@@ -6,10 +6,12 @@
 package mysql
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 	"time"
 
+	"github.com/go-sql-driver/mysql"
 	"github.com/outbrain/golib/sqlutils"
 	"github.com/patrickmn/go-cache"
 	metrics "github.com/rcrowley/go-metrics"
@@ -66,7 +68,7 @@ func (metric *MySQLThrottleMetric) Get() (float64, error) {
 }
 
 // ReadThrottleMetric returns replication lag for a given connection config; either by explicit query
-// or via SHOW SLAVE STATUS
+// or via SHOW REPLICA STATUS / SHOW SLAVE STATUS
 func ReadThrottleMetric(probe *Probe, clusterName string) (mySQLThrottleMetric *MySQLThrottleMetric) {
 	if mySQLThrottleMetric := getCachedMySQLThrottleMetric(probe); mySQLThrottleMetric != nil {
 		return mySQLThrottleMetric
@@ -115,17 +117,46 @@ func ReadThrottleMetric(probe *Probe, clusterName string) (mySQLThrottleMetric *
 		return mySQLThrottleMetric
 	}
 
-	// No metric query? By default we look at replication lag as output of SHOW SLAVE STATUS
+	// No metric query? By default we look at replication lag.
+	// Try SHOW REPLICA STATUS first (MySQL 8.0.22+, required in 8.4+), fall back to
+	// SHOW SLAVE STATUS for older MySQL versions that don't recognise the new syntax.
 
-	mySQLThrottleMetric.Err = sqlutils.QueryRowsMap(db, `show slave status`, func(m sqlutils.RowMap) error {
-		slaveIORunning := m.GetString("Slave_IO_Running")
-		slaveSQLRunning := m.GetString("Slave_SQL_Running")
-		secondsBehindMaster := m.GetNullInt64("Seconds_Behind_Master")
-		if !secondsBehindMaster.Valid {
-			return fmt.Errorf("replication not running; Slave_IO_Running=%+v, Slave_SQL_Running=%+v", slaveIORunning, slaveSQLRunning)
+	mySQLThrottleMetric.Err = sqlutils.QueryRowsMap(db, `show replica status`, func(m sqlutils.RowMap) error {
+		replicaIORunning := m.GetString("Replica_IO_Running")
+		replicaSQLRunning := m.GetString("Replica_SQL_Running")
+		secondsBehindSource := m.GetNullInt64("Seconds_Behind_Source")
+		if !secondsBehindSource.Valid {
+			return fmt.Errorf("replication not running; Replica_IO_Running=%+v, Replica_SQL_Running=%+v", replicaIORunning, replicaSQLRunning)
 		}
-		mySQLThrottleMetric.Value = float64(secondsBehindMaster.Int64)
+		mySQLThrottleMetric.Value = float64(secondsBehindSource.Int64)
 		return nil
 	})
+
+	// MySQL error 1064 means syntax error — the server doesn't understand SHOW REPLICA STATUS
+	// (MySQL < 8.0.22). Fall back to the legacy SHOW SLAVE STATUS command.
+	if mySQLThrottleMetric.Err != nil {
+		var mysqlErr *mysql.MySQLError
+		if errors.As(mySQLThrottleMetric.Err, &mysqlErr) && mysqlErr.Number == 1064 {
+			originalErr := mySQLThrottleMetric.Err
+			fallbackErr := sqlutils.QueryRowsMap(db, `show slave status`, func(m sqlutils.RowMap) error {
+				slaveIORunning := m.GetString("Slave_IO_Running")
+				slaveSQLRunning := m.GetString("Slave_SQL_Running")
+				secondsBehindMaster := m.GetNullInt64("Seconds_Behind_Master")
+				if !secondsBehindMaster.Valid {
+					return fmt.Errorf("replication not running; Slave_IO_Running=%+v, Slave_SQL_Running=%+v", slaveIORunning, slaveSQLRunning)
+				}
+				mySQLThrottleMetric.Value = float64(secondsBehindMaster.Int64)
+				return nil
+			})
+			if fallbackErr == nil {
+				mySQLThrottleMetric.Err = nil
+			} else {
+				// Both commands failed; surface the original error as it's more informative.
+				mySQLThrottleMetric.Err = originalErr
+			}
+		}
+		// Non-syntax errors (permissions, connectivity, replication issues) are kept as-is.
+	}
+
 	return cacheMySQLThrottleMetric(probe, mySQLThrottleMetric)
 }
