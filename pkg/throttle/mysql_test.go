@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/github/freno/pkg/base"
+	"github.com/github/freno/pkg/config"
 	"github.com/github/freno/pkg/mysql"
 
 	"github.com/outbrain/golib/log"
@@ -26,6 +27,27 @@ var (
 
 func init() {
 	log.SetLevel(log.ERROR)
+}
+
+func TestCapacityAggregationDoesNotIgnoreFailedOrSaturatedHosts(t *testing.T) {
+	cluster := "capacity"
+	capacity := &config.ProxySQLCapacityConfigurationSettings{Metric: "frontend"}
+	probes := mysql.Probes{
+		key1: {Key: key1, ProxySQLCapacitySettings: capacity},
+		key2: {Key: key2, ProxySQLCapacitySettings: capacity},
+	}
+	results := mysql.InstanceMetricResultMap{
+		mysql.GetClusterInstanceKey(cluster, &key1): base.NewSimpleMetricResult(10),
+		mysql.GetClusterInstanceKey(cluster, &key2): base.NewSimpleMetricResult(99),
+	}
+	value, err := aggregateMySQLProbes(&probes, cluster, results, nil, 1, true, 0).Get()
+	if err != nil || value != 99 {
+		t.Fatalf("capacity aggregation ignored saturation: %v, %v", value, err)
+	}
+	results[mysql.GetClusterInstanceKey(cluster, &key2)] = base.NewErrorMetricResult(0, base.NoHostsError)
+	if _, err := aggregateMySQLProbes(&probes, cluster, results, nil, 1, true, 0).Get(); err == nil {
+		t.Fatal("capacity aggregation ignored a failed host")
+	}
 }
 
 func TestAggregateMySQLProbesNoErrors(t *testing.T) {

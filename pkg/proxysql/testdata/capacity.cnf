@@ -1,0 +1,23 @@
+datadir="/tmp/proxysql-capacity-test"
+admin_variables=
+{
+  admin_credentials="admin:admin"
+  stats_credentials="stats:capacity-test-only"
+  mysql_ifaces="0.0.0.0:6032"
+}
+mysql_variables=
+{
+  threads=1
+  max_connections=200000
+  interfaces="127.0.0.1:6033"
+  monitor_enabled=false
+}
+mysql_servers=
+(
+  {
+    address="127.0.0.1"
+    port=3407
+    hostgroup=30
+    max_connections=1000
+  }
+)
