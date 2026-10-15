@@ -22,6 +22,7 @@ type MySQLClusterConfigurationSettings struct {
 	RecoveryDurationMillis int      // continuous recovery duration required before writes resume
 	FailOnNoHosts          bool     // reject checks when no eligible hosts remain instead of preserving legacy fail-open behavior
 	RequiredClusters       []string // additional MySQL cluster metrics that must pass for this cluster to pass
+	ShadowRequiredClusters []string // evaluate prospective dependencies without changing admission or memcache publication
 	Port                   int      // Specify if different than 3306 or if different than specified by MySQLConfigurationSettings
 	IgnoreHostsCount       int      // Number of hosts that can be skipped/ignored even on error or on exceeding theesholds
 	IgnoreHostsThreshold   float64  // Threshold beyond which IgnoreHostsCount applies (default: 0)
@@ -205,22 +206,36 @@ func (settings *MySQLConfigurationSettings) validateRequiredClusters() error {
 	visit = func(clusterName string) error {
 		switch states[clusterName] {
 		case visiting:
-			return fmt.Errorf("Stores.MySQL.Clusters contains a RequiredClusters cycle involving %q", clusterName)
+			return fmt.Errorf("Stores.MySQL.Clusters contains a RequiredClusters/ShadowRequiredClusters cycle involving %q", clusterName)
 		case visited:
 			return nil
 		}
 
 		states[clusterName] = visiting
-		for _, requiredCluster := range settings.Clusters[clusterName].RequiredClusters {
-			if _, ok := settings.Clusters[requiredCluster]; !ok {
-				return fmt.Errorf(
-					"Stores.MySQL.Clusters.%s.RequiredClusters references unknown cluster %q",
-					clusterName,
-					requiredCluster,
-				)
+		cluster := settings.Clusters[clusterName]
+		required := make(map[string]bool, len(cluster.RequiredClusters))
+		for _, name := range cluster.RequiredClusters {
+			required[name] = true
+		}
+		for _, name := range cluster.ShadowRequiredClusters {
+			if required[name] {
+				return fmt.Errorf("Stores.MySQL.Clusters.%s: cluster %q cannot appear in both RequiredClusters and ShadowRequiredClusters", clusterName, name)
 			}
-			if err := visit(requiredCluster); err != nil {
-				return err
+		}
+		for _, dependencies := range []struct {
+			field string
+			names []string
+		}{
+			{"RequiredClusters", cluster.RequiredClusters},
+			{"ShadowRequiredClusters", cluster.ShadowRequiredClusters},
+		} {
+			for _, name := range dependencies.names {
+				if _, ok := settings.Clusters[name]; !ok {
+					return fmt.Errorf("Stores.MySQL.Clusters.%s.%s references unknown cluster %q", clusterName, dependencies.field, name)
+				}
+				if err := visit(name); err != nil {
+					return err
+				}
 			}
 		}
 		states[clusterName] = visited

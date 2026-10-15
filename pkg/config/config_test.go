@@ -139,7 +139,48 @@ func TestMySQLRequiredClusters(t *testing.T) {
 				"replicas": {RequiredClusters: []string{"primary"}},
 				"primary":  {RequiredClusters: []string{"replicas"}},
 			},
-			wantErr: `Stores.MySQL.Clusters contains a RequiredClusters cycle involving "primary"`,
+			wantErr: `Stores.MySQL.Clusters contains a RequiredClusters/ShadowRequiredClusters cycle involving "primary"`,
+		},
+		{
+			name: "unknown shadow dependency",
+			clusters: map[string]*MySQLClusterConfigurationSettings{
+				"replicas": {ShadowRequiredClusters: []string{"primary"}},
+			},
+			wantErr: `Stores.MySQL.Clusters.replicas.ShadowRequiredClusters references unknown cluster "primary"`,
+		},
+		{
+			name: "shadow cycle",
+			clusters: map[string]*MySQLClusterConfigurationSettings{
+				"primary":  {ShadowRequiredClusters: []string{"replicas"}},
+				"replicas": {ShadowRequiredClusters: []string{"primary"}},
+			},
+			wantErr: `Stores.MySQL.Clusters contains a RequiredClusters/ShadowRequiredClusters cycle involving "primary"`,
+		},
+		{
+			name: "mixed dependency cycle",
+			clusters: map[string]*MySQLClusterConfigurationSettings{
+				"primary":  {RequiredClusters: []string{"replicas"}},
+				"replicas": {ShadowRequiredClusters: []string{"primary"}},
+			},
+			wantErr: `Stores.MySQL.Clusters contains a RequiredClusters/ShadowRequiredClusters cycle involving "primary"`,
+		},
+		{
+			name: "enforced and shadow overlap",
+			clusters: map[string]*MySQLClusterConfigurationSettings{
+				"primary":  {},
+				"replicas": {RequiredClusters: []string{"primary"}, ShadowRequiredClusters: []string{"primary"}},
+			},
+			wantErr: `Stores.MySQL.Clusters.replicas: cluster "primary" cannot appear in both RequiredClusters and ShadowRequiredClusters`,
+		},
+		{
+			name: "nested and shared dependencies",
+			clusters: map[string]*MySQLClusterConfigurationSettings{
+				"replicas": {RequiredClusters: []string{"required"}, ShadowRequiredClusters: []string{"primary", "primary"}},
+				"required": {ShadowRequiredClusters: []string{"primary"}},
+				"primary":  {RequiredClusters: []string{"capacity"}, ShadowRequiredClusters: []string{"extra"}},
+				"capacity": {},
+				"extra":    {RequiredClusters: []string{"capacity"}},
+			},
 		},
 		{
 			name: "null cluster",

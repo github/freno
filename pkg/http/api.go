@@ -366,7 +366,7 @@ type discardWriter struct{ io.Writer }
 func (discardWriter) Header() http.Header { return make(http.Header) }
 func (discardWriter) WriteHeader(int)     {}
 
-// Metrics exports process metrics, excluding aggregate and probe metrics on followers.
+// Metrics exports process metrics, excluding leader-only metrics on followers.
 // Filtering happens here because published expvar values cannot be removed.
 func (api *APIImpl) Metrics(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
 	metricsHandler.ServeHTTP(discardWriter{Writer: io.Discard}, r)
@@ -375,7 +375,7 @@ func (api *APIImpl) Metrics(w http.ResponseWriter, r *http.Request, _ httprouter
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	metricValues := make(map[string]json.RawMessage)
 	expvar.Do(func(metric expvar.KeyValue) {
-		if !isLeader && (strings.HasPrefix(metric.Key, "aggregated.") || strings.HasPrefix(metric.Key, "probes.")) {
+		if !isLeader && (strings.HasPrefix(metric.Key, "aggregated.") || strings.HasPrefix(metric.Key, "probes.") || strings.HasPrefix(metric.Key, "shadow.background.")) {
 			return
 		}
 		metricValues[metric.Key] = json.RawMessage(metric.Value.String())
