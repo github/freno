@@ -66,3 +66,18 @@ func TestGetDBUri(t *testing.T) {
 	dbUri = c.GetDBUri("test_database")
 	test.S(t).ExpectEquals(dbUri, "gromit:penguin@tcp(myhost:3306)/test_database?interpolateParams=true&collation=utf8mb4_unicode_ci&timeout=1000ms")
 }
+
+func TestCapacityMetricDoesNotFallBackToMySQLQueries(t *testing.T) {
+	probe := &Probe{
+		Key:                      InstanceKey{Hostname: "127.0.0.1", Port: 3306},
+		MetricQuery:              "SELECT 1",
+		ProxySQLCapacitySettings: &config.ProxySQLCapacityConfigurationSettings{Metric: "invalid"},
+	}
+	metric := ReadThrottleMetric(probe, "capacity")
+	if metric.Err == nil || metric.Err.Error() != "Metric must be frontend or writer-backend" {
+		t.Fatalf("capacity probe fell through to ordinary SQL: %v", metric.Err)
+	}
+	if metric.ClusterName != "capacity" || metric.Key != probe.Key {
+		t.Fatalf("capacity metric lost its cluster/endpoint identity: %+v", metric)
+	}
+}

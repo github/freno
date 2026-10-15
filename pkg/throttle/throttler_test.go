@@ -2,15 +2,78 @@ package throttle
 
 import (
 	"net/http"
+	"net/http/httptest"
 	"testing"
 	"time"
 
 	"github.com/github/freno/pkg/base"
 	"github.com/github/freno/pkg/config"
+	"github.com/github/freno/pkg/mysql"
 	"github.com/patrickmn/go-cache"
 	metrics "github.com/rcrowley/go-metrics"
 	"github.com/stretchr/testify/assert"
 )
+
+func TestCapacityDiscoveryUsesAdminPortWithoutMySQLHostSkipping(t *testing.T) {
+	original := config.Settings().Stores.MySQL
+	defer func() { config.Settings().Stores.MySQL = original }()
+	capacity := &config.ProxySQLCapacityConfigurationSettings{Metric: "frontend"}
+	config.Settings().Stores.MySQL = config.MySQLConfigurationSettings{
+		Clusters: map[string]*config.MySQLClusterConfigurationSettings{
+			"capacity": {
+				Port: 6032, User: "stats", Password: "test-only", HttpCheckPort: -1,
+				IgnoreHosts:              []string{"proxy"},
+				StaticHostsSettings:      config.StaticHostsConfigurationSettings{Hosts: []string{"proxy.example:3306"}},
+				ProxySQLCapacitySettings: capacity,
+			},
+		},
+	}
+	throttler := NewThrottler()
+	throttler.isLeader = true
+	throttler.skippedHosts.SetDefault("proxy.example", true)
+	if err := throttler.refreshMySQLInventory(); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case cluster := <-throttler.mysqlClusterProbesChan:
+		probe := (*cluster.InstanceProbes)[mysql.InstanceKey{Hostname: "proxy.example", Port: 6032}]
+		if len(*cluster.InstanceProbes) != 1 || probe == nil || probe.ProxySQLCapacitySettings != capacity {
+			t.Fatalf("discovery did not retain the admin probe: %+v", cluster)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("capacity discovery did not publish probes")
+	}
+}
+
+func TestCapacityFailedDiscoveryClearsThePreviousRoster(t *testing.T) {
+	original := config.Settings().Stores.MySQL
+	defer func() { config.Settings().Stores.MySQL = original }()
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Write([]byte("invalid HAProxy CSV"))
+	}))
+	defer server.Close()
+	config.Settings().Stores.MySQL = config.MySQLConfigurationSettings{
+		Clusters: map[string]*config.MySQLClusterConfigurationSettings{
+			"capacity": {
+				HAProxySettings:          config.HAProxyConfigurationSettings{Addresses: server.URL, PoolName: "writer"},
+				ProxySQLCapacitySettings: &config.ProxySQLCapacityConfigurationSettings{Metric: "frontend"},
+			},
+		},
+	}
+	throttler := NewThrottler()
+	throttler.isLeader = true
+	if err := throttler.refreshMySQLInventory(); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case cluster := <-throttler.mysqlClusterProbesChan:
+		if cluster.ClusterName != "capacity" || len(*cluster.InstanceProbes) != 0 {
+			t.Fatalf("failed discovery retained old hosts: %+v", cluster)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("failed discovery must explicitly clear capacity probes")
+	}
+}
 
 func Test_checkAppMetricResult(t *testing.T) {
 	throttler := NewThrottler()

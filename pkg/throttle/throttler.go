@@ -286,15 +286,19 @@ func (throttler *Throttler) refreshMySQLInventory() error {
 	log.Debugf("refreshing MySQL inventory")
 
 	addInstanceKey := func(key *mysql.InstanceKey, clusterName string, clusterSettings *config.MySQLClusterConfigurationSettings, probes *mysql.Probes) {
-		for _, ignore := range clusterSettings.IgnoreHosts {
-			if strings.Contains(key.StringCode(), ignore) {
-				log.Debugf("instance key ignored: %+v", key)
+		if clusterSettings.ProxySQLCapacitySettings != nil {
+			key = &mysql.InstanceKey{Hostname: key.Hostname, Port: clusterSettings.Port}
+		} else {
+			for _, ignore := range clusterSettings.IgnoreHosts {
+				if strings.Contains(key.StringCode(), ignore) {
+					log.Debugf("instance key ignored: %+v", key)
+					return
+				}
+			}
+			if _, skipped := throttler.skippedHosts.Get(key.Hostname); skipped {
+				log.Debugf("host skipped: %+v", key.Hostname)
 				return
 			}
-		}
-		if _, skipped := throttler.skippedHosts.Get(key.Hostname); skipped {
-			log.Debugf("host skipped: %+v", key.Hostname)
-			return
 		}
 		if !key.IsValid() {
 			log.Debugf("read invalid instance key: [%+v] for cluster %+v", key, clusterName)
@@ -303,13 +307,14 @@ func (throttler *Throttler) refreshMySQLInventory() error {
 		log.Debugf("read instance key: %+v", key)
 
 		probe := &mysql.Probe{
-			Key:           *key,
-			User:          clusterSettings.User,
-			Password:      clusterSettings.Password,
-			MetricQuery:   clusterSettings.MetricQuery,
-			CacheMillis:   clusterSettings.CacheMillis,
-			HttpCheckPath: clusterSettings.HttpCheckPath,
-			HttpCheckPort: clusterSettings.HttpCheckPort,
+			Key:                      *key,
+			User:                     clusterSettings.User,
+			Password:                 clusterSettings.Password,
+			MetricQuery:              clusterSettings.MetricQuery,
+			CacheMillis:              clusterSettings.CacheMillis,
+			HttpCheckPath:            clusterSettings.HttpCheckPath,
+			HttpCheckPort:            clusterSettings.HttpCheckPort,
+			ProxySQLCapacitySettings: clusterSettings.ProxySQLCapacitySettings,
 		}
 		(*probes)[*key] = probe
 	}
@@ -319,7 +324,15 @@ func (throttler *Throttler) refreshMySQLInventory() error {
 		clusterSettings := clusterSettings
 		// config may dynamically change, but internal structure (config.Settings().Stores.MySQL.Clusters in our case)
 		// is immutable and can only be _replaced_. Hence, it's safe to read in a goroutine:
-		go func() error {
+		go func() (err error) {
+			defer func() {
+				if err != nil && clusterSettings.ProxySQLCapacitySettings != nil {
+					// A failed refresh must not leave an old proxy roster looking healthy.
+					throttler.mysqlClusterProbesChan <- &mysql.ClusterProbes{
+						ClusterName: clusterName, InstanceProbes: mysql.NewProbes(),
+					}
+				}
+			}()
 			throttler.mysqlClusterThresholds.Set(clusterName, clusterSettings.ThrottleThreshold, cache.DefaultExpiration)
 			if !clusterSettings.HAProxySettings.IsEmpty() {
 				poolName := clusterSettings.HAProxySettings.PoolName
@@ -336,6 +349,9 @@ func (throttler *Throttler) refreshMySQLInventory() error {
 						totalHosts = append(totalHosts, hosts...)
 						log.Debugf("Read %+v hosts from haproxy %s/#%s", len(hosts), u.String(), poolName)
 					} else {
+						if clusterSettings.ProxySQLCapacitySettings != nil {
+							return log.Errorf("Unable to discover ProxySQL capacity hosts from %s/#%s: %+v", u.String(), poolName, err)
+						}
 						log.Errorf("Unable to get HAproxy hosts from %s/#%s: %+v", u.String(), poolName, err)
 					}
 				}

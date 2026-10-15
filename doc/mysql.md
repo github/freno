@@ -160,7 +160,8 @@ A cluster can require additional cluster metrics to pass before `freno` permits 
   "prod4": {
     "RequiredClusters": [
       "prod4-primary",
-      "prod4-proxysql"
+      "prod4-proxysql-frontend",
+      "prod4-proxysql-writer-backend"
     ],
     "HAProxySettings": {
       "Host": "my.haproxy.mydomain.com",
@@ -181,25 +182,54 @@ A cluster can require additional cluster metrics to pass before `freno` permits 
       ]
     }
   },
-  "prod4-proxysql": {
+  "prod4-proxysql-frontend": {
     "User": "${proxysql_stats_user}",
     "Password": "${proxysql_stats_password}",
-    "MetricQuery": "select connection_pressure_percent from operational_metrics.proxysql_capacity limit 1",
-    "CacheMillis": 500,
+    "Port": 6032,
     "ThrottleThreshold": 80,
     "RecoveryThreshold": 60,
-    "RecoveryDurationMillis": 5000,
+    "RecoveryDurationMillis": 30000,
     "FailOnNoHosts": true,
-    "StaticHostsSettings": {
-      "Hosts": [
-        "my.prod4.proxysql.example.com:6032"
+    "ProxySQLCapacitySettings": {
+      "Metric": "frontend",
+      "FrontendMaxConnections": 200000,
+      "WriterHostgroupID": 30,
+      "BackendLimits": [
+        {"Host": "/var/run/mysqld/mysqld.sock", "Port": 0, "MaxConnections": 1000}
       ]
+    },
+    "StaticHostsSettings": {
+      "Hosts": ["my.prod4.proxysql.example.com"]
+    }
+  },
+  "prod4-proxysql-writer-backend": {
+    "User": "${proxysql_stats_user}",
+    "Password": "${proxysql_stats_password}",
+    "Port": 6032,
+    "ThrottleThreshold": 80,
+    "RecoveryThreshold": 60,
+    "RecoveryDurationMillis": 30000,
+    "FailOnNoHosts": true,
+    "ProxySQLCapacitySettings": {
+      "Metric": "writer-backend",
+      "FrontendMaxConnections": 200000,
+      "WriterHostgroupID": 30,
+      "BackendLimits": [
+        {"Host": "/var/run/mysqld/mysqld.sock", "Port": 0, "MaxConnections": 1000}
+      ]
+    },
+    "StaticHostsSettings": {
+      "Hosts": ["my.prod4.proxysql.example.com"]
     }
   }
 }
 ```
 
-The ProxySQL query above is illustrative: deployments must provide a scalar query or operational view whose value increases as usable connection capacity is consumed.
+The capacity limits and thresholds above are examples, not production-approved
+values. Capacity probes execute built-in queries against ProxySQL's `stats`
+database, not an application view or a MySQL backend. They require explicit
+stats credentials and do not inherit MySQL credentials, queries, host ignores,
+or the legacy fail-open no-host behavior.
 
 - `RequiredClusters` lists additional configured metrics that must return `HTTP 200`. Missing required runtime metrics fail closed.
 - `FailOnNoHosts` changes the legacy no-host response from `HTTP 200` to `HTTP 500`. Enable it for primary and ProxySQL safety probes, where an empty roster cannot prove that work is safe.
@@ -210,6 +240,63 @@ The ProxySQL query above is illustrative: deployments must provide a scalar quer
 - Check responses include `MetricName`, identifying the replica, primary, or ProxySQL metric that blocked a composite decision. `recovery.mysql.<cluster>.active` reports whether the recovery latch is active.
 
 Configuration loading rejects missing `RequiredClusters` references and dependency cycles.
+
+### Direct ProxySQL capacity sampling
+
+`ProxySQLCapacitySettings.Metric` selects `frontend` or `writer-backend`.
+Frontend utilization is `100 * Client_Connections_connected /
+FrontendMaxConnections`. Writer utilization is the maximum of `100 * ConnUsed /
+MaxConnections` across the expected backend endpoints in `WriterHostgroupID`.
+`ConnFree` is not the configured capacity; `ConnUsed / (ConnUsed + ConnFree)` is
+not used. Unknown ONLINE backends, duplicate endpoints, missing expected
+backends, non-ONLINE expected backends, invalid counters, and query failures
+reject writer capacity checks. Frontend and backend checks must both be attached
+when enforcing full connection-capacity protection.
+
+The stats-only account cannot read runtime configuration tables. Operators must
+verify every configured limit against runtime before enabling collection, and
+revalidate limits whenever backend membership or ProxySQL configuration changes.
+All proxies discovered by one configured metric must have matching verified
+limits and backend endpoint mappings; otherwise split them into explicit probes.
+There is no automatic runtime-limit drift detection.
+
+Only the leader samples. Both metrics share one reusable admin connection and
+one five-second snapshot per proxy, credential set, and writer hostgroup.
+A complete snapshot uses two small stats queries, at most 0.4 queries/second in
+steady state. Failed polls replace the previous snapshot and are cached for the
+same five seconds; application requests cannot trigger a hot retry loop.
+The entire two-query batch has a one-second deadline, with one-second dial,
+read, and write limits. Inactive endpoint pools are retired after ten minutes.
+
+An admin port must be explicit or default to 6032; common application ports
+3306 and 6033 are rejected. For capacity probes, discovered port numbers are
+replaced by the configured admin port, including Vitess tablet ports. HAProxy
+and Vitess discovery are only appropriate after confirming that ProxySQL is
+colocated with those database hosts. Detached deployments require an explicit
+proxy roster. `ProxySQLSettings` is not suitable: it discovers MySQL backends.
+Capacity probes do not inherit the replica HTTP check or honor host-skipping
+settings that could hide a saturated proxy.
+
+These queries add no SQL or connections to the MySQL backend. They still consume
+ProxySQL CPU/memory, including shared resources on a colocated primary host.
+Measure that overhead during shadow rollout; do not claim zero host overhead.
+No listener, permissions, deployment, or enforcement is enabled by adding code.
+
+The opt-in integration test uses an isolated ProxySQL fixture with monitoring
+disabled and a listening backend sentinel. It verifies successful stats-only
+sampling while the sentinel receives zero connections:
+
+```bash
+docker run --rm --name freno-capacity-test \
+  --mount type=bind,src="$PWD/pkg/proxysql/testdata/capacity.cnf",dst=/etc/proxysql.cnf,readonly \
+  proxysql/proxysql:2.7.3
+# In another shell; no container ports need to be published:
+docker run --rm --network container:freno-capacity-test \
+  --mount type=bind,src="$PWD",dst=/source,readonly -w /source \
+  -e FRENO_PROXYSQL_CAPACITY_INTEGRATION=1 golang:1.20 \
+  go test -mod=vendor ./pkg/proxysql -run TestCapacityIntegrationNoBackendConnections -count=1
+docker stop freno-capacity-test
+```
 
 ### Rolling out primary safety checks
 

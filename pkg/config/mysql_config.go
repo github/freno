@@ -29,10 +29,11 @@ type MySQLClusterConfigurationSettings struct {
 	HttpCheckPath          string   // Specify if different than specified by MySQLConfigurationSettings
 	IgnoreHosts            []string // override MySQLConfigurationSettings's, or leave empty to inherit those settings
 
-	HAProxySettings     HAProxyConfigurationSettings  // If list of servers is to be acquired via HAProxy, provide this field
-	ProxySQLSettings    ProxySQLConfigurationSettings // If list of servers is to be acquired via ProxySQL, provide this field
-	VitessSettings      VitessConfigurationSettings   // If list of servers is to be acquired via Vitess, provide this field
-	StaticHostsSettings StaticHostsConfigurationSettings
+	HAProxySettings          HAProxyConfigurationSettings  // If list of servers is to be acquired via HAProxy, provide this field
+	ProxySQLSettings         ProxySQLConfigurationSettings // If list of servers is to be acquired via ProxySQL, provide this field
+	VitessSettings           VitessConfigurationSettings   // If list of servers is to be acquired via Vitess, provide this field
+	StaticHostsSettings      StaticHostsConfigurationSettings
+	ProxySQLCapacitySettings *ProxySQLCapacityConfigurationSettings
 }
 
 // Hook to implement adjustments after reading each configuration file.
@@ -116,6 +117,15 @@ func (settings *MySQLConfigurationSettings) postReadAdjustments() error {
 			if err := clusterSettings.VitessSettings.postReadAdjustments(); err != nil {
 				return fmt.Errorf("Stores.MySQL.Clusters.%s.VitessSettings: %w", clusterName, err)
 			}
+		}
+		if clusterSettings.ProxySQLCapacitySettings != nil {
+			if !clusterSettings.VitessSettings.IsEmpty() && len(clusterSettings.VitessSettings.Cells) == 0 {
+				clusterSettings.VitessSettings.Cells = settings.VitessCells
+			}
+			if err := clusterSettings.adjustProxySQLCapacity(); err != nil {
+				return fmt.Errorf("Stores.MySQL.Clusters.%s.ProxySQLCapacitySettings: %w", clusterName, err)
+			}
+			continue
 		}
 		if clusterSettings.User == "" {
 			clusterSettings.User = settings.User

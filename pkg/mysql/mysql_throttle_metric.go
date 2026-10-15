@@ -10,12 +10,14 @@ import (
 	"strings"
 	"time"
 
+	"github.com/github/freno/pkg/proxysql"
 	"github.com/outbrain/golib/sqlutils"
 	"github.com/patrickmn/go-cache"
 	metrics "github.com/rcrowley/go-metrics"
 )
 
 var mysqlMetricCache = cache.New(cache.NoExpiration, 10*time.Millisecond)
+var proxySQLCapacitySampler = proxysql.NewCapacitySampler()
 
 func getMySQLMetricCacheKey(probe *Probe) string {
 	return fmt.Sprintf("%s:%s", probe.Key, probe.MetricQuery)
@@ -68,9 +70,11 @@ func (metric *MySQLThrottleMetric) Get() (float64, error) {
 // ReadThrottleMetric returns replication lag for a given connection config; either by explicit query
 // or via SHOW SLAVE STATUS
 func ReadThrottleMetric(probe *Probe, clusterName string) (mySQLThrottleMetric *MySQLThrottleMetric) {
-	if mySQLThrottleMetric := getCachedMySQLThrottleMetric(probe); mySQLThrottleMetric != nil {
-		return mySQLThrottleMetric
-		// On cached results we avoid taking latency metrics
+	if probe.ProxySQLCapacitySettings == nil {
+		if mySQLThrottleMetric := getCachedMySQLThrottleMetric(probe); mySQLThrottleMetric != nil {
+			return mySQLThrottleMetric
+			// On cached results we avoid taking latency metrics
+		}
 	}
 
 	started := time.Now()
@@ -87,6 +91,13 @@ func ReadThrottleMetric(probe *Probe, clusterName string) (mySQLThrottleMetric *
 			}
 		}()
 	}(mySQLThrottleMetric, started)
+
+	if probe.ProxySQLCapacitySettings != nil {
+		mySQLThrottleMetric.Value, mySQLThrottleMetric.Err = proxySQLCapacitySampler.Read(
+			probe.Key.Hostname, probe.Key.Port, probe.User, probe.Password, *probe.ProxySQLCapacitySettings,
+		)
+		return mySQLThrottleMetric
+	}
 
 	dbUri := probe.GetDBUri("information_schema")
 	db, fromCache, err := sqlutils.GetDB(dbUri)
