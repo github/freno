@@ -211,6 +211,48 @@ The ProxySQL query above is illustrative: deployments must provide a scalar quer
 
 Configuration loading rejects missing `RequiredClusters` references and dependency cycles.
 
+### Rolling out primary safety checks
+
+Deploy a binary containing these settings before deploying configuration that
+uses them. The related #197 changes were merged into the #196 feature branch,
+not independently into the default branch; a merged stacked PR is not proof of
+a deployed server version.
+
+1. Deploy the binary with the existing configuration. Without required
+   dependencies, fail-on-no-hosts, or a recovery duration, legacy cluster
+   decisions retain their existing behavior.
+2. Add separately named primary metrics in shadow mode, without adding them to
+   the application's normal cluster `RequiredClusters`. Validate writer
+   discovery, privileges, probe load, error rates, and recovery gauges.
+3. Review thresholds against recent traffic, known incidents, and per-host/shard
+   coverage. Five-minute Datadog averages are candidate baselines, not equivalent
+   to the instantaneous SQL samples used by the safety check. Missing data must
+   not be interpreted as zero or healthy.
+4. Add a primary dependency to one reviewed cluster. Exercise overload, probe
+   failure, missing hosts, leadership changes, and the HTTP and memcache paths.
+   Required probes fail closed; verify callers defer work rather than bypassing
+   protection on an error.
+5. Expand only after reviewing rejection rates, recovery duration, job backlog,
+   application errors, and primary health against agreed success/rollback limits.
+
+The fleet Puppet configuration uses a 30-second healthy recovery duration and
+an empty enforcement allowlist. A leadership change starts a fresh recovery
+window for configured metrics. Coordinate deployment/restart behavior with the
+operators of active clients.
+
+Ruby clients default to a 10-second wait budget. A caller encountering the
+beginning of a 30-second server recovery window can therefore receive
+`WaitedTooLong` before the server recovers. Application owners must approve a
+longer wait budget or implement safe retry/defer behavior. Neither a longer
+timeout nor client-side consecutive checks guarantee recovery during overload.
+
+Rollback enforcement by removing the primary dependency from the normal
+cluster, keeping its existing replica-lag configuration. In the Puppet rollout,
+remove the cluster from `EnforcedClusters` with `EnforceAll` still false and
+deploy the configuration. This is a configuration deployment, not an
+instantaneous runtime toggle; account for service notifications and startup
+recovery. Disable generation only after removing all references to its probes.
+
 ### Scope boundaries
 
 These settings provide reusable admission checks and recovery behavior. Deployments remain responsible for choosing appropriate metrics and thresholds, configuring their host-discovery sources, monitoring probe health and rejection rates, and controlling application concurrency or fallback behavior.
