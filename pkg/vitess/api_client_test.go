@@ -13,7 +13,7 @@ import (
 
 func TestTabletIsValidReplica(t *testing.T) {
 	replica := Tablet{Type: topodata.TabletType_REPLICA}
-	primary := Tablet{Type: topodata.TabletType_MASTER}
+	primary := Tablet{Type: tabletTypePrimary}
 
 	if !replica.IsValidReplica() {
 		t.Fatal("expected replica tablet to remain valid through compatibility method")
@@ -31,7 +31,7 @@ func TestParseTablets(t *testing.T) {
 				{
 					// primary (should be ignored)
 					Alias: &topodata.TabletAlias{Cell: "cell1"},
-					Type:  topodata.TabletType_MASTER,
+					Type:  tabletTypePrimary,
 				},
 				{
 					// replica without realtime tablet stats enabled (assumed to be healthy)
@@ -153,24 +153,26 @@ func TestParseTablets(t *testing.T) {
 		}
 	})
 
-	t.Run("primary", func(t *testing.T) {
-		tablets, err := ParseTablets(config.VitessConfigurationSettings{
-			API:        vitessApi.URL,
-			Keyspace:   "test",
-			Shard:      "00",
-			TabletType: "MASTER",
-		})
-		if err != nil {
-			t.Fatalf("Expected no error, got %q", err)
-		}
+	for _, tabletType := range []string{"PRIMARY", "MASTER"} {
+		t.Run(tabletType, func(t *testing.T) {
+			tablets, err := ParseTablets(config.VitessConfigurationSettings{
+				API:        vitessApi.URL,
+				Keyspace:   "test",
+				Shard:      "00",
+				TabletType: tabletType,
+			})
+			if err != nil {
+				t.Fatalf("Expected no error, got %q", err)
+			}
 
-		if len(tablets) != 1 {
-			t.Fatalf("Expected 1 tablet, got %d", len(tablets))
-		}
-		if tablets[0].Type != topodata.TabletType_MASTER {
-			t.Fatalf("Expected master tablet, got %s", tablets[0].Type.String())
-		}
-	})
+			if len(tablets) != 1 {
+				t.Fatalf("Expected 1 tablet, got %d", len(tablets))
+			}
+			if tablets[0].Type != tabletTypePrimary {
+				t.Fatalf("Expected primary tablet, got %s", tablets[0].Type.String())
+			}
+		})
+	}
 
 	t.Run("not-found", func(t *testing.T) {
 		tablets, err := ParseTablets(config.VitessConfigurationSettings{

@@ -15,6 +15,9 @@ import (
 
 const defaultTimeout = time.Duration(5) * time.Second
 
+// The pinned Vitess enum names value 1 MASTER; current Vitess calls it PRIMARY.
+const tabletTypePrimary = topodata.TabletType_MASTER
+
 // TabletRealtimeStats represents realtime stats from a running instance of vttablet.
 type TabletRealtimeStats struct {
 	HealthError string `json:"health_error,omitempty"`
@@ -108,8 +111,8 @@ func ParseCells(settings config.VitessConfigurationSettings) (cells []string) {
 }
 
 func configuredTabletType(settings config.VitessConfigurationSettings) topodata.TabletType {
-	if settings.TabletType == "MASTER" {
-		return topodata.TabletType_MASTER
+	if settings.TabletType == "PRIMARY" || settings.TabletType == "MASTER" {
+		return tabletTypePrimary
 	}
 	return topodata.TabletType_REPLICA
 }

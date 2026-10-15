@@ -212,8 +212,10 @@ func TestVitessTabletTypeConfiguration(t *testing.T) {
 	}{
 		{name: "default replica", want: "REPLICA"},
 		{name: "replica", tabletType: "replica", want: "REPLICA"},
-		{name: "master", tabletType: "master", want: "MASTER"},
-		{name: "primary alias", tabletType: "primary", want: "MASTER"},
+		{name: "primary", tabletType: "primary", want: "PRIMARY"},
+		{name: "legacy master alias", tabletType: "master", want: "PRIMARY"},
+		{name: "primary with whitespace", tabletType: " PRIMARY ", want: "PRIMARY"},
+		{name: "legacy alias with whitespace", tabletType: " MASTER ", want: "PRIMARY"},
 		{name: "invalid", tabletType: "rdonly", wantErr: `Stores.MySQL.Clusters.vitess.VitessSettings: unsupported Vitess tablet type "rdonly"`},
 	}
 
