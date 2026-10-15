@@ -121,7 +121,7 @@ Noteworthy:
 
 - `prod4` chooses to (but doesn't have to) override the `ThrottleThreshold` to `0.8` seconds
 - `prod4` list of servers is dictated by `HAProxy`. `freno` will routinely and dynamically poll given HAProxy server for list of hosts. These will include any hosts not in `NOLB`.
-- `sharded` discovers `REPLICA` tablets by default. Set `TabletType` to `MASTER` (or `PRIMARY`) for a separately configured primary safety metric.
+- `sharded` discovers `REPLICA` tablets by default. Set `TabletType` to `PRIMARY` for a separately configured primary safety metric. `MASTER` is accepted as a deprecated alias and normalized to `PRIMARY`.
 - `local` cluster chooses to override `User`, `Password` and `IgnoreHostsCount`.
 - `local` cluster defines a static list of hosts.
 
@@ -311,11 +311,15 @@ a deployed server version.
 2. Add separately named primary metrics in shadow mode, without adding them to
    the application's normal cluster `RequiredClusters`. Validate writer
    discovery, privileges, probe load, error rates, and recovery gauges.
+   Here, shadow mode means collection only: per-probe self-checks report errors,
+   but there is no `ShadowRequiredClusters` setting or composite "would reject"
+   counter. Do not add new probes and enforce them in the same deployment.
 3. Review thresholds against recent traffic, known incidents, and per-host/shard
    coverage. Five-minute Datadog averages are candidate baselines, not equivalent
    to the instantaneous SQL samples used by the safety check. Missing data must
    not be interpreted as zero or healthy.
-4. Add a primary dependency to one reviewed cluster. Exercise overload, probe
+4. In a separate reviewed configuration change, add a primary dependency to one
+   cluster whose probes have been validated. Exercise overload, probe
    failure, missing hosts, leadership changes, and the HTTP and memcache paths.
    Required probes fail closed; verify callers defer work rather than bypassing
    protection on an error.

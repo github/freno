@@ -32,8 +32,8 @@ func (settings *VitessConfigurationSettings) postReadAdjustments() error {
 	switch strings.ToUpper(strings.TrimSpace(settings.TabletType)) {
 	case "", "REPLICA":
 		settings.TabletType = "REPLICA"
-	case "MASTER", "PRIMARY":
-		settings.TabletType = "MASTER"
+	case "PRIMARY", "MASTER":
+		settings.TabletType = "PRIMARY"
 	default:
 		return fmt.Errorf("unsupported Vitess tablet type %q", settings.TabletType)
 	}
