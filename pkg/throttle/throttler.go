@@ -456,6 +456,18 @@ func (throttler *Throttler) aggregateMySQLMetrics() error {
 	for clusterName, aggregatedMetric := range aggregatedMetrics {
 		metricName := fmt.Sprintf("mysql/%s", clusterName)
 		go throttler.aggregatedMetrics.Set(metricName, aggregatedMetric, cache.DefaultExpiration)
+		value, err := aggregatedMetric.Get()
+		settings := config.Settings().Stores.MySQL.Clusters[clusterName]
+		if settings != nil && err == nil && value <= settings.ThrottleThreshold &&
+			throttler.requiredMySQLClustersHealthy(clusterName, aggregatedMetrics, make(map[string]bool)) {
+			observeMySQLShadowDependencies("background", clusterName, func(name string) *CheckResult {
+				metric, found := aggregatedMetrics[name]
+				if !found {
+					metric = base.NoSuchMetric
+				}
+				return mysqlDependencyCheckResult(name, metric, config.Settings().Stores.MySQL.Clusters[name].ThrottleThreshold, true)
+			})
+		}
 		if throttler.memcacheClient != nil {
 			requiredClustersHealthy := throttler.requiredMySQLClustersHealthy(clusterName, aggregatedMetrics, make(map[string]bool))
 			go func(metricName string, aggregatedMetric base.MetricResult, requiredClustersHealthy bool) {

@@ -41,6 +41,9 @@ Optionally set `MemcachePath` (default is `"freno"`):
   required metric is unavailable, recovering, or above its configured
   threshold. Direct memcache clients therefore observe the same composite
   safety gate as HTTP clients.
+- `ShadowRequiredClusters` never removes the requested cluster's key. Its
+  [background would-reject counters](mysql.md#shadow-counters-and-limits) describe
+  prospective dependency failures during leader aggregation, not client reads.
 
 ### Runtime access to memcache configuration
 
