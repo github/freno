@@ -7,10 +7,92 @@ import (
 
 	"github.com/github/freno/pkg/base"
 	"github.com/github/freno/pkg/config"
+	"github.com/github/freno/pkg/mysql"
 	"github.com/patrickmn/go-cache"
 	metrics "github.com/rcrowley/go-metrics"
 	"github.com/stretchr/testify/assert"
 )
+
+func TestRefreshMySQLInventoryStaticHostsIgnoreSettings(t *testing.T) {
+	originalSettings := config.Settings().Stores.MySQL
+	defer func() {
+		config.Settings().Stores.MySQL = originalSettings
+	}()
+
+	tests := []struct {
+		name                 string
+		ignoreHostsCount     int
+		ignoreHostsThreshold float64
+		highMetric           float64
+		want                 float64
+	}{
+		{name: "default keeps worst host", highMetric: 21.5, want: 21.5},
+		{name: "ignores host above threshold", ignoreHostsCount: 1, ignoreHostsThreshold: 15, highMetric: 21.5, want: 0.05},
+		{name: "keeps host below threshold", ignoreHostsCount: 1, ignoreHostsThreshold: 15, highMetric: 14.9, want: 14.9},
+		{name: "keeps host at threshold", ignoreHostsCount: 1, ignoreHostsThreshold: 15, highMetric: 15, want: 15},
+		{name: "threshold alone ignores no hosts", ignoreHostsThreshold: 15, highMetric: 21.5, want: 21.5},
+		{name: "zero threshold is unconditional", ignoreHostsCount: 1, highMetric: 21.5, want: 0.05},
+		{name: "retains at least one host", ignoreHostsCount: 2, highMetric: 21.5, want: 0.05},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			const clusterName = "static"
+			config.Settings().Stores.MySQL = config.MySQLConfigurationSettings{
+				Clusters: map[string]*config.MySQLClusterConfigurationSettings{
+					clusterName: {
+						Port:                 config.DefaultMySQLPort,
+						IgnoreHostsCount:     test.ignoreHostsCount,
+						IgnoreHostsThreshold: test.ignoreHostsThreshold,
+						StaticHostsSettings: config.StaticHostsConfigurationSettings{
+							Hosts: []string{key1.Hostname, key2.StringCode()},
+						},
+					},
+				},
+			}
+			throttler := NewThrottler()
+			throttler.isLeader = true
+			throttler.mysqlClusterProbesChan = make(chan *mysql.ClusterProbes, 1)
+			assert.NoError(t, throttler.refreshMySQLInventory())
+
+			var probes *mysql.ClusterProbes
+			select {
+			case probes = <-throttler.mysqlClusterProbesChan:
+			case <-time.After(time.Second):
+				t.Fatal("timed out waiting for static-host probes")
+			}
+			if probes == nil || probes.InstanceProbes == nil {
+				t.Fatal("missing static-host probes")
+			}
+			assert.Equal(t, clusterName, probes.ClusterName)
+			assert.Equal(t, test.ignoreHostsCount, probes.IgnoreHostsCount)
+			assert.Equal(t, test.ignoreHostsThreshold, probes.IgnoreHostsThreshold)
+			if len(*probes.InstanceProbes) != 2 {
+				t.Fatalf("probe count = %d, want 2", len(*probes.InstanceProbes))
+			}
+			for _, key := range []mysql.InstanceKey{key1, key2} {
+				probe := (*probes.InstanceProbes)[key]
+				want := mysql.Probe{Key: key}
+				if probe == nil || *probe != want {
+					t.Fatalf("probe for %s = %+v, want %+v", key.StringCode(), probe, want)
+				}
+			}
+			assert.NoError(t, throttler.updateMySQLClusterProbes(probes))
+
+			inventory := throttler.mysqlInventory
+			inventory.InstanceKeyMetrics[mysql.GetClusterInstanceKey(clusterName, &key1)] = base.NewSimpleMetricResult(test.highMetric)
+			inventory.InstanceKeyMetrics[mysql.GetClusterInstanceKey(clusterName, &key2)] = base.NewSimpleMetricResult(0.05)
+			metric := aggregateMySQLProbes(
+				inventory.ClustersProbes[clusterName], clusterName,
+				inventory.InstanceKeyMetrics, inventory.ClusterInstanceHttpChecks,
+				inventory.IgnoreHostsCount[clusterName], false, inventory.IgnoreHostsThreshold[clusterName],
+			)
+			value, err := metric.Get()
+			assert.NoError(t, err)
+			assert.Equal(t, test.want, value)
+		})
+	}
+}
 
 func Test_checkAppMetricResult(t *testing.T) {
 	throttler := NewThrottler()
