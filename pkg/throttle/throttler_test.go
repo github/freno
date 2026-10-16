@@ -1,6 +1,9 @@
 package throttle
 
 import (
+	"errors"
+	"fmt"
+	"math"
 	"net/http"
 	"testing"
 	"time"
@@ -12,6 +15,146 @@ import (
 	metrics "github.com/rcrowley/go-metrics"
 	"github.com/stretchr/testify/assert"
 )
+
+func TestExplainMySQLCluster(t *testing.T) {
+	originalSettings := config.Settings().Stores.MySQL
+	defer func() { config.Settings().Stores.MySQL = originalSettings }()
+	recoveryThreshold := 100.0
+	config.Settings().Stores.MySQL = config.MySQLConfigurationSettings{
+		IgnoreDialTcpErrors: true,
+		FallbackCluster:     "explain-source",
+		Clusters: map[string]*config.MySQLClusterConfigurationSettings{
+			"explain-source": {
+				ThrottleThreshold:      1,
+				RequiredClusters:       []string{"explain-required"},
+				ShadowRequiredClusters: []string{"explain-candidate", "explain-missing"},
+			},
+			"explain-required": {
+				ThrottleThreshold:      10,
+				RecoveryDurationMillis: 30000,
+				RequiredClusters:       []string{"explain-shared"},
+			},
+			"explain-candidate": {
+				ThrottleThreshold:      175,
+				RecoveryThreshold:      &recoveryThreshold,
+				RecoveryDurationMillis: 30000,
+				CacheMillis:            5000,
+				IgnoreHostsCount:       1,
+				IgnoreHostsThreshold:   15,
+				FailOnNoHosts:          true,
+				RequiredClusters:       []string{"explain-shared", "explain-no-hosts"},
+			},
+			"explain-shared":   {ThrottleThreshold: 20},
+			"explain-missing":  {ThrottleThreshold: 30},
+			"explain-no-hosts": {ThrottleThreshold: 40, FailOnNoHosts: true},
+		},
+	}
+	throttler := NewThrottler()
+	setTestMySQLClusterMetric(throttler, "explain-source", 0.1, 1)
+	setTestMySQLClusterMetric(throttler, "explain-candidate", 200, 175)
+	throttler.aggregatedMetrics.SetDefault("mysql/explain-required", base.NewErrorMetricResult(3, fmt.Errorf("private-password: %w", base.RecoveryNotCompleteError)))
+	throttler.aggregatedMetrics.SetDefault("mysql/explain-shared", base.NewErrorMetricResult(0, errors.New("query failed with private-password")))
+	throttler.aggregatedMetrics.SetDefault("mysql/explain-no-hosts", base.NoHostsMetricResult)
+
+	counterName := "shadow.http.mysql.explain-source.total"
+	metrics.DefaultRegistry.Unregister(counterName)
+	defer metrics.DefaultRegistry.Unregister(counterName)
+	check := NewThrottlerCheck(throttler)
+	result, err := check.ExplainMySQLCluster("explain-source")
+	if !assert.NoError(t, err) {
+		return
+	}
+	assert.Equal(t, "mysql/explain-source", result.MetricName)
+	assert.Len(t, result.Metrics, 6)
+	assert.Equal(t, "mysql/explain-source", result.Metrics[0].MetricName)
+	byName := make(map[string]MySQLMetricExplanation)
+	for _, metric := range result.Metrics {
+		byName[metric.MetricName] = metric
+	}
+	source := byName["mysql/explain-source"]
+	assert.Equal(t, "source", source.Mode)
+	assert.Equal(t, http.StatusOK, source.StatusCode)
+	assert.Equal(t, 0.1, *source.Value)
+	assert.Equal(t, 1.0, source.RecoveryThreshold)
+
+	candidate := byName["mysql/explain-candidate"]
+	assert.Equal(t, "shadow", candidate.Mode)
+	assert.Equal(t, http.StatusTooManyRequests, candidate.StatusCode)
+	assert.Equal(t, 200.0, *candidate.Value)
+	assert.Equal(t, 175.0, candidate.Threshold)
+	assert.Equal(t, 100.0, candidate.RecoveryThreshold)
+	assert.Equal(t, 30000, candidate.RecoveryDurationMillis)
+	assert.Equal(t, 5000, candidate.CacheMillis)
+	assert.True(t, candidate.FailOnNoHosts)
+	assert.Equal(t, 1, candidate.IgnoreHostsCount)
+	assert.Equal(t, 15.0, candidate.IgnoreHostsThreshold)
+	assert.True(t, candidate.IgnoreDialTcpErrors)
+	assert.Equal(t, []string{"explain-shared", "explain-no-hosts"}, candidate.RequiredClusters)
+
+	required := byName["mysql/explain-required"]
+	assert.Equal(t, "enforced", required.Mode)
+	assert.Equal(t, http.StatusTooManyRequests, required.StatusCode)
+	assert.Equal(t, 3.0, *required.Value)
+	assert.Equal(t, base.RecoveryNotCompleteError.Error(), required.Message)
+	shared := byName["mysql/explain-shared"]
+	assert.Equal(t, "enforced", shared.Mode)
+	assert.Equal(t, http.StatusInternalServerError, shared.StatusCode)
+	assert.Nil(t, shared.Value)
+	assert.Equal(t, "Probe error; consult server logs", shared.Message)
+	assert.Equal(t, "shadow", byName["mysql/explain-no-hosts"].Mode)
+	assert.Equal(t, base.NoHostsError.Error(), byName["mysql/explain-no-hosts"].Message)
+	assert.Equal(t, http.StatusInternalServerError, byName["mysql/explain-no-hosts"].StatusCode)
+	assert.Nil(t, byName["mysql/explain-missing"].Value)
+	assert.Equal(t, http.StatusInternalServerError, byName["mysql/explain-missing"].StatusCode)
+	assert.Nil(t, metrics.DefaultRegistry.Get(counterName))
+	assert.Empty(t, throttler.mysqlRecoveryState)
+	_, err = check.ExplainMySQLCluster("unknown")
+	assert.Equal(t, base.NoSuchMetricError, err)
+}
+
+func TestExplainMySQLClusterPromotesSharedShadowDependency(t *testing.T) {
+	originalSettings := config.Settings().Stores.MySQL
+	defer func() { config.Settings().Stores.MySQL = originalSettings }()
+	config.Settings().Stores.MySQL = config.MySQLConfigurationSettings{
+		Clusters: map[string]*config.MySQLClusterConfigurationSettings{
+			"root": {RequiredClusters: []string{"first", "second"}},
+			"first": {
+				ShadowRequiredClusters: []string{"shared"},
+			},
+			"second": {RequiredClusters: []string{"shared"}},
+			"shared": {RequiredClusters: []string{"child"}},
+			"child":  {},
+		},
+	}
+	result, err := NewThrottlerCheck(NewThrottler()).ExplainMySQLCluster("root")
+	if !assert.NoError(t, err) {
+		return
+	}
+	for _, metric := range result.Metrics {
+		if metric.MetricName == "mysql/shared" || metric.MetricName == "mysql/child" {
+			assert.Equal(t, "enforced", metric.Mode)
+		}
+	}
+}
+
+func TestExplainMySQLClusterInvalidValues(t *testing.T) {
+	originalSettings := config.Settings().Stores.MySQL
+	defer func() { config.Settings().Stores.MySQL = originalSettings }()
+	config.Settings().Stores.MySQL = config.MySQLConfigurationSettings{
+		Clusters: map[string]*config.MySQLClusterConfigurationSettings{"root": {ThrottleThreshold: 1}},
+	}
+	for _, value := range []float64{math.NaN(), math.Inf(1)} {
+		throttler := NewThrottler()
+		setTestMySQLClusterMetric(throttler, "root", value, 1)
+		result, err := NewThrottlerCheck(throttler).ExplainMySQLCluster("root")
+		if !assert.NoError(t, err) {
+			continue
+		}
+		assert.Equal(t, http.StatusInternalServerError, result.Metrics[0].StatusCode)
+		assert.Nil(t, result.Metrics[0].Value)
+		assert.Equal(t, "invalid metric value", result.Metrics[0].Message)
+	}
+}
 
 func TestRefreshMySQLInventoryStaticHostsIgnoreSettings(t *testing.T) {
 	originalSettings := config.Settings().Stores.MySQL

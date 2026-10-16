@@ -2,6 +2,7 @@ package http
 
 import (
 	"encoding/json"
+	"errors"
 	"expvar"
 	"fmt"
 	"io"
@@ -12,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/github/freno/pkg/base"
 	"github.com/github/freno/pkg/config"
 	"github.com/github/freno/pkg/group"
 	"github.com/github/freno/pkg/throttle"
@@ -34,6 +36,7 @@ type API interface {
 	ReadCheck(w http.ResponseWriter, r *http.Request, _ httprouter.Params)
 	ReadCheckIfExists(w http.ResponseWriter, r *http.Request, _ httprouter.Params)
 	AggregatedMetrics(w http.ResponseWriter, r *http.Request, _ httprouter.Params)
+	ExplainMySQL(w http.ResponseWriter, r *http.Request, _ httprouter.Params)
 	MetricsHealth(w http.ResponseWriter, r *http.Request, _ httprouter.Params)
 	ThrottleApp(w http.ResponseWriter, r *http.Request, _ httprouter.Params)
 	UnthrottleApp(w http.ResponseWriter, r *http.Request, _ httprouter.Params)
@@ -233,6 +236,26 @@ func (api *APIImpl) AggregatedMetrics(w http.ResponseWriter, r *http.Request, ps
 		responseMap[metricName] = description
 	}
 	json.NewEncoder(w).Encode(responseMap)
+}
+
+func (api *APIImpl) ExplainMySQL(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
+	w.Header().Set("Content-Type", "application/json")
+	if api.consensusService == nil || !api.consensusService.IsLeader() {
+		w.WriteHeader(http.StatusServiceUnavailable)
+		json.NewEncoder(w).Encode(NewGeneralResponse(http.StatusServiceUnavailable, "Diagnostics require the current leader"))
+		return
+	}
+	explanation, err := api.throttlerCheck.ExplainMySQLCluster(ps.ByName("storeName"))
+	if err != nil {
+		status, message := http.StatusInternalServerError, "Invalid MySQL dependency configuration"
+		if errors.Is(err, base.NoSuchMetricError) {
+			status, message = http.StatusNotFound, "No such MySQL cluster"
+		}
+		w.WriteHeader(status)
+		json.NewEncoder(w).Encode(NewGeneralResponse(status, message))
+		return
+	}
+	json.NewEncoder(w).Encode(explanation)
 }
 
 // MetricsHealth returns the time since last "OK" check per-metric
@@ -438,6 +461,7 @@ func ConfigureRoutes(api API) *httprouter.Router {
 	register(router, "/check-read-if-exists/:app/:storeType/:storeName/:threshold", api.ReadCheckIfExists)
 
 	register(router, "/aggregated-metrics", api.AggregatedMetrics)
+	register(router, "/explain/mysql/:storeName", api.ExplainMySQL)
 	register(router, "/metrics-health", api.MetricsHealth)
 
 	register(router, "/throttle-app/:app", api.ThrottleApp)

@@ -6,10 +6,12 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/github/freno/pkg/config"
 	"github.com/github/freno/pkg/group"
+	"github.com/github/freno/pkg/throttle"
 	metrics "github.com/rcrowley/go-metrics"
 )
 
@@ -58,6 +60,65 @@ func TestRoutes(t *testing.T) {
 		if !(w.Code == route.code) {
 			t.Errorf("Route %s failed: code {expected=%d, actual=%d}", route.path, route.code, w.Code)
 		}
+	}
+}
+
+func TestExplainMySQLRoute(t *testing.T) {
+	defer config.Reset()
+	config.Settings().Stores.MySQL = config.MySQLConfigurationSettings{
+		User: "private-user", Password: "private-password",
+		ProxySQLPassword: "private-proxy-password",
+		MetricQuery:      "private-query",
+		Clusters: map[string]*config.MySQLClusterConfigurationSettings{
+			"source": {
+				ThrottleThreshold:      1,
+				ShadowRequiredClusters: []string{"source-primary"},
+			},
+			"source-primary": {
+				User: "private-cluster-user", Password: "private-cluster-password",
+				MetricQuery: "private-cluster-query", ThrottleThreshold: 75,
+				StaticHostsSettings: config.StaticHostsConfigurationSettings{Hosts: []string{"private-host"}},
+			},
+			"broken": {RequiredClusters: []string{"not-configured"}},
+		},
+	}
+	for _, test := range []struct {
+		name     string
+		leader   bool
+		cluster  string
+		wantCode int
+	}{
+		{"leader snapshot", true, "source", http.StatusOK},
+		{"follower", false, "source", http.StatusServiceUnavailable},
+		{"unknown cluster", true, "unknown", http.StatusNotFound},
+		{"invalid dependencies", true, "broken", http.StatusInternalServerError},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			check := throttle.NewThrottlerCheck(throttle.NewThrottler())
+			api := NewAPIImpl(check, &metricsConsensusService{isLeader: test.leader})
+			router := ConfigureRoutes(api)
+			recorder := httptest.NewRecorder()
+			router.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/explain/mysql/"+test.cluster, nil))
+			if recorder.Code != test.wantCode {
+				t.Fatalf("status = %d, want %d: %s", recorder.Code, test.wantCode, recorder.Body.String())
+			}
+			if strings.Contains(recorder.Body.String(), "private-") {
+				t.Fatal("diagnostic response exposed private configuration")
+			}
+			if test.wantCode == http.StatusOK {
+				var result throttle.MySQLExplanation
+				if err := json.Unmarshal(recorder.Body.Bytes(), &result); err != nil {
+					t.Fatal(err)
+				}
+				if len(result.Metrics) != 2 || result.Metrics[1].Threshold != 75 ||
+					result.Metrics[1].Mode != "shadow" || result.Metrics[1].Value != nil {
+					t.Fatalf("unexpected diagnostic response: %s", recorder.Body.String())
+				}
+				if !strings.Contains(recorder.Body.String(), `"Value":null`) {
+					t.Fatal("missing measurement must be JSON null")
+				}
+			}
+		})
 	}
 }
 
