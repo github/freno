@@ -3,7 +3,10 @@ package main
 import (
 	"flag"
 	"fmt"
+	"io"
 	gohttp "net/http"
+	"os"
+	"sort"
 	"strings"
 
 	"github.com/github/freno/pkg/config"
@@ -96,6 +99,11 @@ func main() {
 
 	switch {
 	case *http:
+		if !*quiet {
+			if err := logMySQLSafetyConfiguration(config.Settings().Stores.MySQL, os.Stderr); err != nil {
+				log.Fatalf("Error reporting MySQL safety configuration: %s", err)
+			}
+		}
 		err := httpServe()
 		log.Errore(err)
 	default:
@@ -114,6 +122,32 @@ func loadConfiguration(configFile string) {
 	if err != nil {
 		log.Fatalf("Error reading configuration, please check the logs. Error was: %s", err.Error())
 	}
+}
+
+func logMySQLSafetyConfiguration(settings config.MySQLConfigurationSettings, output io.Writer) error {
+	clusterNames := make([]string, 0, len(settings.Clusters))
+	for name, cluster := range settings.Clusters {
+		if len(cluster.RequiredClusters) > 0 || len(cluster.ShadowRequiredClusters) > 0 || cluster.RecoveryDurationMillis > 0 || cluster.FailOnNoHosts {
+			clusterNames = append(clusterNames, name)
+		}
+	}
+	sort.Strings(clusterNames)
+
+	for _, name := range clusterNames {
+		cluster := settings.Clusters[name]
+		recoveryThreshold := cluster.ThrottleThreshold
+		if cluster.RecoveryThreshold != nil {
+			recoveryThreshold = *cluster.RecoveryThreshold
+		}
+		// Safety notices must be visible at the default ERROR log level, without changing other log filtering.
+		if _, err := fmt.Fprintf(output,
+			"freno MySQL safety configuration: cluster=%q RequiredClusters=%q ShadowRequiredClusters=%q RecoveryDurationMillis=%d RecoveryThreshold=%g ThrottleThreshold=%g FailOnNoHosts=%t\n",
+			name, cluster.RequiredClusters, cluster.ShadowRequiredClusters, cluster.RecoveryDurationMillis, recoveryThreshold, cluster.ThrottleThreshold, cluster.FailOnNoHosts,
+		); err != nil {
+			return fmt.Errorf("cannot log MySQL safety configuration for cluster %q: %w", name, err)
+		}
+	}
+	return nil
 }
 
 func httpServe() error {

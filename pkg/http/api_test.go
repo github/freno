@@ -6,10 +6,12 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/github/freno/pkg/config"
 	"github.com/github/freno/pkg/group"
+	"github.com/github/freno/pkg/throttle"
 	metrics "github.com/rcrowley/go-metrics"
 )
 
@@ -58,6 +60,65 @@ func TestRoutes(t *testing.T) {
 		if !(w.Code == route.code) {
 			t.Errorf("Route %s failed: code {expected=%d, actual=%d}", route.path, route.code, w.Code)
 		}
+	}
+}
+
+func TestExplainMySQLRoute(t *testing.T) {
+	defer config.Reset()
+	config.Settings().Stores.MySQL = config.MySQLConfigurationSettings{
+		User: "private-user", Password: "private-password",
+		ProxySQLPassword: "private-proxy-password",
+		MetricQuery:      "private-query",
+		Clusters: map[string]*config.MySQLClusterConfigurationSettings{
+			"source": {
+				ThrottleThreshold:      1,
+				ShadowRequiredClusters: []string{"source-primary"},
+			},
+			"source-primary": {
+				User: "private-cluster-user", Password: "private-cluster-password",
+				MetricQuery: "private-cluster-query", ThrottleThreshold: 75,
+				StaticHostsSettings: config.StaticHostsConfigurationSettings{Hosts: []string{"private-host"}},
+			},
+			"broken": {RequiredClusters: []string{"not-configured"}},
+		},
+	}
+	for _, test := range []struct {
+		name     string
+		leader   bool
+		cluster  string
+		wantCode int
+	}{
+		{"leader snapshot", true, "source", http.StatusOK},
+		{"follower", false, "source", http.StatusServiceUnavailable},
+		{"unknown cluster", true, "unknown", http.StatusNotFound},
+		{"invalid dependencies", true, "broken", http.StatusInternalServerError},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			check := throttle.NewThrottlerCheck(throttle.NewThrottler())
+			api := NewAPIImpl(check, &metricsConsensusService{isLeader: test.leader})
+			router := ConfigureRoutes(api)
+			recorder := httptest.NewRecorder()
+			router.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/explain/mysql/"+test.cluster, nil))
+			if recorder.Code != test.wantCode {
+				t.Fatalf("status = %d, want %d: %s", recorder.Code, test.wantCode, recorder.Body.String())
+			}
+			if strings.Contains(recorder.Body.String(), "private-") {
+				t.Fatal("diagnostic response exposed private configuration")
+			}
+			if test.wantCode == http.StatusOK {
+				var result throttle.MySQLExplanation
+				if err := json.Unmarshal(recorder.Body.Bytes(), &result); err != nil {
+					t.Fatal(err)
+				}
+				if len(result.Metrics) != 2 || result.Metrics[1].Threshold != 75 ||
+					result.Metrics[1].Mode != "shadow" || result.Metrics[1].Value != nil {
+					t.Fatalf("unexpected diagnostic response: %s", recorder.Body.String())
+				}
+				if !strings.Contains(recorder.Body.String(), `"Value":null`) {
+					t.Fatal("missing measurement must be JSON null")
+				}
+			}
+		})
 	}
 }
 
@@ -120,9 +181,11 @@ func TestMetricsFiltersAggregateAndProbeMetricsFromFollowers(t *testing.T) {
 		aggregatedMetricName = "aggregated.mysql.metrics-export-test"
 		probeMetricName      = "probes.total.metrics-export-test"
 		processMetricName    = "consensus.metrics-export-test"
+		backgroundMetricName = "shadow.background.mysql.metrics-export-test.would_reject"
+		httpMetricName       = "shadow.http.mysql.metrics-export-test.total"
 	)
 
-	metricNames := []string{aggregatedMetricName, probeMetricName, processMetricName}
+	metricNames := []string{aggregatedMetricName, probeMetricName, processMetricName, backgroundMetricName, httpMetricName}
 	for _, metricName := range metricNames {
 		metrics.DefaultRegistry.Unregister(metricName)
 		defer metrics.DefaultRegistry.Unregister(metricName)
@@ -131,6 +194,8 @@ func TestMetricsFiltersAggregateAndProbeMetricsFromFollowers(t *testing.T) {
 	metrics.GetOrRegisterGaugeFloat64(aggregatedMetricName, nil).Update(42)
 	metrics.GetOrRegisterCounter(probeMetricName, nil).Inc(7)
 	metrics.GetOrRegisterGauge(processMetricName, nil).Update(1)
+	metrics.GetOrRegisterCounter(backgroundMetricName, nil).Inc(2)
+	metrics.GetOrRegisterCounter(httpMetricName, nil).Inc(3)
 
 	readMetrics := func(isLeader bool) map[string]interface{} {
 		recorder := httptest.NewRecorder()
@@ -149,6 +214,7 @@ func TestMetricsFiltersAggregateAndProbeMetricsFromFollowers(t *testing.T) {
 	leaderMetrics := readMetrics(true)
 	metrics.DefaultRegistry.Unregister(aggregatedMetricName)
 	metrics.DefaultRegistry.Unregister(probeMetricName)
+	metrics.DefaultRegistry.Unregister(backgroundMetricName)
 	if expvar.Get(aggregatedMetricName) == nil || expvar.Get(probeMetricName) == nil {
 		t.Fatal("Expected aggregate and probe metrics to remain in expvar after unregister")
 	}
@@ -159,5 +225,13 @@ func TestMetricsFiltersAggregateAndProbeMetricsFromFollowers(t *testing.T) {
 	}
 	if followerMetrics[aggregatedMetricName] != nil || followerMetrics[probeMetricName] != nil || followerMetrics[processMetricName] == nil {
 		t.Errorf("Unexpected follower metrics: %v", followerMetrics)
+	}
+	if leaderMetrics[backgroundMetricName] == nil || leaderMetrics[httpMetricName] == nil ||
+		followerMetrics[backgroundMetricName] != nil || followerMetrics[httpMetricName] == nil {
+		t.Errorf("Unexpected shadow metrics: leader=%v follower=%v", leaderMetrics, followerMetrics)
+	}
+	if leaderMetrics[backgroundMetricName] != float64(2) || leaderMetrics[httpMetricName] != float64(3) ||
+		followerMetrics[httpMetricName] != float64(3) {
+		t.Errorf("Expected integer shadow counter values, got leader=%v follower=%v", leaderMetrics, followerMetrics)
 	}
 }

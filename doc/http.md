@@ -113,6 +113,33 @@ Notes:
 
 - `/config/memcache`: show the [memcache](memcache.md) configuration used, so freno clients can use it to implement more efficient read strategies.
 
+### Read-only MySQL diagnostics
+
+`GET /explain/mysql/<cluster>` returns the source metric and all of its required
+and shadow dependencies, even when the source is healthy. It requires the
+current leader (`503` on a follower), uses exact configured names without
+`FallbackCluster`, and returns `404` for an unknown cluster.
+
+Each entry in `Metrics` includes `MetricName`, the cached `Value`, `Threshold`,
+effective `RecoveryThreshold`, `RecoveryDurationMillis`, `CacheMillis`,
+`FailOnNoHosts`, and host-exclusion settings. `Mode` is `source`, `enforced`, or
+`shadow`, relative to the requested source. Dependencies below a shadow edge
+remain shadow-only unless also reachable through an entirely required path.
+Dependency lists preserve the configured graph.
+
+`StatusCode` and `Message` describe each metric independently, not the source's
+combined admission decision. `Value` is `null` when a usable measurement is
+unavailable; recovery errors retain the observed value. Recovery may reject
+even when the value is below the throttle threshold. Probe-error details are
+redacted; credentials, SQL, connection settings, and host identities are not
+exported. The response reflects loaded policy and cached aggregates, not
+per-host values or sample timestamps.
+
+This endpoint does not run application policy, random throttling, priority or
+shared-domain checks, issue SQL, advance recovery, or increment shadow/check
+counters. A diagnostic HTTP `200` means the explanation was retrieved, **not**
+permission to write. Continue to use the regular `/check` endpoint for admission.
+
 # GET method
 
 `GET` and `HEAD` respond with same status codes. But `GET` requests compute and return additional data. Automated requests should not be interested in this data; the status code is what should guide the clients. However humans or manual requests may benefit from extra information supplied by the `GET` request.

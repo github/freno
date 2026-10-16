@@ -112,6 +112,184 @@ func TestMySQLFallbackCluster(t *testing.T) {
 	}
 }
 
+func TestMySQLRequiredClusters(t *testing.T) {
+	tests := []struct {
+		name     string
+		clusters map[string]*MySQLClusterConfigurationSettings
+		wantErr  string
+	}{
+		{
+			name: "valid dependencies",
+			clusters: map[string]*MySQLClusterConfigurationSettings{
+				"replicas": {RequiredClusters: []string{"primary", "proxysql"}},
+				"primary":  {},
+				"proxysql": {},
+			},
+		},
+		{
+			name: "unknown dependency",
+			clusters: map[string]*MySQLClusterConfigurationSettings{
+				"replicas": {RequiredClusters: []string{"primary"}},
+			},
+			wantErr: `Stores.MySQL.Clusters.replicas.RequiredClusters references unknown cluster "primary"`,
+		},
+		{
+			name: "dependency cycle",
+			clusters: map[string]*MySQLClusterConfigurationSettings{
+				"replicas": {RequiredClusters: []string{"primary"}},
+				"primary":  {RequiredClusters: []string{"replicas"}},
+			},
+			wantErr: `Stores.MySQL.Clusters contains a RequiredClusters/ShadowRequiredClusters cycle involving "primary"`,
+		},
+		{
+			name: "unknown shadow dependency",
+			clusters: map[string]*MySQLClusterConfigurationSettings{
+				"replicas": {ShadowRequiredClusters: []string{"primary"}},
+			},
+			wantErr: `Stores.MySQL.Clusters.replicas.ShadowRequiredClusters references unknown cluster "primary"`,
+		},
+		{
+			name: "shadow cycle",
+			clusters: map[string]*MySQLClusterConfigurationSettings{
+				"primary":  {ShadowRequiredClusters: []string{"replicas"}},
+				"replicas": {ShadowRequiredClusters: []string{"primary"}},
+			},
+			wantErr: `Stores.MySQL.Clusters contains a RequiredClusters/ShadowRequiredClusters cycle involving "primary"`,
+		},
+		{
+			name: "mixed dependency cycle",
+			clusters: map[string]*MySQLClusterConfigurationSettings{
+				"primary":  {RequiredClusters: []string{"replicas"}},
+				"replicas": {ShadowRequiredClusters: []string{"primary"}},
+			},
+			wantErr: `Stores.MySQL.Clusters contains a RequiredClusters/ShadowRequiredClusters cycle involving "primary"`,
+		},
+		{
+			name: "enforced and shadow overlap",
+			clusters: map[string]*MySQLClusterConfigurationSettings{
+				"primary":  {},
+				"replicas": {RequiredClusters: []string{"primary"}, ShadowRequiredClusters: []string{"primary"}},
+			},
+			wantErr: `Stores.MySQL.Clusters.replicas: cluster "primary" cannot appear in both RequiredClusters and ShadowRequiredClusters`,
+		},
+		{
+			name: "nested and shared dependencies",
+			clusters: map[string]*MySQLClusterConfigurationSettings{
+				"replicas": {RequiredClusters: []string{"required"}, ShadowRequiredClusters: []string{"primary", "primary"}},
+				"required": {ShadowRequiredClusters: []string{"primary"}},
+				"primary":  {RequiredClusters: []string{"capacity"}, ShadowRequiredClusters: []string{"extra"}},
+				"capacity": {},
+				"extra":    {RequiredClusters: []string{"capacity"}},
+			},
+		},
+		{
+			name: "null cluster",
+			clusters: map[string]*MySQLClusterConfigurationSettings{
+				"replicas": nil,
+			},
+			wantErr: `Stores.MySQL.Clusters.replicas must not be null`,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			settings := MySQLConfigurationSettings{Clusters: test.clusters}
+			err := settings.postReadAdjustments()
+			if test.wantErr == "" && err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if test.wantErr != "" && (err == nil || err.Error() != test.wantErr) {
+				t.Fatalf("error = %v, want %q", err, test.wantErr)
+			}
+		})
+	}
+}
+
+func TestMySQLRecoveryConfiguration(t *testing.T) {
+	recoveryThreshold := 5.0
+	tooHighRecoveryThreshold := 11.0
+	tests := []struct {
+		name            string
+		clusterSettings *MySQLClusterConfigurationSettings
+		wantErr         string
+	}{
+		{name: "disabled", clusterSettings: &MySQLClusterConfigurationSettings{ThrottleThreshold: 10}},
+		{name: "valid", clusterSettings: &MySQLClusterConfigurationSettings{ThrottleThreshold: 10, RecoveryThreshold: &recoveryThreshold, RecoveryDurationMillis: 5000}},
+		{name: "default recovery threshold", clusterSettings: &MySQLClusterConfigurationSettings{ThrottleThreshold: 10, RecoveryDurationMillis: 5000}},
+		{
+			name:            "negative duration",
+			clusterSettings: &MySQLClusterConfigurationSettings{ThrottleThreshold: 10, RecoveryDurationMillis: -1},
+			wantErr:         "Stores.MySQL.Clusters.primary.RecoveryDurationMillis must not be negative",
+		},
+		{
+			name:            "recovery threshold above throttle threshold",
+			clusterSettings: &MySQLClusterConfigurationSettings{ThrottleThreshold: 10, RecoveryThreshold: &tooHighRecoveryThreshold, RecoveryDurationMillis: 5000},
+			wantErr:         "Stores.MySQL.Clusters.primary.RecoveryThreshold must not exceed ThrottleThreshold",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			settings := MySQLConfigurationSettings{
+				Clusters: map[string]*MySQLClusterConfigurationSettings{"primary": test.clusterSettings},
+			}
+			err := settings.postReadAdjustments()
+			if test.wantErr == "" && err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if test.wantErr != "" && (err == nil || err.Error() != test.wantErr) {
+				t.Fatalf("error = %v, want %q", err, test.wantErr)
+			}
+		})
+	}
+}
+
+func TestVitessTabletTypeConfiguration(t *testing.T) {
+	tests := []struct {
+		name       string
+		tabletType string
+		want       string
+		wantErr    string
+	}{
+		{name: "default replica", want: "REPLICA"},
+		{name: "replica", tabletType: "replica", want: "REPLICA"},
+		{name: "primary", tabletType: "primary", want: "PRIMARY"},
+		{name: "legacy master alias", tabletType: "master", want: "PRIMARY"},
+		{name: "primary with whitespace", tabletType: " PRIMARY ", want: "PRIMARY"},
+		{name: "legacy alias with whitespace", tabletType: " MASTER ", want: "PRIMARY"},
+		{name: "invalid", tabletType: "rdonly", wantErr: `Stores.MySQL.Clusters.vitess.VitessSettings: unsupported Vitess tablet type "rdonly"`},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			settings := MySQLConfigurationSettings{
+				Clusters: map[string]*MySQLClusterConfigurationSettings{
+					"vitess": {
+						VitessSettings: VitessConfigurationSettings{
+							API:        "https://vtctld.example.com/api",
+							Keyspace:   "test",
+							TabletType: test.tabletType,
+						},
+					},
+				},
+			}
+			err := settings.postReadAdjustments()
+			if test.wantErr == "" && err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if test.wantErr != "" {
+				if err == nil || err.Error() != test.wantErr {
+					t.Fatalf("error = %v, want %q", err, test.wantErr)
+				}
+				return
+			}
+			if got := settings.Clusters["vitess"].VitessSettings.TabletType; got != test.want {
+				t.Fatalf("TabletType = %q, want %q", got, test.want)
+			}
+		})
+	}
+}
+
 func dump(path string, contents *ConfigurationSettings) error {
 	json, _ := json.Marshal(contents)
 	err := ioutil.WriteFile(path, json, 0644)
