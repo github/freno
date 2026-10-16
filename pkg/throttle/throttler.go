@@ -404,8 +404,10 @@ func (throttler *Throttler) refreshMySQLInventory() error {
 
 			if !clusterSettings.StaticHostsSettings.IsEmpty() {
 				clusterProbes := &mysql.ClusterProbes{
-					ClusterName:    clusterName,
-					InstanceProbes: mysql.NewProbes(),
+					ClusterName:          clusterName,
+					IgnoreHostsCount:     clusterSettings.IgnoreHostsCount,
+					IgnoreHostsThreshold: clusterSettings.IgnoreHostsThreshold,
+					InstanceProbes:       mysql.NewProbes(),
 				}
 				for _, host := range clusterSettings.StaticHostsSettings.Hosts {
 					key, err := mysql.ParseInstanceKey(host, clusterSettings.Port)
