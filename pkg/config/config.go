@@ -47,7 +47,7 @@ func newConfiguration() *Configuration {
 
 // Read reads configuration from all given files, in order of input.
 // Each file can override the properties of the previous files
-// Initially, the settings are the defult ones defined by newConfigurationSettings
+// Initially, the settings are the default ones defined by newConfigurationSettings
 func (config *Configuration) Read(fileNames ...string) error {
 	settings := newConfigurationSettings()
 
@@ -89,7 +89,7 @@ func (config *Configuration) Reload() error {
 // ConfigurationSettings models a set of configurable values, that can be
 // provided by the user via one or several JSON formatted files.
 //
-// Some of the settinges have reasonable default values, and some other
+// Some of the settings have reasonable default values, and some other
 // (like database credentials) are strictly expected from user.
 type ConfigurationSettings struct {
 	ListenPort            int
