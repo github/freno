@@ -3,11 +3,9 @@
 // license that can be found in the LICENSE file.
 
 //go:build sparc64 && linux
-// +build sparc64,linux
 
 package unix
 
-//sys	EpollWait(epfd int, events []EpollEvent, msec int) (n int, err error)
 //sys	Fadvise(fd int, offset int64, length int64, advice int) (err error) = SYS_FADVISE64
 //sys	Fchown(fd int, uid int, gid int) (err error)
 //sys	Fstat(fd int, stat *Stat_t) (err error)
@@ -31,7 +29,6 @@ package unix
 //sys	sendfile(outfd int, infd int, offset *int64, count int) (written int, err error)
 //sys	setfsgid(gid int) (prev int, err error)
 //sys	setfsuid(uid int) (prev int, err error)
-//sysnb	Setrlimit(resource int, rlim *Rlimit) (err error)
 //sys	Shutdown(fd int, how int) (err error)
 //sys	Splice(rfd int, roff *int64, wfd int, woff *int64, len int, flags int) (n int64, err error)
 //sys	Stat(path string, stat *Stat_t) (err error)

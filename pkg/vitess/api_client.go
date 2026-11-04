@@ -69,8 +69,11 @@ func (t Tablet) IsValidReplica() bool {
 	return t.IsServeable()
 }
 
-var httpClient = http.Client{
-	Timeout: defaultTimeout,
+func discoveryTimeout(settings config.VitessConfigurationSettings) time.Duration {
+	if settings.TimeoutSecs == 0 {
+		return defaultTimeout
+	}
+	return time.Duration(settings.TimeoutSecs) * time.Second
 }
 
 func constructAPIURL(settings config.VitessConfigurationSettings) (apiUrl string) {
@@ -112,14 +115,16 @@ func filterReplicaTablets(settings config.VitessConfigurationSettings, tablets [
 	return replicas
 }
 
-// ParseTablets reads from vitess /api/keyspace/<keyspace>/tablets/[shard] and returns a
-// listing (mysql_hostname, mysql_port, type) of REPLICA tablets
+// ParseTablets returns REPLICA tablets from the configured gRPC or legacy HTTP endpoint.
 func ParseTablets(settings config.VitessConfigurationSettings) (tablets []Tablet, err error) {
-	if settings.TimeoutSecs == 0 {
-		httpClient.Timeout = defaultTimeout
-	} else {
-		httpClient.Timeout = time.Duration(settings.TimeoutSecs) * time.Second
+	if err := settings.Validate(); err != nil {
+		return nil, err
 	}
+	if settings.GRPCAddress != "" {
+		return parseGRPCTablets(settings)
+	}
+
+	httpClient := http.Client{Timeout: discoveryTimeout(settings)}
 
 	url := constructAPIURL(settings)
 	resp, err := httpClient.Get(url)

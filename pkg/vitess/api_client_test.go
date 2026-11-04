@@ -104,10 +104,6 @@ func TestParseTablets(t *testing.T) {
 		if tablets[1].MysqlHostname != "replica2" {
 			t.Fatalf("Expected hostname %q, got %q", "replica2", tablets[1].MysqlHostname)
 		}
-
-		if httpClient.Timeout != time.Second {
-			t.Fatalf("Expected vitess client timeout of %v, got %v", time.Second, httpClient.Timeout)
-		}
 	})
 
 	t.Run("with-cell", func(t *testing.T) {
@@ -154,10 +150,6 @@ func TestParseTablets(t *testing.T) {
 		if len(tablets) != 0 {
 			t.Fatalf("Expected 0 tablets, got %d", len(tablets))
 		}
-
-		if httpClient.Timeout != defaultTimeout {
-			t.Fatalf("Expected vitess client timeout of %v, got %v", defaultTimeout, httpClient.Timeout)
-		}
 	})
 
 	t.Run("failed", func(t *testing.T) {
@@ -171,4 +163,22 @@ func TestParseTablets(t *testing.T) {
 			t.Fatal("Expected error, got nil")
 		}
 	})
+}
+
+func TestParseHTTPDeadline(t *testing.T) {
+	canceled := make(chan struct{})
+	server := httptest.NewServer(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
+		<-r.Context().Done()
+		close(canceled)
+	}))
+	defer server.Close()
+	tablets, err := ParseTablets(config.VitessConfigurationSettings{API: server.URL, Keyspace: "commerce", TimeoutSecs: 1})
+	if err == nil || len(tablets) != 0 {
+		t.Fatalf("HTTP deadline: tablets = %v, error = %v", tablets, err)
+	}
+	select {
+	case <-canceled:
+	case <-time.After(time.Second):
+		t.Fatal("HTTP request was not canceled")
+	}
 }

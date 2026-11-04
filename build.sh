@@ -72,10 +72,7 @@ function precheck() {
     ok=1
   fi
 
-  if ! go version | egrep -q 'go(1\.1[6789])' ; then
-    echo "go version must be 1.16 or above"
-    ok=1
-  fi
+  . "$mydir/script/bootstrap"
 
   return $ok
 }
@@ -143,7 +140,7 @@ function build() {
   prefix="$4"
   ldflags="-X main.AppVersion=${RELEASE_VERSION} -X main.GitCommit=${GIT_COMMIT}"
   echo "Building via $(go version)"
-  gobuild="go build -i ${opt_race} -ldflags \"$ldflags\" -o $builddir/freno${prefix}/freno cmd/freno/main.go"
+  gobuild="go build ${opt_race} -ldflags \"$ldflags\" -o $builddir/freno${prefix}/freno cmd/freno/main.go"
 
   case $os in
     'linux')

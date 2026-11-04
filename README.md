@@ -78,6 +78,10 @@ See [sample config file](resources/freno.conf.sample.json). Also find:
 
 ### Deployment
 
+Building from source requires Go 1.25 or newer. Run `script/cibuild` to build and
+run the race-enabled unit tests. See [Vitess discovery](doc/mysql.md#vitess-discovery)
+for gRPC configuration and upgrade requirements.
+
 See [deployment docs](doc/deploy.md) for suggestions on a recommended `freno` deployment setup.
 
 ### Resources

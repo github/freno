@@ -44,6 +44,9 @@ func (settings *MySQLClusterConfigurationSettings) postReadAdjustments() error {
 	if err := settings.HAProxySettings.postReadAdjustments(); err != nil {
 		return err
 	}
+	if err := settings.VitessSettings.Validate(); err != nil {
+		return err
+	}
 	return nil
 }
 

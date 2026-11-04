@@ -378,14 +378,15 @@ func (throttler *Throttler) refreshMySQLInventory() error {
 			}
 
 			if !clusterSettings.VitessSettings.IsEmpty() {
-				log.Debugf("getting vitess data from %s", clusterSettings.VitessSettings.API)
+				endpoint := clusterSettings.VitessSettings.Endpoint()
+				log.Debugf("getting vitess data from %s", endpoint)
 				keyspace := clusterSettings.VitessSettings.Keyspace
 				shard := clusterSettings.VitessSettings.Shard
 				tablets, err := vitess.ParseTablets(clusterSettings.VitessSettings)
 				if err != nil {
-					return log.Errorf("Unable to get vitess hosts from %s, %s/%s: %+v", clusterSettings.VitessSettings.API, keyspace, shard, err)
+					return log.Errorf("Unable to get vitess hosts from %s, %s/%s: %+v", endpoint, keyspace, shard, err)
 				}
-				log.Debugf("Read %+v hosts from vitess %s, %s/%s, cells=%s", len(tablets), clusterSettings.VitessSettings.API,
+				log.Debugf("Read %+v hosts from vitess %s, %s/%s, cells=%s", len(tablets), endpoint,
 					keyspace, shard, strings.Join(vitess.ParseCells(clusterSettings.VitessSettings), ","),
 				)
 				clusterProbes := &mysql.ClusterProbes{

@@ -123,6 +123,82 @@ Noteworthy:
 - `local` cluster chooses to override `User`, `Password` and `IgnoreHostsCount`.
 - `local` cluster defines a static list of hosts.
 
+### Vitess discovery
+
+For Vitess v22 and v23, configure the native `Vtctld.GetTablets` gRPC service:
+
+```json
+"VitessSettings": {
+  "GRPCAddress": "vtctld.example.com:15999",
+  "GRPCCAFile": "/etc/freno/vitess-ca.pem",
+  "GRPCServerName": "vtctld.example.com",
+  "Keyspace": "commerce",
+  "Shard": "",
+  "Cells": ["zone1", "zone2"],
+  "TimeoutSecs": 5
+}
+```
+
+`GRPCAddress` is an explicit `host:port` for a vtctld listener exposing the
+`vtctlservice.Vtctld` service, not an HTTP URL or a vttablet endpoint. No port is
+inferred from `API`. When `GRPCAddress` is nonempty it takes precedence over
+`API`, including on failure: there is no HTTP fallback.
+
+TLS and certificate verification are enabled by default, using system CA roots
+and the address's hostname. `GRPCCAFile` optionally replaces the system roots
+with certificates from a PEM file. `GRPCServerName` optionally specifies the
+expected certificate DNS name, for example when connecting through a different
+address. Omit these two fields when system trust and the address's name suffice.
+There is no option to skip certificate verification. Servers requiring client
+certificates or authentication metadata need additional client support; these
+credentials are not configured by this discovery path.
+
+Only for an intentionally plaintext gRPC listener, set `"GRPCInsecure": true`.
+This disables transport encryption, not just certificate verification, and
+cannot be combined with `GRPCCAFile` or `GRPCServerName`. Do not use it as a
+workaround for TLS errors or to migrate an HTTPS configuration to plaintext.
+
+`Keyspace` is required. An empty or omitted `Shard` discovers all shards in that
+keyspace. `Cells` restricts discovery to those cells; empty entries are ignored.
+If `Cells` is omitted or empty, it inherits `Stores.MySQL.VitessCells`. If no
+nonempty cells remain, all cells are eligible. Only `REPLICA` tablets are used,
+and their `mysql_hostname` and `mysql_port` supply the probe addresses, not their
+vttablet hostname or service ports. The gRPC response has no realtime tablet
+health stats; Freno continues to collect its configured MySQL metrics and HTTP
+checks.
+
+`TimeoutSecs` bounds each discovery call, including connection establishment;
+zero or omitted means five seconds. Each gRPC call owns and closes its
+connection. Requests set `Strict=true` so a topology/cell failure is an error,
+not a successful partial inventory. Errors are logged and do not replace the
+previous inventory. Successful responses with no replicas remain an empty
+inventory, as with HTTP discovery.
+
+Existing `API`-only configurations retain the legacy HTTP discovery path and
+its realtime-stat filtering. That endpoint was
+[removed in Vitess v23.0.7](https://github.com/vitessio/vitess/releases/tag/v23.0.7#legacy-vtctld-http-api-removed);
+configure gRPC before upgrading to a version without it. The HTTP transport is
+not made compatible with its removal.
+
+The client uses the stable [Vitess v0.21.0 generated schema](https://github.com/vitessio/vitess/blob/v21.0.0/proto/vtctldata.proto) rather than
+upgrading to v23 libraries. Its request fields and response match
+the public [v22 GetTablets schema](https://github.com/vitessio/vitess/blob/v22.0.0/proto/vtctldata.proto)
+and [v23 GetTablets schema](https://github.com/vitessio/vitess/blob/v23.0.8/proto/vtctldata.proto);
+the request filters by replica type and results are also filtered locally.
+The v0.12.6 schema was also evaluated, but its
+[runtime helpers](https://github.com/vitessio/vitess/blob/v12.0.6/go/hack/runtime.go) do not link with
+the required modern Go toolchain. Local gRPC-server tests exercise the RPC
+contract, filtering, TLS and errors; they are not real v22/v23 vtctld daemon
+integration tests.
+
+Building requires Go 1.25 or newer. This is required by the patched gRPC
+transport, not by the older Vitess schema; see the upstream
+[HTTP/2 memory-exhaustion advisory](https://github.com/advisories/GHSA-vp52-pcj8-j9qc).
+Downstream builders must update their Go toolchain and build the new source
+revision. Runtime rollout also requires a reachable gRPC listener, authorization
+to call `GetTablets`, and the appropriate CA certificates. Installing a new
+binary alone does not change `API`-only configurations.
+
 
 ### Non lag metrics
 
