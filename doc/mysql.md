@@ -122,6 +122,7 @@ Noteworthy:
 - `prod4` list of servers is dictated by `HAProxy`. `freno` will routinely and dynamically poll given HAProxy server for list of hosts. These will include any hosts not in `NOLB`.
 - `local` cluster chooses to override `User`, `Password` and `IgnoreHostsCount`.
 - `local` cluster defines a static list of hosts.
+- `sharded` list of servers is read from Vitess vtctld's HTTP `API`. To read it with vtctld's gRPC `GetTablets` instead (Vitess v23 removes the HTTP API), set `"GRPCAddress": "vtctld.example.com:15999"` and `"GRPCInsecure": true`. Only plaintext gRPC is supported.
 
 
 ### Non lag metrics
