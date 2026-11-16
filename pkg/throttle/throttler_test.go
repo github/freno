@@ -316,6 +316,10 @@ func SetTestMySQLClusterMetric(throttler *Throttler, clusterName string, value, 
 	setTestMySQLClusterMetric(throttler, clusterName, value, threshold)
 }
 
+func StabilizeTestMySQLClusterMetric(throttler *Throttler, clusterName string, metric base.MetricResult, now time.Time) {
+	throttler.aggregatedMetrics.SetDefault("mysql/"+clusterName, throttler.stabilizeMySQLMetric(clusterName, metric, now))
+}
+
 func newTestMySQLFallbackCheck(fallbackCluster string) (*ThrottlerCheck, *Throttler) {
 	config.Settings().Stores.MySQL = config.MySQLConfigurationSettings{
 		FallbackCluster: fallbackCluster,
