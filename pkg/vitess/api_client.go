@@ -112,9 +112,12 @@ func filterReplicaTablets(settings config.VitessConfigurationSettings, tablets [
 	return replicas
 }
 
-// ParseTablets reads from vitess /api/keyspace/<keyspace>/tablets/[shard] and returns a
-// listing (mysql_hostname, mysql_port, type) of REPLICA tablets
+// ParseTablets reads from vtctld's gRPC GetTablets if GRPCAddress is set, otherwise from vitess
+// /api/keyspace/<keyspace>/tablets/[shard], and returns a listing (mysql_hostname, mysql_port, type) of REPLICA tablets
 func ParseTablets(settings config.VitessConfigurationSettings) (tablets []Tablet, err error) {
+	if settings.GRPCAddress != "" {
+		return parseGRPCTablets(settings)
+	}
 	if settings.TimeoutSecs == 0 {
 		httpClient.Timeout = defaultTimeout
 	} else {

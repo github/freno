@@ -3,7 +3,6 @@
 // license that can be found in the LICENSE file.
 
 //go:build linux && ppc
-// +build linux,ppc
 
 package unix
 
@@ -12,7 +11,6 @@ import (
 	"unsafe"
 )
 
-//sys	EpollWait(epfd int, events []EpollEvent, msec int) (n int, err error)
 //sys	Fchown(fd int, uid int, gid int) (err error)
 //sys	Fstat(fd int, stat *Stat_t) (err error) = SYS_FSTAT64
 //sys	Fstatat(dirfd int, path string, stat *Stat_t, flags int) (err error) = SYS_FSTATAT64
@@ -157,33 +155,6 @@ func Getrlimit(resource int, rlim *Rlimit) (err error) {
 		rlim.Max = uint64(rl.Max)
 	}
 	return
-}
-
-//sysnb	setrlimit(resource int, rlim *rlimit32) (err error) = SYS_SETRLIMIT
-
-func Setrlimit(resource int, rlim *Rlimit) (err error) {
-	err = Prlimit(0, resource, rlim, nil)
-	if err != ENOSYS {
-		return err
-	}
-
-	rl := rlimit32{}
-	if rlim.Cur == rlimInf64 {
-		rl.Cur = rlimInf32
-	} else if rlim.Cur < uint64(rlimInf32) {
-		rl.Cur = uint32(rlim.Cur)
-	} else {
-		return EINVAL
-	}
-	if rlim.Max == rlimInf64 {
-		rl.Max = rlimInf32
-	} else if rlim.Max < uint64(rlimInf32) {
-		rl.Max = uint32(rlim.Max)
-	} else {
-		return EINVAL
-	}
-
-	return setrlimit(resource, &rl)
 }
 
 func (r *PtraceRegs) PC() uint32 { return r.Nip }
