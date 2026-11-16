@@ -139,45 +139,14 @@ func TestMySQLRequiredClusters(t *testing.T) {
 				"replicas": {RequiredClusters: []string{"primary"}},
 				"primary":  {RequiredClusters: []string{"replicas"}},
 			},
-			wantErr: `Stores.MySQL.Clusters contains a RequiredClusters/ShadowRequiredClusters cycle involving "primary"`,
-		},
-		{
-			name: "unknown shadow dependency",
-			clusters: map[string]*MySQLClusterConfigurationSettings{
-				"replicas": {ShadowRequiredClusters: []string{"primary"}},
-			},
-			wantErr: `Stores.MySQL.Clusters.replicas.ShadowRequiredClusters references unknown cluster "primary"`,
-		},
-		{
-			name: "shadow cycle",
-			clusters: map[string]*MySQLClusterConfigurationSettings{
-				"primary":  {ShadowRequiredClusters: []string{"replicas"}},
-				"replicas": {ShadowRequiredClusters: []string{"primary"}},
-			},
-			wantErr: `Stores.MySQL.Clusters contains a RequiredClusters/ShadowRequiredClusters cycle involving "primary"`,
-		},
-		{
-			name: "mixed dependency cycle",
-			clusters: map[string]*MySQLClusterConfigurationSettings{
-				"primary":  {RequiredClusters: []string{"replicas"}},
-				"replicas": {ShadowRequiredClusters: []string{"primary"}},
-			},
-			wantErr: `Stores.MySQL.Clusters contains a RequiredClusters/ShadowRequiredClusters cycle involving "primary"`,
-		},
-		{
-			name: "enforced and shadow overlap",
-			clusters: map[string]*MySQLClusterConfigurationSettings{
-				"primary":  {},
-				"replicas": {RequiredClusters: []string{"primary"}, ShadowRequiredClusters: []string{"primary"}},
-			},
-			wantErr: `Stores.MySQL.Clusters.replicas: cluster "primary" cannot appear in both RequiredClusters and ShadowRequiredClusters`,
+			wantErr: `Stores.MySQL.Clusters contains a RequiredClusters cycle involving "primary"`,
 		},
 		{
 			name: "nested and shared dependencies",
 			clusters: map[string]*MySQLClusterConfigurationSettings{
-				"replicas": {RequiredClusters: []string{"required"}, ShadowRequiredClusters: []string{"primary", "primary"}},
-				"required": {ShadowRequiredClusters: []string{"primary"}},
-				"primary":  {RequiredClusters: []string{"capacity"}, ShadowRequiredClusters: []string{"extra"}},
+				"replicas": {RequiredClusters: []string{"required", "primary", "primary"}},
+				"required": {RequiredClusters: []string{"primary"}},
+				"primary":  {RequiredClusters: []string{"capacity", "extra"}},
 				"capacity": {},
 				"extra":    {RequiredClusters: []string{"capacity"}},
 			},
@@ -239,52 +208,6 @@ func TestMySQLRecoveryConfiguration(t *testing.T) {
 			}
 			if test.wantErr != "" && (err == nil || err.Error() != test.wantErr) {
 				t.Fatalf("error = %v, want %q", err, test.wantErr)
-			}
-		})
-	}
-}
-
-func TestVitessTabletTypeConfiguration(t *testing.T) {
-	tests := []struct {
-		name       string
-		tabletType string
-		want       string
-		wantErr    string
-	}{
-		{name: "default replica", want: "REPLICA"},
-		{name: "replica", tabletType: "replica", want: "REPLICA"},
-		{name: "primary", tabletType: "primary", want: "PRIMARY"},
-		{name: "legacy master alias", tabletType: "master", want: "PRIMARY"},
-		{name: "primary with whitespace", tabletType: " PRIMARY ", want: "PRIMARY"},
-		{name: "legacy alias with whitespace", tabletType: " MASTER ", want: "PRIMARY"},
-		{name: "invalid", tabletType: "rdonly", wantErr: `Stores.MySQL.Clusters.vitess.VitessSettings: unsupported Vitess tablet type "rdonly"`},
-	}
-
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			settings := MySQLConfigurationSettings{
-				Clusters: map[string]*MySQLClusterConfigurationSettings{
-					"vitess": {
-						VitessSettings: VitessConfigurationSettings{
-							API:        "https://vtctld.example.com/api",
-							Keyspace:   "test",
-							TabletType: test.tabletType,
-						},
-					},
-				},
-			}
-			err := settings.postReadAdjustments()
-			if test.wantErr == "" && err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
-			if test.wantErr != "" {
-				if err == nil || err.Error() != test.wantErr {
-					t.Fatalf("error = %v, want %q", err, test.wantErr)
-				}
-				return
-			}
-			if got := settings.Clusters["vitess"].VitessSettings.TabletType; got != test.want {
-				t.Fatalf("TabletType = %q, want %q", got, test.want)
 			}
 		})
 	}

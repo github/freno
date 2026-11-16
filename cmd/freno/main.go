@@ -127,7 +127,7 @@ func loadConfiguration(configFile string) {
 func logMySQLSafetyConfiguration(settings config.MySQLConfigurationSettings, output io.Writer) error {
 	clusterNames := make([]string, 0, len(settings.Clusters))
 	for name, cluster := range settings.Clusters {
-		if len(cluster.RequiredClusters) > 0 || len(cluster.ShadowRequiredClusters) > 0 || cluster.RecoveryDurationMillis > 0 || cluster.FailOnNoHosts {
+		if len(cluster.RequiredClusters) > 0 || cluster.RecoveryDurationMillis > 0 || cluster.FailOnNoHosts {
 			clusterNames = append(clusterNames, name)
 		}
 	}
@@ -141,8 +141,8 @@ func logMySQLSafetyConfiguration(settings config.MySQLConfigurationSettings, out
 		}
 		// Safety notices must be visible at the default ERROR log level, without changing other log filtering.
 		if _, err := fmt.Fprintf(output,
-			"freno MySQL safety configuration: cluster=%q RequiredClusters=%q ShadowRequiredClusters=%q RecoveryDurationMillis=%d RecoveryThreshold=%g ThrottleThreshold=%g FailOnNoHosts=%t\n",
-			name, cluster.RequiredClusters, cluster.ShadowRequiredClusters, cluster.RecoveryDurationMillis, recoveryThreshold, cluster.ThrottleThreshold, cluster.FailOnNoHosts,
+			"freno MySQL safety configuration: cluster=%q RequiredClusters=%q RecoveryDurationMillis=%d RecoveryThreshold=%g ThrottleThreshold=%g FailOnNoHosts=%t\n",
+			name, cluster.RequiredClusters, cluster.RecoveryDurationMillis, recoveryThreshold, cluster.ThrottleThreshold, cluster.FailOnNoHosts,
 		); err != nil {
 			return fmt.Errorf("cannot log MySQL safety configuration for cluster %q: %w", name, err)
 		}

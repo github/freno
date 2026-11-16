@@ -26,7 +26,6 @@ type MySQLMetricExplanation struct {
 	IgnoreDialTcpErrors    bool
 	Message                string
 	RequiredClusters       []string `json:",omitempty"`
-	ShadowRequiredClusters []string `json:",omitempty"`
 }
 
 type MySQLExplanation struct {
@@ -35,7 +34,7 @@ type MySQLExplanation struct {
 }
 
 // ExplainMySQLCluster reads loaded policy and cached metrics without running
-// admission checks, sampling probes, or changing recovery and shadow counters.
+// admission checks, sampling probes, or changing recovery state.
 func (check *ThrottlerCheck) ExplainMySQLCluster(clusterName string) (*MySQLExplanation, error) {
 	settings := config.Settings().Stores.MySQL
 	if settings.Clusters[clusterName] == nil {
@@ -45,7 +44,7 @@ func (check *ThrottlerCheck) ExplainMySQLCluster(clusterName string) (*MySQLExpl
 	modes := make(map[string]string)
 	var visit func(string, string) error
 	visit = func(name, mode string) error {
-		if previous, found := modes[name]; found && (previous != "shadow" || mode == "shadow") {
+		if _, found := modes[name]; found {
 			return nil
 		}
 		cluster := settings.Clusters[name]
@@ -53,17 +52,8 @@ func (check *ThrottlerCheck) ExplainMySQLCluster(clusterName string) (*MySQLExpl
 			return fmt.Errorf("missing MySQL dependency configuration for %q", name)
 		}
 		modes[name] = mode
-		requiredMode := "enforced"
-		if mode == "shadow" {
-			requiredMode = "shadow"
-		}
 		for _, dependency := range cluster.RequiredClusters {
-			if err := visit(dependency, requiredMode); err != nil {
-				return err
-			}
-		}
-		for _, dependency := range cluster.ShadowRequiredClusters {
-			if err := visit(dependency, "shadow"); err != nil {
+			if err := visit(dependency, "enforced"); err != nil {
 				return err
 			}
 		}
@@ -133,7 +123,6 @@ func (check *ThrottlerCheck) ExplainMySQLCluster(clusterName string) (*MySQLExpl
 			IgnoreDialTcpErrors:    settings.IgnoreDialTcpErrors,
 			Message:                result.Message,
 			RequiredClusters:       cluster.RequiredClusters,
-			ShadowRequiredClusters: cluster.ShadowRequiredClusters,
 		})
 	}
 	return explanation, nil

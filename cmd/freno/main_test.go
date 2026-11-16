@@ -27,10 +27,6 @@ func TestLogMySQLSafetyConfiguration(t *testing.T) {
 				MetricQuery:       "do-not-log-query",
 			},
 			"primary": {ThrottleThreshold: 50},
-			"shadow-only": {
-				ShadowRequiredClusters: []string{"primary"},
-				ThrottleThreshold:      5,
-			},
 			"fail-closed": {
 				FailOnNoHosts:     true,
 				ThrottleThreshold: 50,
@@ -46,10 +42,9 @@ func TestLogMySQLSafetyConfiguration(t *testing.T) {
 	if err := logMySQLSafetyConfiguration(settings, &output); err != nil {
 		t.Fatal(err)
 	}
-	want := "freno MySQL safety configuration: cluster=\"dependency\" RequiredClusters=[\"primary\"] ShadowRequiredClusters=[] RecoveryDurationMillis=0 RecoveryThreshold=5 ThrottleThreshold=5 FailOnNoHosts=false\n" +
-		"freno MySQL safety configuration: cluster=\"fail-closed\" RequiredClusters=[] ShadowRequiredClusters=[] RecoveryDurationMillis=0 RecoveryThreshold=50 ThrottleThreshold=50 FailOnNoHosts=true\n" +
-		"freno MySQL safety configuration: cluster=\"recovery\" RequiredClusters=[] ShadowRequiredClusters=[] RecoveryDurationMillis=5000 RecoveryThreshold=3 ThrottleThreshold=10 FailOnNoHosts=false\n" +
-		"freno MySQL safety configuration: cluster=\"shadow-only\" RequiredClusters=[] ShadowRequiredClusters=[\"primary\"] RecoveryDurationMillis=0 RecoveryThreshold=5 ThrottleThreshold=5 FailOnNoHosts=false\n"
+	want := "freno MySQL safety configuration: cluster=\"dependency\" RequiredClusters=[\"primary\"] RecoveryDurationMillis=0 RecoveryThreshold=5 ThrottleThreshold=5 FailOnNoHosts=false\n" +
+		"freno MySQL safety configuration: cluster=\"fail-closed\" RequiredClusters=[] RecoveryDurationMillis=0 RecoveryThreshold=50 ThrottleThreshold=50 FailOnNoHosts=true\n" +
+		"freno MySQL safety configuration: cluster=\"recovery\" RequiredClusters=[] RecoveryDurationMillis=5000 RecoveryThreshold=3 ThrottleThreshold=10 FailOnNoHosts=false\n"
 	if got := output.String(); got != want {
 		t.Fatalf("startup safety configuration = %q, want %q", got, want)
 	}

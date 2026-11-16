@@ -71,8 +71,8 @@ func TestExplainMySQLRoute(t *testing.T) {
 		MetricQuery:      "private-query",
 		Clusters: map[string]*config.MySQLClusterConfigurationSettings{
 			"source": {
-				ThrottleThreshold:      1,
-				ShadowRequiredClusters: []string{"source-primary"},
+				ThrottleThreshold: 1,
+				RequiredClusters:  []string{"source-primary"},
 			},
 			"source-primary": {
 				User: "private-cluster-user", Password: "private-cluster-password",
@@ -111,7 +111,7 @@ func TestExplainMySQLRoute(t *testing.T) {
 					t.Fatal(err)
 				}
 				if len(result.Metrics) != 2 || result.Metrics[1].Threshold != 75 ||
-					result.Metrics[1].Mode != "shadow" || result.Metrics[1].Value != nil {
+					result.Metrics[1].Mode != "enforced" || result.Metrics[1].Value != nil {
 					t.Fatalf("unexpected diagnostic response: %s", recorder.Body.String())
 				}
 				if !strings.Contains(recorder.Body.String(), `"Value":null`) {
@@ -181,11 +181,9 @@ func TestMetricsFiltersAggregateAndProbeMetricsFromFollowers(t *testing.T) {
 		aggregatedMetricName = "aggregated.mysql.metrics-export-test"
 		probeMetricName      = "probes.total.metrics-export-test"
 		processMetricName    = "consensus.metrics-export-test"
-		backgroundMetricName = "shadow.background.mysql.metrics-export-test.would_reject"
-		httpMetricName       = "shadow.http.mysql.metrics-export-test.total"
 	)
 
-	metricNames := []string{aggregatedMetricName, probeMetricName, processMetricName, backgroundMetricName, httpMetricName}
+	metricNames := []string{aggregatedMetricName, probeMetricName, processMetricName}
 	for _, metricName := range metricNames {
 		metrics.DefaultRegistry.Unregister(metricName)
 		defer metrics.DefaultRegistry.Unregister(metricName)
@@ -194,8 +192,6 @@ func TestMetricsFiltersAggregateAndProbeMetricsFromFollowers(t *testing.T) {
 	metrics.GetOrRegisterGaugeFloat64(aggregatedMetricName, nil).Update(42)
 	metrics.GetOrRegisterCounter(probeMetricName, nil).Inc(7)
 	metrics.GetOrRegisterGauge(processMetricName, nil).Update(1)
-	metrics.GetOrRegisterCounter(backgroundMetricName, nil).Inc(2)
-	metrics.GetOrRegisterCounter(httpMetricName, nil).Inc(3)
 
 	readMetrics := func(isLeader bool) map[string]interface{} {
 		recorder := httptest.NewRecorder()
@@ -214,7 +210,6 @@ func TestMetricsFiltersAggregateAndProbeMetricsFromFollowers(t *testing.T) {
 	leaderMetrics := readMetrics(true)
 	metrics.DefaultRegistry.Unregister(aggregatedMetricName)
 	metrics.DefaultRegistry.Unregister(probeMetricName)
-	metrics.DefaultRegistry.Unregister(backgroundMetricName)
 	if expvar.Get(aggregatedMetricName) == nil || expvar.Get(probeMetricName) == nil {
 		t.Fatal("Expected aggregate and probe metrics to remain in expvar after unregister")
 	}
@@ -225,13 +220,5 @@ func TestMetricsFiltersAggregateAndProbeMetricsFromFollowers(t *testing.T) {
 	}
 	if followerMetrics[aggregatedMetricName] != nil || followerMetrics[probeMetricName] != nil || followerMetrics[processMetricName] == nil {
 		t.Errorf("Unexpected follower metrics: %v", followerMetrics)
-	}
-	if leaderMetrics[backgroundMetricName] == nil || leaderMetrics[httpMetricName] == nil ||
-		followerMetrics[backgroundMetricName] != nil || followerMetrics[httpMetricName] == nil {
-		t.Errorf("Unexpected shadow metrics: leader=%v follower=%v", leaderMetrics, followerMetrics)
-	}
-	if leaderMetrics[backgroundMetricName] != float64(2) || leaderMetrics[httpMetricName] != float64(3) ||
-		followerMetrics[httpMetricName] != float64(3) {
-		t.Errorf("Expected integer shadow counter values, got leader=%v follower=%v", leaderMetrics, followerMetrics)
 	}
 }

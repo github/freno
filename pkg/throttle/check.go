@@ -130,10 +130,6 @@ func (check *ThrottlerCheck) checkMySQLCluster(
 
 // CheckAppStoreMetric
 func (check *ThrottlerCheck) Check(appName string, storeType string, storeName string, remoteAddr string, flags *CheckFlags) (checkResult *CheckResult) {
-	return check.check(appName, storeType, storeName, remoteAddr, flags, true)
-}
-
-func (check *ThrottlerCheck) check(appName string, storeType string, storeName string, remoteAddr string, flags *CheckFlags, observeShadow bool) (checkResult *CheckResult) {
 	requestedStoreName := storeName
 	var metricResultFunc base.MetricResultFunc
 	switch storeType {
@@ -149,12 +145,6 @@ func (check *ThrottlerCheck) check(appName string, storeType string, storeName s
 			}
 			if configured {
 				checkResult = check.checkMySQLCluster(appName, storeName, flags, make(map[string]bool))
-				if observeShadow && checkResult.StatusCode == http.StatusOK {
-					observeMySQLShadowDependencies("http", storeName, func(name string) *CheckResult {
-						metric, threshold := check.throttler.getMySQLClusterMetrics(name)
-						return mysqlDependencyCheckResult(name, metric, threshold, false)
-					})
-				}
 			} else {
 				metricResultFunc = func() (metricResult base.MetricResult, threshold float64) {
 					return base.NoSuchMetric, 0
@@ -216,8 +206,8 @@ func (check *ThrottlerCheck) localCheck(metricName string) (checkResult *CheckRe
 	if err != nil {
 		return NoSuchMetricCheckResult
 	}
-	checkResult = check.check(frenoAppName, storeType, storeName, "local", StandardCheckFlags, false)
-	go check.check(frenoShareDmainAppName, storeType, storeName, "local", StandardCheckFlags, false)
+	checkResult = check.Check(frenoAppName, storeType, storeName, "local", StandardCheckFlags)
+	go check.Check(frenoShareDmainAppName, storeType, storeName, "local", StandardCheckFlags)
 
 	if checkResult.StatusCode == http.StatusOK {
 		check.throttler.markMetricHealthy(metricName)

@@ -398,7 +398,7 @@ func (api *APIImpl) Metrics(w http.ResponseWriter, r *http.Request, _ httprouter
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	metricValues := make(map[string]json.RawMessage)
 	expvar.Do(func(metric expvar.KeyValue) {
-		if !isLeader && (strings.HasPrefix(metric.Key, "aggregated.") || strings.HasPrefix(metric.Key, "probes.") || strings.HasPrefix(metric.Key, "shadow.background.")) {
+		if !isLeader && (strings.HasPrefix(metric.Key, "aggregated.") || strings.HasPrefix(metric.Key, "probes.")) {
 			return
 		}
 		metricValues[metric.Key] = json.RawMessage(metric.Value.String())

@@ -15,9 +15,6 @@ import (
 
 const defaultTimeout = time.Duration(5) * time.Second
 
-// The pinned Vitess enum names value 1 MASTER; current Vitess calls it PRIMARY.
-const tabletTypePrimary = topodata.TabletType_MASTER
-
 // TabletRealtimeStats represents realtime stats from a running instance of vttablet.
 type TabletRealtimeStats struct {
 	HealthError string `json:"health_error,omitempty"`
@@ -64,18 +61,12 @@ func (t Tablet) IsServeable() bool {
 	return true
 }
 
-// IsValidType returns whether a tablet has the requested type and is eligible
-// for direct metric collection.
-func (t Tablet) IsValidType(tabletType topodata.TabletType) bool {
-	if t.Type != tabletType {
+// IsValidReplica returns a bool reflecting if a tablet type is REPLICA
+func (t Tablet) IsValidReplica() bool {
+	if t.Type != topodata.TabletType_REPLICA {
 		return false
 	}
 	return t.IsServeable()
-}
-
-// IsValidReplica preserves the original replica-specific API for package consumers.
-func (t Tablet) IsValidReplica() bool {
-	return t.IsValidType(topodata.TabletType_REPLICA)
 }
 
 var httpClient = http.Client{
@@ -110,27 +101,19 @@ func ParseCells(settings config.VitessConfigurationSettings) (cells []string) {
 	return cells
 }
 
-func configuredTabletType(settings config.VitessConfigurationSettings) topodata.TabletType {
-	if settings.TabletType == "PRIMARY" || settings.TabletType == "MASTER" {
-		return tabletTypePrimary
-	}
-	return topodata.TabletType_REPLICA
-}
-
-// filterTablets parses a list of tablets, returning only the configured type.
-func filterTablets(settings config.VitessConfigurationSettings, tablets []Tablet) (filtered []Tablet) {
+// filterReplicaTablets parses a list of tablets, returning replica tablets only
+func filterReplicaTablets(settings config.VitessConfigurationSettings, tablets []Tablet) (replicas []Tablet) {
 	validCells := ParseCells(settings)
-	tabletType := configuredTabletType(settings)
 	for _, tablet := range tablets {
-		if tablet.HasValidCell(validCells) && tablet.IsValidType(tabletType) {
-			filtered = append(filtered, tablet)
+		if tablet.HasValidCell(validCells) && tablet.IsValidReplica() {
+			replicas = append(replicas, tablet)
 		}
 	}
-	return filtered
+	return replicas
 }
 
 // ParseTablets reads from vitess /api/keyspace/<keyspace>/tablets/[shard] and returns a
-// listing (mysql_hostname, mysql_port, type) of the configured tablet type.
+// listing (mysql_hostname, mysql_port, type) of REPLICA tablets
 func ParseTablets(settings config.VitessConfigurationSettings) (tablets []Tablet, err error) {
 	if settings.TimeoutSecs == 0 {
 		httpClient.Timeout = defaultTimeout
@@ -154,5 +137,5 @@ func ParseTablets(settings config.VitessConfigurationSettings) (tablets []Tablet
 		return tablets, err
 	}
 	err = json.Unmarshal(body, &tablets)
-	return filterTablets(settings, tablets), err
+	return filterReplicaTablets(settings, tablets), err
 }

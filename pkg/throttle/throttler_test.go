@@ -25,9 +25,8 @@ func TestExplainMySQLCluster(t *testing.T) {
 		FallbackCluster:     "explain-source",
 		Clusters: map[string]*config.MySQLClusterConfigurationSettings{
 			"explain-source": {
-				ThrottleThreshold:      1,
-				RequiredClusters:       []string{"explain-required"},
-				ShadowRequiredClusters: []string{"explain-candidate", "explain-missing"},
+				ThrottleThreshold: 1,
+				RequiredClusters:  []string{"explain-required", "explain-candidate", "explain-missing"},
 			},
 			"explain-required": {
 				ThrottleThreshold:      10,
@@ -56,9 +55,6 @@ func TestExplainMySQLCluster(t *testing.T) {
 	throttler.aggregatedMetrics.SetDefault("mysql/explain-shared", base.NewErrorMetricResult(0, errors.New("query failed with private-password")))
 	throttler.aggregatedMetrics.SetDefault("mysql/explain-no-hosts", base.NoHostsMetricResult)
 
-	counterName := "shadow.http.mysql.explain-source.total"
-	metrics.DefaultRegistry.Unregister(counterName)
-	defer metrics.DefaultRegistry.Unregister(counterName)
 	check := NewThrottlerCheck(throttler)
 	result, err := check.ExplainMySQLCluster("explain-source")
 	if !assert.NoError(t, err) {
@@ -78,7 +74,7 @@ func TestExplainMySQLCluster(t *testing.T) {
 	assert.Equal(t, 1.0, source.RecoveryThreshold)
 
 	candidate := byName["mysql/explain-candidate"]
-	assert.Equal(t, "shadow", candidate.Mode)
+	assert.Equal(t, "enforced", candidate.Mode)
 	assert.Equal(t, http.StatusTooManyRequests, candidate.StatusCode)
 	assert.Equal(t, 200.0, *candidate.Value)
 	assert.Equal(t, 175.0, candidate.Threshold)
@@ -101,25 +97,24 @@ func TestExplainMySQLCluster(t *testing.T) {
 	assert.Equal(t, http.StatusInternalServerError, shared.StatusCode)
 	assert.Nil(t, shared.Value)
 	assert.Equal(t, "Probe error; consult server logs", shared.Message)
-	assert.Equal(t, "shadow", byName["mysql/explain-no-hosts"].Mode)
+	assert.Equal(t, "enforced", byName["mysql/explain-no-hosts"].Mode)
 	assert.Equal(t, base.NoHostsError.Error(), byName["mysql/explain-no-hosts"].Message)
 	assert.Equal(t, http.StatusInternalServerError, byName["mysql/explain-no-hosts"].StatusCode)
 	assert.Nil(t, byName["mysql/explain-missing"].Value)
 	assert.Equal(t, http.StatusInternalServerError, byName["mysql/explain-missing"].StatusCode)
-	assert.Nil(t, metrics.DefaultRegistry.Get(counterName))
 	assert.Empty(t, throttler.mysqlRecoveryState)
 	_, err = check.ExplainMySQLCluster("unknown")
 	assert.Equal(t, base.NoSuchMetricError, err)
 }
 
-func TestExplainMySQLClusterPromotesSharedShadowDependency(t *testing.T) {
+func TestExplainMySQLClusterIncludesSharedDependenciesOnce(t *testing.T) {
 	originalSettings := config.Settings().Stores.MySQL
 	defer func() { config.Settings().Stores.MySQL = originalSettings }()
 	config.Settings().Stores.MySQL = config.MySQLConfigurationSettings{
 		Clusters: map[string]*config.MySQLClusterConfigurationSettings{
 			"root": {RequiredClusters: []string{"first", "second"}},
 			"first": {
-				ShadowRequiredClusters: []string{"shared"},
+				RequiredClusters: []string{"shared"},
 			},
 			"second": {RequiredClusters: []string{"shared"}},
 			"shared": {RequiredClusters: []string{"child"}},
@@ -130,6 +125,7 @@ func TestExplainMySQLClusterPromotesSharedShadowDependency(t *testing.T) {
 	if !assert.NoError(t, err) {
 		return
 	}
+	assert.Len(t, result.Metrics, 5)
 	for _, metric := range result.Metrics {
 		if metric.MetricName == "mysql/shared" || metric.MetricName == "mysql/child" {
 			assert.Equal(t, "enforced", metric.Mode)
@@ -465,6 +461,18 @@ func TestCheckMySQLRequiredClusters(t *testing.T) {
 		assert.Equal(t, http.StatusOK, result.StatusCode)
 		assert.Equal(t, 1.0, result.Value)
 		assert.Equal(t, 5.0, result.Threshold)
+	})
+
+	t.Run("unreferenced primary does not gate admission", func(t *testing.T) {
+		check, throttler := newCheck()
+		replicas := config.Settings().Stores.MySQL.Clusters["replicas"]
+		required := replicas.RequiredClusters
+		replicas.RequiredClusters = nil
+		defer func() { replicas.RequiredClusters = required }()
+		setTestMySQLClusterMetric(throttler, "primary", 60.0, 50.0)
+		result := check.Check("transitions", "mysql", "replicas", "", &CheckFlags{})
+		assert.Equal(t, http.StatusOK, result.StatusCode)
+		assert.Equal(t, "mysql/replicas", result.MetricName)
 	})
 
 	t.Run("primary cluster blocks admission", func(t *testing.T) {
