@@ -267,7 +267,7 @@ that a configuration change installs new server functionality.
    decisions retain their existing behavior.
 2. Add separately named primary metrics and reference them from the application's
    normal cluster only after validation. Initially leave them out of
-   `RequiredClusters` and inspect their aggregates or read-only diagnostics.
+   `RequiredClusters` and inspect their aggregates.
    Validate discovery, privileges, probe load, errors, and recovery gauges.
    Do not add new probes and enforce them in the same deployment.
 3. Review thresholds against recent traffic, known incidents, and per-host/shard
