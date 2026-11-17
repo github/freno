@@ -160,6 +160,18 @@ func (check *ThrottlerCheck) Check(appName string, storeType string, storeName s
 		checkResult = check.checkAppMetricResult(appName, storeType, storeName, metricResultFunc, flags)
 	}
 
+	if checkResult.StatusCode == http.StatusTooManyRequests && appName != frenoAppName && appName != frenoShareDmainAppName {
+		reason := "other"
+		switch {
+		case errors.Is(checkResult.Error, base.RecoveryNotCompleteError):
+			reason = "recovery"
+		case errors.Is(checkResult.Error, base.ThresholdExceededError) && checkResult.Value > checkResult.Threshold:
+			reason = "threshold"
+		}
+		metricName := strings.ReplaceAll(checkResult.MetricName, "/", ".")
+		metrics.GetOrRegisterCounter(fmt.Sprintf("check.rejected.%s.%s.total", metricName, reason), nil).Inc(1)
+	}
+
 	go func(statusCode int) {
 		metrics.GetOrRegisterCounter("check.any.total", nil).Inc(1)
 		metrics.GetOrRegisterCounter(fmt.Sprintf("check.%s.total", appName), nil).Inc(1)

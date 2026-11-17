@@ -192,6 +192,32 @@ standard error. It includes the dependency names, effective recovery and throttl
 thresholds, recovery duration, and no-host policy, without credentials or query
 text. These notices are visible without `--verbose`; `--quiet` suppresses them.
 
+#### Rejection counters
+
+Application checks returning `429` increment
+`check.rejected.mysql.<blocking-cluster>.<reason>.total`. The blocking cluster
+comes from the response's `MetricName`, not necessarily the cluster requested
+by the application. For example:
+
+```text
+check.rejected.mysql.prod4.threshold.total
+check.rejected.mysql.prod4-primary.threshold.total
+check.rejected.mysql.prod4-primary.recovery.total
+```
+
+With the configuration below, the first counter records replica-lag rejections,
+the second primary-pressure rejections, and the third primary recovery holds.
+`threshold` means the value exceeded the effective threshold; `recovery` means
+the healthy window is incomplete. Other `429` decisions, such as a shared-domain
+hold while the local value is healthy, use `other` rather than claiming local
+overload.
+
+Each check increments only the counter for its first blocking metric. Healthy
+checks, non-`429` failures, and the internal `freno` and `freno-share-domain`
+checks do not increment these counters. These are process-local cumulative
+request counters that reset on restart, not counts of overloaded probe readings
+or distinct overload episodes. They do not measure memcache client rejections.
+
 #### Configuration example
 
 A cluster can require additional cluster metrics to pass before `freno` permits

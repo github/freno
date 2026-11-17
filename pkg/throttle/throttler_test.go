@@ -406,6 +406,82 @@ func TestCheckMySQLRequiredClusters(t *testing.T) {
 	})
 }
 
+func TestCheckRejectionMetrics(t *testing.T) {
+	originalSettings := config.Settings().Stores.MySQL
+	defer func() { config.Settings().Stores.MySQL = originalSettings }()
+	config.Settings().Stores.MySQL = config.MySQLConfigurationSettings{
+		FallbackCluster: "rejection-replicas",
+		Clusters: map[string]*config.MySQLClusterConfigurationSettings{
+			"rejection-replicas": {RequiredClusters: []string{"rejection-primary"}},
+			"rejection-primary":  {},
+		},
+	}
+
+	for _, test := range []struct {
+		name             string
+		replicaValue     float64
+		primaryMetric    base.MetricResult
+		appName          string
+		requestedCluster string
+		sharedDomain     bool
+		wantStatus       int
+		wantCounter      string
+	}{
+		{name: "healthy", wantStatus: http.StatusOK},
+		{name: "replica overload", replicaValue: 6, wantStatus: http.StatusTooManyRequests, wantCounter: "rejection-replicas.threshold"},
+		{name: "primary overload", primaryMetric: base.NewSimpleMetricResult(60), wantStatus: http.StatusTooManyRequests, wantCounter: "rejection-primary.threshold"},
+		{name: "both overloaded count only the first blocker", replicaValue: 6, primaryMetric: base.NewSimpleMetricResult(60), wantStatus: http.StatusTooManyRequests, wantCounter: "rejection-replicas.threshold"},
+		{name: "primary recovery is not overload", primaryMetric: base.NewErrorMetricResult(35, base.RecoveryNotCompleteError), wantStatus: http.StatusTooManyRequests, wantCounter: "rejection-primary.recovery"},
+		{name: "shared domain is not local overload", sharedDomain: true, wantStatus: http.StatusTooManyRequests, wantCounter: "rejection-primary.other"},
+		{name: "missing required metric is not a 429", primaryMetric: base.NoSuchMetric, wantStatus: http.StatusInternalServerError},
+		{name: "application policy denial is not a 429", appName: "abusing-app", wantStatus: http.StatusExpectationFailed},
+		{name: "self checks are excluded", appName: frenoAppName, primaryMetric: base.NewSimpleMetricResult(60), wantStatus: http.StatusTooManyRequests},
+		{name: "shared domain self checks are excluded", appName: frenoShareDmainAppName, primaryMetric: base.NewSimpleMetricResult(60), wantStatus: http.StatusTooManyRequests},
+		{name: "fallback uses the actual blocking metric", requestedCluster: "unknown", primaryMetric: base.NewSimpleMetricResult(60), wantStatus: http.StatusTooManyRequests, wantCounter: "rejection-primary.threshold"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			for _, cluster := range []string{"rejection-replicas", "rejection-primary"} {
+				for _, reason := range []string{"threshold", "recovery", "other"} {
+					name := "check.rejected.mysql." + cluster + "." + reason + ".total"
+					metrics.DefaultRegistry.Unregister(name)
+					t.Cleanup(func() { metrics.DefaultRegistry.Unregister(name) })
+				}
+			}
+			throttler := NewThrottler()
+			setTestMySQLClusterMetric(throttler, "rejection-replicas", test.replicaValue, 5)
+			setTestMySQLClusterMetric(throttler, "rejection-primary", 10, 50)
+			if test.primaryMetric != nil {
+				throttler.aggregatedMetrics.SetDefault("mysql/rejection-primary", test.primaryMetric)
+			}
+			if test.sharedDomain {
+				throttler.shareDomainMetricHealth.SetDefault("mysql/rejection-primary", &base.MetricHealth{SecondsSinceLastHealthy: 1})
+			}
+			appName, cluster := test.appName, test.requestedCluster
+			if appName == "" {
+				appName = "test-app"
+			}
+			if cluster == "" {
+				cluster = "rejection-replicas"
+			}
+			check := NewThrottlerCheck(throttler)
+			for attempt := 0; attempt < 2; attempt++ {
+				result := check.Check(appName, "mysql", cluster, "", StandardCheckFlags)
+				assert.Equal(t, test.wantStatus, result.StatusCode)
+			}
+			for _, cluster := range []string{"rejection-replicas", "rejection-primary"} {
+				for _, reason := range []string{"threshold", "recovery", "other"} {
+					name := "check.rejected.mysql." + cluster + "." + reason + ".total"
+					var want int64
+					if cluster+"."+reason == test.wantCounter {
+						want = 2
+					}
+					assert.Equal(t, want, metrics.GetOrRegisterCounter(name, nil).Count(), name)
+				}
+			}
+		})
+	}
+}
+
 func TestStabilizeMySQLMetric(t *testing.T) {
 	originalSettings := config.Settings().Stores.MySQL
 	defer func() {
