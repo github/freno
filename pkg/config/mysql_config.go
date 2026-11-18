@@ -13,26 +13,27 @@ import (
 const DefaultMySQLPort = 3306
 
 type MySQLClusterConfigurationSettings struct {
-	User                   string   // override MySQLConfigurationSettings's, or leave empty to inherit those settings
-	Password               string   // override MySQLConfigurationSettings's, or leave empty to inherit those settings
-	MetricQuery            string   // override MySQLConfigurationSettings's, or leave empty to inherit those settings
-	CacheMillis            int      // override MySQLConfigurationSettings's, or leave empty to inherit those settings
-	ThrottleThreshold      float64  // override MySQLConfigurationSettings's, or leave empty to inherit those settings
-	RecoveryThreshold      *float64 // optional threshold that must be met before a throttled cluster begins recovery
-	RecoveryDurationMillis int      // continuous recovery duration required before writes resume
-	FailOnNoHosts          bool     // reject checks when no eligible hosts remain instead of preserving legacy fail-open behavior
-	RequiredClusters       []string // additional MySQL cluster metrics that must pass for this cluster to pass
-	Port                   int      // Specify if different than 3306 or if different than specified by MySQLConfigurationSettings
-	IgnoreHostsCount       int      // Number of hosts that can be skipped/ignored even on error or on exceeding theesholds
-	IgnoreHostsThreshold   float64  // Threshold beyond which IgnoreHostsCount applies (default: 0)
-	HttpCheckPort          int      // Specify if different than specified by MySQLConfigurationSettings. -1 to disable HTTP check
-	HttpCheckPath          string   // Specify if different than specified by MySQLConfigurationSettings
-	IgnoreHosts            []string // override MySQLConfigurationSettings's, or leave empty to inherit those settings
+	User                 string   // override MySQLConfigurationSettings's, or leave empty to inherit those settings
+	Password             string   // override MySQLConfigurationSettings's, or leave empty to inherit those settings
+	MetricQuery          string   // override MySQLConfigurationSettings's, or leave empty to inherit those settings
+	CacheMillis          int      // override MySQLConfigurationSettings's, or leave empty to inherit those settings
+	ThrottleThreshold    float64  // override MySQLConfigurationSettings's, or leave empty to inherit those settings
+	Port                 int      // Specify if different than 3306 or if different than specified by MySQLConfigurationSettings
+	IgnoreHostsCount     int      // Number of hosts that can be skipped/ignored even on error or on exceeding theesholds
+	IgnoreHostsThreshold float64  // Threshold beyond which IgnoreHostsCount applies (default: 0)
+	HttpCheckPort        int      // Specify if different than specified by MySQLConfigurationSettings. -1 to disable HTTP check
+	HttpCheckPath        string   // Specify if different than specified by MySQLConfigurationSettings
+	IgnoreHosts          []string // override MySQLConfigurationSettings's, or leave empty to inherit those settings
 
 	HAProxySettings     HAProxyConfigurationSettings  // If list of servers is to be acquired via HAProxy, provide this field
 	ProxySQLSettings    ProxySQLConfigurationSettings // If list of servers is to be acquired via ProxySQL, provide this field
 	VitessSettings      VitessConfigurationSettings   // If list of servers is to be acquired via Vitess, provide this field
 	StaticHostsSettings StaticHostsConfigurationSettings
+
+	RecoveryThreshold      *float64 // optional threshold that must be met before a throttled cluster begins recovery
+	RecoveryDurationMillis int      // continuous recovery duration required before writes resume
+	FailOnNoHosts          bool     // reject checks when no eligible hosts remain instead of preserving legacy fail-open behavior
+	RequiredClusters       []string // additional MySQL cluster metrics that must pass for this cluster to pass
 }
 
 // Hook to implement adjustments after reading each configuration file.
@@ -197,6 +198,9 @@ func (settings *MySQLConfigurationSettings) validateRequiredClusters() error {
 
 		states[clusterName] = visiting
 		cluster := settings.Clusters[clusterName]
+		if cluster == nil {
+			return fmt.Errorf("Stores.MySQL.Clusters.%s must not be null", clusterName)
+		}
 		for _, name := range cluster.RequiredClusters {
 			if _, ok := settings.Clusters[name]; !ok {
 				return fmt.Errorf("Stores.MySQL.Clusters.%s.RequiredClusters references unknown cluster %q", clusterName, name)

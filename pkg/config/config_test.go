@@ -3,6 +3,8 @@ package config
 import (
 	"encoding/json"
 	"io/ioutil"
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/outbrain/golib/log"
@@ -118,6 +120,8 @@ func TestMySQLRequiredClusters(t *testing.T) {
 		clusters map[string]*MySQLClusterConfigurationSettings
 		wantErr  string
 	}{
+		{name: "omitted clusters"},
+		{name: "empty clusters", clusters: map[string]*MySQLClusterConfigurationSettings{}},
 		{
 			name: "valid dependencies",
 			clusters: map[string]*MySQLClusterConfigurationSettings{
@@ -171,6 +175,47 @@ func TestMySQLRequiredClusters(t *testing.T) {
 				t.Fatalf("error = %v, want %q", err, test.wantErr)
 			}
 		})
+	}
+}
+
+func TestValidateRequiredClustersRejectsNullDependency(t *testing.T) {
+	settings := MySQLConfigurationSettings{
+		Clusters: map[string]*MySQLClusterConfigurationSettings{
+			"replicas": {RequiredClusters: []string{"primary"}},
+			"primary":  nil,
+		},
+	}
+	wantErr := "Stores.MySQL.Clusters.primary must not be null"
+	if err := settings.validateRequiredClusters(); err == nil || err.Error() != wantErr {
+		t.Fatalf("error = %v, want %q", err, wantErr)
+	}
+}
+
+func TestReadRejectsMisspelledRequiredCluster(t *testing.T) {
+	directory := t.TempDir()
+	settings := newConfigurationSettings()
+	settings.RaftDataDir = directory
+	settings.Stores.MySQL.Clusters = map[string]*MySQLClusterConfigurationSettings{
+		"replicas": {RequiredClusters: []string{"primray"}},
+		"primary":  {},
+	}
+	contents, err := json.Marshal(settings)
+	if err != nil {
+		t.Fatal(err)
+	}
+	filename := filepath.Join(directory, "freno.json")
+	if err := os.WriteFile(filename, contents, 0600); err != nil {
+		t.Fatal(err)
+	}
+
+	configuration := newConfiguration()
+	originalSettings := configuration.settings
+	wantErr := `Stores.MySQL.Clusters.replicas.RequiredClusters references unknown cluster "primray"`
+	if err := configuration.Read(filename); err == nil || err.Error() != wantErr {
+		t.Fatalf("error = %v, want %q", err, wantErr)
+	}
+	if configuration.settings != originalSettings {
+		t.Fatal("invalid configuration replaced the active settings")
 	}
 }
 
