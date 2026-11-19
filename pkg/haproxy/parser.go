@@ -1,10 +1,14 @@
 package haproxy
 
 import (
+	"encoding/csv"
 	"fmt"
+	"io"
 	"io/ioutil"
+	"net"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"time"
 
@@ -72,24 +76,52 @@ func ParseStatus(fullStatus string) (status BackendHostStatus, isTransitioning b
 // Returned are all non-disabled hosts in given backend. Thus, a NOLB is skipped; any UP or DOWN hosts are returned.
 // Such list indicates the hosts which can be expected to be active, which is then the list freno will probe.
 func ParseHosts(csvLines []string, poolName string) (backendHosts [](*BackendHost), err error) {
+	return parseHosts(csvLines, poolName, false)
+}
+
+func parseHosts(csvLines []string, poolName string, useServerAddress bool) (backendHosts []*BackendHost, err error) {
 	if len(csvLines) < 1 {
 		return backendHosts, HAProxyEmptyStatus
 	}
 	if len(csvLines) == 1 {
 		return backendHosts, HAProxyPartialStatus
 	}
-	var tokensMap map[string]int
+	tokensMap := parseHeader(csvLines[0])
+	requiredColumns := 0
+	for _, field := range []string{"pxname", "svname", "status"} {
+		index, ok := tokensMap[field]
+		if !ok {
+			return nil, fmt.Errorf("HAProxy CSV parsing: missing %s column", field)
+		}
+		if index+1 > requiredColumns {
+			requiredColumns = index + 1
+		}
+	}
+	addressColumn, hasAddressColumn := tokensMap["addr"]
+	if useServerAddress && !hasAddressColumn {
+		return nil, fmt.Errorf("HAProxy CSV parsing: missing addr column")
+	}
+	reader := csv.NewReader(strings.NewReader(strings.Join(csvLines[1:], "\n")))
+	reader.FieldsPerRecord = -1
 	poolFound := false
 	countHosts := 0
 	countUpHosts := 0
 	countTransitioningHosts := 0
 	countTransitioningUpHosts := 0
-	for i, line := range csvLines {
-		if i == 0 {
-			tokensMap = parseHeader(csvLines[0])
+	for {
+		tokens, err := reader.Read()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return nil, fmt.Errorf("HAProxy CSV parsing: %w", err)
+		}
+		if len(tokens) == 1 && strings.TrimSpace(tokens[0]) == "" {
 			continue
 		}
-		tokens := strings.Split(line, ",")
+		if len(tokens) < requiredColumns {
+			return nil, fmt.Errorf("HAProxy CSV parsing: incomplete row")
+		}
 		if tokens[tokensMap["pxname"]] == poolName {
 			poolFound = true
 			if host := tokens[tokensMap["svname"]]; host != "BACKEND" && host != "FRONTEND" {
@@ -97,7 +129,25 @@ func ParseHosts(csvLines []string, poolName string) (backendHosts [](*BackendHos
 
 				status, isTransitioning := ParseStatus(tokens[tokensMap["status"]])
 
-				backendHosts = append(backendHosts, NewBackendHost(host, status, isTransitioning))
+				backendHost := NewBackendHost(host, status, isTransitioning)
+				if useServerAddress && backendHost.isRelevantForThrottling() {
+					if len(tokens) <= addressColumn {
+						return nil, fmt.Errorf("HAProxy CSV parsing: missing addr for %s/%s", poolName, host)
+					}
+					address := tokens[addressColumn]
+					hostname, portText, err := net.SplitHostPort(address)
+					ip := net.ParseIP(hostname)
+					if err != nil || hostname == "" || strings.ContainsAny(hostname, " \t\r\n") || (ip != nil && ip.IsUnspecified()) {
+						return nil, fmt.Errorf("HAProxy CSV parsing: invalid addr %q for %s/%s", address, poolName, host)
+					}
+					port, err := strconv.Atoi(portText)
+					if err != nil || port <= 0 || port > 65535 {
+						return nil, fmt.Errorf("HAProxy CSV parsing: invalid port in addr %q for %s/%s", address, poolName, host)
+					}
+					backendHost.Hostname = hostname
+					backendHost.Port = port
+				}
+				backendHosts = append(backendHosts, backendHost)
 				if isTransitioning {
 					countTransitioningHosts++
 				}
@@ -127,6 +177,12 @@ func ParseHosts(csvLines []string, poolName string) (backendHosts [](*BackendHos
 func ParseCsvHosts(csv string, poolName string) (backendHosts [](*BackendHost), err error) {
 	csvLines := parseLines(csv)
 	return ParseHosts(csvLines, poolName)
+}
+
+// ParseCsvHostsWithServerAddresses uses each server's addr instead of its svname label.
+// Each eligible backend server row must have a valid host:port address.
+func ParseCsvHostsWithServerAddresses(csv string, poolName string) ([]*BackendHost, error) {
+	return parseHosts(parseLines(csv), poolName, true)
 }
 
 func toCSVUrl(u url.URL) *url.URL {
