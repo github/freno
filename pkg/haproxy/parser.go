@@ -3,8 +3,10 @@ package haproxy
 import (
 	"fmt"
 	"io/ioutil"
+	"net"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"time"
 
@@ -72,6 +74,10 @@ func ParseStatus(fullStatus string) (status BackendHostStatus, isTransitioning b
 // Returned are all non-disabled hosts in given backend. Thus, a NOLB is skipped; any UP or DOWN hosts are returned.
 // Such list indicates the hosts which can be expected to be active, which is then the list freno will probe.
 func ParseHosts(csvLines []string, poolName string) (backendHosts [](*BackendHost), err error) {
+	return parseHosts(csvLines, poolName, false)
+}
+
+func parseHosts(csvLines []string, poolName string, useServerAddress bool) (backendHosts []*BackendHost, err error) {
 	if len(csvLines) < 1 {
 		return backendHosts, HAProxyEmptyStatus
 	}
@@ -79,6 +85,7 @@ func ParseHosts(csvLines []string, poolName string) (backendHosts [](*BackendHos
 		return backendHosts, HAProxyPartialStatus
 	}
 	var tokensMap map[string]int
+	requiredColumns := 0
 	poolFound := false
 	countHosts := 0
 	countUpHosts := 0
@@ -87,9 +94,26 @@ func ParseHosts(csvLines []string, poolName string) (backendHosts [](*BackendHos
 	for i, line := range csvLines {
 		if i == 0 {
 			tokensMap = parseHeader(csvLines[0])
+			if useServerAddress {
+				for _, field := range []string{"pxname", "svname", "status", "addr"} {
+					index, ok := tokensMap[field]
+					if !ok {
+						return nil, fmt.Errorf("HAProxy CSV parsing: missing %s column", field)
+					}
+					if index+1 > requiredColumns {
+						requiredColumns = index + 1
+					}
+				}
+			}
+			continue
+		}
+		if strings.TrimSpace(line) == "" {
 			continue
 		}
 		tokens := strings.Split(line, ",")
+		if useServerAddress && len(tokens) < requiredColumns {
+			return nil, fmt.Errorf("HAProxy CSV parsing: incomplete row %d", i+1)
+		}
 		if tokens[tokensMap["pxname"]] == poolName {
 			poolFound = true
 			if host := tokens[tokensMap["svname"]]; host != "BACKEND" && host != "FRONTEND" {
@@ -97,7 +121,22 @@ func ParseHosts(csvLines []string, poolName string) (backendHosts [](*BackendHos
 
 				status, isTransitioning := ParseStatus(tokens[tokensMap["status"]])
 
-				backendHosts = append(backendHosts, NewBackendHost(host, status, isTransitioning))
+				backendHost := NewBackendHost(host, status, isTransitioning)
+				if useServerAddress {
+					address := tokens[tokensMap["addr"]]
+					hostname, portText, err := net.SplitHostPort(address)
+					ip := net.ParseIP(hostname)
+					if err != nil || hostname == "" || strings.ContainsAny(hostname, " \t\r\n") || (ip != nil && ip.IsUnspecified()) {
+						return nil, fmt.Errorf("HAProxy CSV parsing: invalid addr %q for %s/%s", address, poolName, host)
+					}
+					port, err := strconv.Atoi(portText)
+					if err != nil || port <= 0 || port > 65535 {
+						return nil, fmt.Errorf("HAProxy CSV parsing: invalid port in addr %q for %s/%s", address, poolName, host)
+					}
+					backendHost.Hostname = hostname
+					backendHost.Port = port
+				}
+				backendHosts = append(backendHosts, backendHost)
 				if isTransitioning {
 					countTransitioningHosts++
 				}
@@ -127,6 +166,12 @@ func ParseHosts(csvLines []string, poolName string) (backendHosts [](*BackendHos
 func ParseCsvHosts(csv string, poolName string) (backendHosts [](*BackendHost), err error) {
 	csvLines := parseLines(csv)
 	return ParseHosts(csvLines, poolName)
+}
+
+// ParseCsvHostsWithServerAddresses uses each server's addr instead of its svname label.
+// Each backend server row must have a valid host:port address.
+func ParseCsvHostsWithServerAddresses(csv string, poolName string) ([]*BackendHost, error) {
+	return parseHosts(parseLines(csv), poolName, true)
 }
 
 func toCSVUrl(u url.URL) *url.URL {

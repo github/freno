@@ -49,10 +49,11 @@ func ParseHostPort(address string) (hostPort *HostPort, err error) {
 }
 
 type HAProxyConfigurationSettings struct {
-	Host      string
-	Port      int
-	Addresses string
-	PoolName  string
+	Host             string
+	Port             int
+	Addresses        string
+	PoolName         string
+	UseServerAddress bool
 }
 
 func parseAddress(address string) (u *url.URL, err error) {

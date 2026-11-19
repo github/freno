@@ -125,6 +125,25 @@ Noteworthy:
 - `sharded` list of servers is read from Vitess vtctld's HTTP `API`. To read it with vtctld's gRPC `GetTablets` instead (Vitess v23 removes the HTTP API), set `"GRPCAddress": "vtctld.example.com:15999"` and `"GRPCInsecure": true`. Only plaintext gRPC is supported.
 
 
+### HAProxy server addresses
+
+By default, HAProxy discovery uses each server's `svname` as its hostname and the
+cluster's configured MySQL port. If server labels are aliases rather than
+resolvable hostnames, set `"UseServerAddress": true` inside that cluster's
+`HAProxySettings` to use the CSV `addr` host and port instead. For example, a server
+labelled `primary` with `addr` `192.0.2.10:3307` is probed at `192.0.2.10:3307`.
+Bracketed IPv6 addresses such as `[2001:db8::10]:3307` are supported.
+
+This setting defaults to `false` and does not change other clusters. When enabled,
+`IgnoreHosts` and skipped-host checks apply to the discovered address, not the
+server label.
+
+The CSV must contain an `addr` column and a valid host and numeric port (1-65535)
+for every backend server row in the selected pool. Invalid or missing addresses
+cause a discovery error, without falling back to the label. As with other HAProxy
+discovery failures, an unsuccessful refresh can leave the previous inventory in
+place.
+
 ### Non lag metrics
 
 `freno` isn't necessarily about replication lag. You may choose to use different thresholds appropriate for your setup and workload. For example, you may choose to monitor the master (as opposed of the replicas) and read some metric such as `threads_running`. An example configuration would be:

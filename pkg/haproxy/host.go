@@ -27,6 +27,7 @@ func ToBackendHostStatus(status string) BackendHostStatus {
 
 type BackendHost struct {
 	Hostname        string
+	Port            int
 	Status          BackendHostStatus
 	IsTransitioning bool
 }
