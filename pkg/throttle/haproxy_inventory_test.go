@@ -64,6 +64,16 @@ func TestRefreshMySQLInventoryHAProxyServerAddress(t *testing.T) {
 			},
 		},
 		{
+			name:    "opt in accepts quoted reports and unused maintenance slots",
+			options: `{"UseServerAddress":true}`,
+			csv: "# pxname,svname,status,last_chk,addr\n" +
+				"writer_a,primary,no check,\"check passed, response \"\"OK\"\"\",192.0.2.10:3307\n" +
+				"writer_a,unused,MAINT (resolution),,\n",
+			want: map[string][]mysql.InstanceKey{
+				"writer_a": {{Hostname: "192.0.2.10", Port: 3307}},
+			},
+		},
+		{
 			name:    "opt in applies exclusions to discovered addresses",
 			options: `{"UseServerAddress":true}`,
 			csv: "# pxname,svname,status,addr\n" +

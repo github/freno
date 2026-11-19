@@ -138,11 +138,21 @@ This setting defaults to `false` and does not change other clusters. When enable
 `IgnoreHosts` and skipped-host checks apply to the discovered address, not the
 server label.
 
+For HTTP stats discovery, enable `stats show-legends` in the HAProxy stats
+configuration so that the CSV includes server address values. Without this
+setting, the `addr` column can be present but empty. Verify that eligible servers
+have populated addresses before enabling `UseServerAddress`.
+
 The CSV must contain an `addr` column and a valid host and numeric port (1-65535)
-for every backend server row in the selected pool. Invalid or missing addresses
-cause a discovery error, without falling back to the label. As with other HAProxy
-discovery failures, an unsuccessful refresh can leave the previous inventory in
-place.
+for every eligible backend server in the selected pool. Address validation skips
+servers excluded by the existing status rules, such as unresolved maintenance
+slots, `NOLB` servers, and transitioning `UP` servers. `DOWN` and `no check`
+servers remain eligible and require valid addresses. Existing safeguards for
+all-transitioning servers are unchanged.
+
+Invalid or missing addresses on eligible servers cause a discovery error,
+without falling back to the label. As with other HAProxy discovery failures, an
+unsuccessful refresh can leave the previous inventory in place.
 
 ### Non lag metrics
 
