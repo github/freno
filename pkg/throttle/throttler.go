@@ -323,7 +323,11 @@ func (throttler *Throttler) refreshMySQLInventory() error {
 			throttler.mysqlClusterThresholds.Set(clusterName, clusterSettings.ThrottleThreshold, cache.DefaultExpiration)
 			if !clusterSettings.HAProxySettings.IsEmpty() {
 				poolName := clusterSettings.HAProxySettings.PoolName
-				totalHosts := []string{}
+				totalHosts := []*haproxy.BackendHost{}
+				parseCSVHosts := haproxy.ParseCsvHosts
+				if clusterSettings.HAProxySettings.UseServerAddress {
+					parseCSVHosts = haproxy.ParseCsvHostsWithServerAddresses
+				}
 				addresses, _ := clusterSettings.HAProxySettings.GetProxyAddresses()
 				for _, u := range addresses {
 					log.Debugf("getting haproxy data from %s", u.String())
@@ -331,8 +335,8 @@ func (throttler *Throttler) refreshMySQLInventory() error {
 					if err != nil {
 						return log.Errorf("Unable to get HAproxy data from %s: %+v", u.String(), err)
 					}
-					if backendHosts, err := haproxy.ParseCsvHosts(csv, poolName); err == nil {
-						hosts := haproxy.FilterThrotllerHosts(backendHosts)
+					if backendHosts, err := parseCSVHosts(csv, poolName); err == nil {
+						hosts := haproxy.FilterThrottlerBackendHosts(backendHosts)
 						totalHosts = append(totalHosts, hosts...)
 						log.Debugf("Read %+v hosts from haproxy %s/#%s", len(hosts), u.String(), poolName)
 					} else {
@@ -350,7 +354,10 @@ func (throttler *Throttler) refreshMySQLInventory() error {
 					InstanceProbes:       mysql.NewProbes(),
 				}
 				for _, host := range totalHosts {
-					key := mysql.InstanceKey{Hostname: host, Port: clusterSettings.Port}
+					key := mysql.InstanceKey{Hostname: host.Hostname, Port: clusterSettings.Port}
+					if host.Port > 0 {
+						key.Port = host.Port
+					}
 					addInstanceKey(&key, clusterName, clusterSettings, clusterProbes.InstanceProbes)
 				}
 				throttler.mysqlClusterProbesChan <- clusterProbes
