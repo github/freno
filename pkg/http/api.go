@@ -366,7 +366,7 @@ type discardWriter struct{ io.Writer }
 func (discardWriter) Header() http.Header { return make(http.Header) }
 func (discardWriter) WriteHeader(int)     {}
 
-// Metrics exports process metrics, excluding aggregate and probe metrics on followers.
+// Metrics exports process metrics, excluding leader-only metrics on followers.
 // Filtering happens here because published expvar values cannot be removed.
 func (api *APIImpl) Metrics(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
 	metricsHandler.ServeHTTP(discardWriter{Writer: io.Discard}, r)

@@ -35,6 +35,9 @@ Clients (application, scripts, jobs) are expected to consult with `freno`. `fren
 
 Read more about [freno and MySQL throttling](doc/mysql.md)
 
+Before enabling required dependencies or recovery, read the
+[MySQL safety behavior changes and rollout warnings](doc/mysql.md#behavior-changes).
+
 ### Use cases
 
 `freno` is useful for bulk operations: massive loading/archiving tasks, schema migrations, mass updates. Such operations typically walk through thousands to millions of rows and may cause undesired effects such as MySQL replication lags. By breaking these tasks to small subtasks (e.g. `100` rows at a time), and by consulting `freno` before applying each such subtask, we are able to achieve the same result without ill effect to the database and to the application that uses it.

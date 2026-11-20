@@ -50,6 +50,7 @@ func TestRoutes(t *testing.T) {
 		{http.MethodGet, "/lb-check", http.StatusOK},
 		{http.MethodGet, "/config/memcache", http.StatusOK},
 		{http.MethodGet, "/debug/metrics", http.StatusOK},
+		{http.MethodGet, "/explain/mysql/source", http.StatusNotFound},
 	}
 	for _, route := range expectedRoutes {
 		r, _ := http.NewRequest(route.verb, route.path, nil)

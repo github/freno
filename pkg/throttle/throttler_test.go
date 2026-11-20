@@ -8,6 +8,8 @@ import (
 	"github.com/github/freno/pkg/base"
 	"github.com/github/freno/pkg/config"
 	"github.com/github/freno/pkg/mysql"
+	"github.com/patrickmn/go-cache"
+	metrics "github.com/rcrowley/go-metrics"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -125,6 +127,34 @@ func Test_checkAppMetricResult(t *testing.T) {
 		assert.EqualError(t, result.Error, base.NoHostsError.Error())
 		assert.Equal(t, http.StatusOK, result.StatusCode)
 	})
+	t.Run("no hosts fail closed", func(t *testing.T) {
+		originalSettings := config.Settings().Stores.MySQL
+		defer func() {
+			config.Settings().Stores.MySQL = originalSettings
+		}()
+		config.Settings().Stores.MySQL = config.MySQLConfigurationSettings{
+			Clusters: map[string]*config.MySQLClusterConfigurationSettings{
+				"test-cluster": {FailOnNoHosts: true},
+			},
+		}
+
+		check := NewThrottlerCheck(throttler)
+		metricResultFunc := func() (metricResult base.MetricResult, threshold float64) {
+			return base.NoHostsMetricResult, 10.0
+		}
+		result := check.checkAppMetricResult("test-app", "mysql", "test-cluster", metricResultFunc, &CheckFlags{})
+		assert.EqualError(t, result.Error, base.NoHostsError.Error())
+		assert.Equal(t, http.StatusInternalServerError, result.StatusCode)
+	})
+	t.Run("recovery period throttles", func(t *testing.T) {
+		check := NewThrottlerCheck(throttler)
+		metricResultFunc := func() (metricResult base.MetricResult, threshold float64) {
+			return base.NewErrorMetricResult(5.0, base.RecoveryNotCompleteError), 10.0
+		}
+		result := check.checkAppMetricResult("test-app", "mysql", "test-cluster", metricResultFunc, &CheckFlags{})
+		assert.EqualError(t, result.Error, base.RecoveryNotCompleteError.Error())
+		assert.Equal(t, http.StatusTooManyRequests, result.StatusCode)
+	})
 	t.Run("low priority denied", func(t *testing.T) {
 		check := NewThrottlerCheck(throttler)
 		throttler.nonLowPriorityAppRequestsThrottled.SetDefault("mysql/test-cluster", true)
@@ -145,6 +175,10 @@ func setTestMySQLClusterMetric(throttler *Throttler, clusterName string, value, 
 
 func SetTestMySQLClusterMetric(throttler *Throttler, clusterName string, value, threshold float64) {
 	setTestMySQLClusterMetric(throttler, clusterName, value, threshold)
+}
+
+func StabilizeTestMySQLClusterMetric(throttler *Throttler, clusterName string, metric base.MetricResult, now time.Time) {
+	throttler.aggregatedMetrics.SetDefault("mysql/"+clusterName, throttler.stabilizeMySQLMetric(clusterName, metric, now))
 }
 
 func newTestMySQLFallbackCheck(fallbackCluster string) (*ThrottlerCheck, *Throttler) {
@@ -260,4 +294,317 @@ func TestCheckMySQLFallbackUsesCanonicalState(t *testing.T) {
 			assert.Equal(t, test.want, result.StatusCode)
 		})
 	}
+}
+
+func TestCheckMySQLRequiredClusters(t *testing.T) {
+	originalSettings := config.Settings().Stores.MySQL
+	defer func() {
+		config.Settings().Stores.MySQL = originalSettings
+	}()
+
+	config.Settings().Stores.MySQL = config.MySQLConfigurationSettings{
+		Clusters: map[string]*config.MySQLClusterConfigurationSettings{
+			"replicas": {
+				RequiredClusters: []string{"primary", "proxysql"},
+			},
+			"primary":  {},
+			"proxysql": {},
+		},
+	}
+
+	newCheck := func() (*ThrottlerCheck, *Throttler) {
+		throttler := NewThrottler()
+		setTestMySQLClusterMetric(throttler, "replicas", 1.0, 5.0)
+		setTestMySQLClusterMetric(throttler, "primary", 10.0, 50.0)
+		setTestMySQLClusterMetric(throttler, "proxysql", 20.0, 80.0)
+		return NewThrottlerCheck(throttler), throttler
+	}
+
+	t.Run("all required clusters healthy", func(t *testing.T) {
+		check, _ := newCheck()
+		result := check.Check("transitions", "mysql", "replicas", "", &CheckFlags{})
+		assert.Equal(t, http.StatusOK, result.StatusCode)
+		assert.Equal(t, 1.0, result.Value)
+		assert.Equal(t, 5.0, result.Threshold)
+	})
+
+	t.Run("unreferenced primary does not gate admission", func(t *testing.T) {
+		check, throttler := newCheck()
+		replicas := config.Settings().Stores.MySQL.Clusters["replicas"]
+		required := replicas.RequiredClusters
+		replicas.RequiredClusters = nil
+		defer func() { replicas.RequiredClusters = required }()
+		setTestMySQLClusterMetric(throttler, "primary", 60.0, 50.0)
+		result := check.Check("transitions", "mysql", "replicas", "", &CheckFlags{})
+		assert.Equal(t, http.StatusOK, result.StatusCode)
+		assert.Equal(t, "mysql/replicas", result.MetricName)
+	})
+
+	t.Run("primary cluster blocks admission", func(t *testing.T) {
+		check, throttler := newCheck()
+		setTestMySQLClusterMetric(throttler, "primary", 60.0, 50.0)
+		result := check.Check("transitions", "mysql", "replicas", "", &CheckFlags{})
+		assert.Equal(t, http.StatusTooManyRequests, result.StatusCode)
+		assert.Equal(t, 60.0, result.Value)
+		assert.Equal(t, 50.0, result.Threshold)
+		assert.Equal(t, "mysql/primary", result.MetricName)
+	})
+
+	t.Run("ProxySQL cluster blocks admission", func(t *testing.T) {
+		check, throttler := newCheck()
+		setTestMySQLClusterMetric(throttler, "proxysql", 90.0, 80.0)
+		result := check.Check("transitions", "mysql", "replicas", "", &CheckFlags{})
+		assert.Equal(t, http.StatusTooManyRequests, result.StatusCode)
+		assert.Equal(t, 90.0, result.Value)
+		assert.Equal(t, 80.0, result.Threshold)
+	})
+
+	t.Run("read threshold override only applies to requested cluster", func(t *testing.T) {
+		check, throttler := newCheck()
+		setTestMySQLClusterMetric(throttler, "primary", 60.0, 50.0)
+		result := check.Check("transitions", "mysql", "replicas", "", &CheckFlags{
+			ReadCheck:         true,
+			OverrideThreshold: 100.0,
+		})
+		assert.Equal(t, http.StatusTooManyRequests, result.StatusCode)
+		assert.Equal(t, 50.0, result.Threshold)
+	})
+
+	t.Run("read threshold override bypasses only the requested cluster recovery latch", func(t *testing.T) {
+		check, throttler := newCheck()
+		throttler.aggregatedMetrics.Set(
+			"mysql/replicas",
+			base.NewErrorMetricResult(45.0, base.RecoveryNotCompleteError),
+			cache.DefaultExpiration,
+		)
+		result := check.Check("transitions", "mysql", "replicas", "", &CheckFlags{
+			ReadCheck:         true,
+			OverrideThreshold: 100.0,
+		})
+		assert.Equal(t, http.StatusOK, result.StatusCode)
+
+		throttler.aggregatedMetrics.Set(
+			"mysql/primary",
+			base.NewErrorMetricResult(40.0, base.RecoveryNotCompleteError),
+			cache.DefaultExpiration,
+		)
+		result = check.Check("transitions", "mysql", "replicas", "", &CheckFlags{
+			ReadCheck:         true,
+			OverrideThreshold: 100.0,
+		})
+		assert.Equal(t, http.StatusTooManyRequests, result.StatusCode)
+		assert.Equal(t, "mysql/primary", result.MetricName)
+	})
+
+	t.Run("missing required metric fails closed", func(t *testing.T) {
+		check, throttler := newCheck()
+		throttler.aggregatedMetrics.Delete("mysql/primary")
+		result := check.Check("transitions", "mysql", "replicas", "", &CheckFlags{OKIfNotExists: true})
+		assert.Equal(t, http.StatusInternalServerError, result.StatusCode)
+		assert.EqualError(t, result.Error, `required MySQL cluster metric "primary" is unavailable`)
+		assert.Equal(t, "mysql/primary", result.MetricName)
+	})
+}
+
+func TestCheckRejectionMetrics(t *testing.T) {
+	originalSettings := config.Settings().Stores.MySQL
+	defer func() { config.Settings().Stores.MySQL = originalSettings }()
+	config.Settings().Stores.MySQL = config.MySQLConfigurationSettings{
+		FallbackCluster: "rejection-replicas",
+		Clusters: map[string]*config.MySQLClusterConfigurationSettings{
+			"rejection-replicas": {RequiredClusters: []string{"rejection-primary"}},
+			"rejection-primary":  {},
+		},
+	}
+
+	for _, test := range []struct {
+		name             string
+		replicaValue     float64
+		primaryMetric    base.MetricResult
+		appName          string
+		requestedCluster string
+		sharedDomain     bool
+		wantStatus       int
+		wantCounter      string
+	}{
+		{name: "healthy", wantStatus: http.StatusOK},
+		{name: "replica overload", replicaValue: 6, wantStatus: http.StatusTooManyRequests, wantCounter: "rejection-replicas.threshold"},
+		{name: "primary overload", primaryMetric: base.NewSimpleMetricResult(60), wantStatus: http.StatusTooManyRequests, wantCounter: "rejection-primary.threshold"},
+		{name: "both overloaded count only the first blocker", replicaValue: 6, primaryMetric: base.NewSimpleMetricResult(60), wantStatus: http.StatusTooManyRequests, wantCounter: "rejection-replicas.threshold"},
+		{name: "primary recovery is not overload", primaryMetric: base.NewErrorMetricResult(35, base.RecoveryNotCompleteError), wantStatus: http.StatusTooManyRequests, wantCounter: "rejection-primary.recovery"},
+		{name: "shared domain is not local overload", sharedDomain: true, wantStatus: http.StatusTooManyRequests, wantCounter: "rejection-primary.other"},
+		{name: "missing required metric is not a 429", primaryMetric: base.NoSuchMetric, wantStatus: http.StatusInternalServerError},
+		{name: "application policy denial is not a 429", appName: "abusing-app", wantStatus: http.StatusExpectationFailed},
+		{name: "self checks are excluded", appName: frenoAppName, primaryMetric: base.NewSimpleMetricResult(60), wantStatus: http.StatusTooManyRequests},
+		{name: "shared domain self checks are excluded", appName: frenoShareDmainAppName, primaryMetric: base.NewSimpleMetricResult(60), wantStatus: http.StatusTooManyRequests},
+		{name: "fallback uses the actual blocking metric", requestedCluster: "unknown", primaryMetric: base.NewSimpleMetricResult(60), wantStatus: http.StatusTooManyRequests, wantCounter: "rejection-primary.threshold"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			for _, cluster := range []string{"rejection-replicas", "rejection-primary"} {
+				for _, reason := range []string{"threshold", "recovery", "other"} {
+					name := "check.rejected.mysql." + cluster + "." + reason + ".total"
+					metrics.DefaultRegistry.Unregister(name)
+					t.Cleanup(func() { metrics.DefaultRegistry.Unregister(name) })
+				}
+			}
+			throttler := NewThrottler()
+			setTestMySQLClusterMetric(throttler, "rejection-replicas", test.replicaValue, 5)
+			setTestMySQLClusterMetric(throttler, "rejection-primary", 10, 50)
+			if test.primaryMetric != nil {
+				throttler.aggregatedMetrics.SetDefault("mysql/rejection-primary", test.primaryMetric)
+			}
+			if test.sharedDomain {
+				throttler.shareDomainMetricHealth.SetDefault("mysql/rejection-primary", &base.MetricHealth{SecondsSinceLastHealthy: 1})
+			}
+			appName, cluster := test.appName, test.requestedCluster
+			if appName == "" {
+				appName = "test-app"
+			}
+			if cluster == "" {
+				cluster = "rejection-replicas"
+			}
+			check := NewThrottlerCheck(throttler)
+			for attempt := 0; attempt < 2; attempt++ {
+				result := check.Check(appName, "mysql", cluster, "", StandardCheckFlags)
+				assert.Equal(t, test.wantStatus, result.StatusCode)
+			}
+			for _, cluster := range []string{"rejection-replicas", "rejection-primary"} {
+				for _, reason := range []string{"threshold", "recovery", "other"} {
+					name := "check.rejected.mysql." + cluster + "." + reason + ".total"
+					var want int64
+					if cluster+"."+reason == test.wantCounter {
+						want = 2
+					}
+					assert.Equal(t, want, metrics.GetOrRegisterCounter(name, nil).Count(), name)
+				}
+			}
+		})
+	}
+}
+
+func TestStabilizeMySQLMetric(t *testing.T) {
+	originalSettings := config.Settings().Stores.MySQL
+	defer func() {
+		config.Settings().Stores.MySQL = originalSettings
+	}()
+
+	recoveryThreshold := 40.0
+	config.Settings().Stores.MySQL = config.MySQLConfigurationSettings{
+		Clusters: map[string]*config.MySQLClusterConfigurationSettings{
+			"primary": {
+				ThrottleThreshold:      50.0,
+				RecoveryThreshold:      &recoveryThreshold,
+				RecoveryDurationMillis: 5000,
+			},
+		},
+	}
+
+	throttler := NewThrottler()
+	start := time.Date(2026, time.September, 23, 12, 0, 0, 0, time.UTC)
+
+	assertMetric := func(t *testing.T, result base.MetricResult, wantValue float64, wantErr error) {
+		t.Helper()
+		value, err := result.Get()
+		assert.Equal(t, wantValue, value)
+		assert.Equal(t, wantErr, err)
+	}
+
+	assertMetric(t, throttler.stabilizeMySQLMetric("primary", base.NewSimpleMetricResult(60), start), 60, nil)
+	assertMetric(t, throttler.stabilizeMySQLMetric("primary", base.NewSimpleMetricResult(45), start.Add(time.Second)), 45, base.RecoveryNotCompleteError)
+	assertMetric(t, throttler.stabilizeMySQLMetric("primary", base.NewSimpleMetricResult(35), start.Add(2*time.Second)), 35, base.RecoveryNotCompleteError)
+	assertMetric(t, throttler.stabilizeMySQLMetric("primary", base.NewSimpleMetricResult(35), start.Add(6*time.Second)), 35, base.RecoveryNotCompleteError)
+	assertMetric(t, throttler.stabilizeMySQLMetric("primary", base.NewSimpleMetricResult(35), start.Add(7*time.Second)), 35, nil)
+}
+
+func TestStabilizeMySQLMetricResetsRecoveryWindow(t *testing.T) {
+	originalSettings := config.Settings().Stores.MySQL
+	defer func() {
+		config.Settings().Stores.MySQL = originalSettings
+	}()
+
+	config.Settings().Stores.MySQL = config.MySQLConfigurationSettings{
+		Clusters: map[string]*config.MySQLClusterConfigurationSettings{
+			"primary": {
+				ThrottleThreshold:      50.0,
+				RecoveryDurationMillis: 5000,
+			},
+		},
+	}
+
+	throttler := NewThrottler()
+	start := time.Date(2026, time.September, 23, 12, 0, 0, 0, time.UTC)
+
+	throttler.stabilizeMySQLMetric("primary", base.NewSimpleMetricResult(60), start)
+	throttler.stabilizeMySQLMetric("primary", base.NewSimpleMetricResult(40), start.Add(time.Second))
+	throttler.stabilizeMySQLMetric("primary", base.NewSimpleMetricResult(55), start.Add(3*time.Second))
+	result := throttler.stabilizeMySQLMetric("primary", base.NewSimpleMetricResult(40), start.Add(7*time.Second))
+	_, err := result.Get()
+	assert.Equal(t, base.RecoveryNotCompleteError, err)
+}
+
+func TestStabilizeMySQLMetricRequiresHealthyWindowAfterStartup(t *testing.T) {
+	originalSettings := config.Settings().Stores.MySQL
+	defer func() {
+		config.Settings().Stores.MySQL = originalSettings
+	}()
+
+	config.Settings().Stores.MySQL = config.MySQLConfigurationSettings{
+		Clusters: map[string]*config.MySQLClusterConfigurationSettings{
+			"primary": {
+				ThrottleThreshold:      50.0,
+				RecoveryDurationMillis: 5000,
+			},
+		},
+	}
+
+	throttler := NewThrottler()
+	start := time.Date(2026, time.September, 23, 12, 0, 0, 0, time.UTC)
+
+	result := throttler.stabilizeMySQLMetric("primary", base.NewSimpleMetricResult(30), start)
+	_, err := result.Get()
+	assert.Equal(t, base.RecoveryNotCompleteError, err)
+
+	result = throttler.stabilizeMySQLMetric("primary", base.NewSimpleMetricResult(30), start.Add(5*time.Second))
+	_, err = result.Get()
+	assert.Nil(t, err)
+	assert.Equal(t, int64(0), metrics.Get("recovery.mysql.primary.active").(metrics.Gauge).Value())
+}
+
+func TestUpdateLeadershipResetsRecoveryStateOnRegain(t *testing.T) {
+	throttler := NewThrottler()
+	throttler.isLeader = true
+	throttler.mysqlRecoveryState["primary"] = &mysqlClusterRecoveryState{throttled: false}
+
+	throttler.updateLeadership(false)
+	assert.Len(t, throttler.mysqlRecoveryState, 1)
+
+	throttler.updateLeadership(true)
+	assert.Empty(t, throttler.mysqlRecoveryState)
+}
+
+func TestRequiredMySQLClustersHealthyForMemcache(t *testing.T) {
+	originalSettings := config.Settings().Stores.MySQL
+	defer func() {
+		config.Settings().Stores.MySQL = originalSettings
+	}()
+
+	config.Settings().Stores.MySQL = config.MySQLConfigurationSettings{
+		Clusters: map[string]*config.MySQLClusterConfigurationSettings{
+			"replicas": {RequiredClusters: []string{"primary"}},
+			"primary":  {ThrottleThreshold: 50.0},
+		},
+	}
+	throttler := NewThrottler()
+	aggregatedMetrics := map[string]base.MetricResult{
+		"replicas": base.NewSimpleMetricResult(1.0),
+		"primary":  base.NewSimpleMetricResult(40.0),
+	}
+
+	assert.True(t, throttler.requiredMySQLClustersHealthy("replicas", aggregatedMetrics, make(map[string]bool)))
+
+	aggregatedMetrics["primary"] = base.NewSimpleMetricResult(60.0)
+	assert.False(t, throttler.requiredMySQLClustersHealthy("replicas", aggregatedMetrics, make(map[string]bool)))
+
+	delete(aggregatedMetrics, "primary")
+	assert.False(t, throttler.requiredMySQLClustersHealthy("replicas", aggregatedMetrics, make(map[string]bool)))
 }

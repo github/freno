@@ -7,6 +7,7 @@ package config
 import (
 	"fmt"
 	"os"
+	"sort"
 )
 
 const DefaultMySQLPort = 3306
@@ -28,6 +29,11 @@ type MySQLClusterConfigurationSettings struct {
 	ProxySQLSettings    ProxySQLConfigurationSettings // If list of servers is to be acquired via ProxySQL, provide this field
 	VitessSettings      VitessConfigurationSettings   // If list of servers is to be acquired via Vitess, provide this field
 	StaticHostsSettings StaticHostsConfigurationSettings
+
+	RecoveryThreshold      *float64 // optional threshold that must be met before a throttled cluster begins recovery
+	RecoveryDurationMillis int      // continuous recovery duration required before writes resume
+	FailOnNoHosts          bool     // reject checks when no eligible hosts remain instead of preserving legacy fail-open behavior
+	RequiredClusters       []string // additional MySQL cluster metrics that must pass for this cluster to pass
 }
 
 // Hook to implement adjustments after reading each configuration file.
@@ -75,6 +81,9 @@ func (settings *MySQLConfigurationSettings) postReadAdjustments() error {
 	if settings.Port == 0 {
 		settings.Port = DefaultMySQLPort
 	}
+	if settings.Clusters == nil {
+		settings.Clusters = make(map[string]*MySQLClusterConfigurationSettings)
+	}
 	if settings.FallbackCluster != "" {
 		if _, ok := settings.Clusters[settings.FallbackCluster]; !ok {
 			return fmt.Errorf("Stores.MySQL.FallbackCluster %q does not name a configured cluster", settings.FallbackCluster)
@@ -97,7 +106,10 @@ func (settings *MySQLConfigurationSettings) postReadAdjustments() error {
 		}
 	}
 
-	for _, clusterSettings := range settings.Clusters {
+	for clusterName, clusterSettings := range settings.Clusters {
+		if clusterSettings == nil {
+			return fmt.Errorf("Stores.MySQL.Clusters.%s must not be null", clusterName)
+		}
 		if err := clusterSettings.postReadAdjustments(); err != nil {
 			return err
 		}
@@ -147,6 +159,70 @@ func (settings *MySQLConfigurationSettings) postReadAdjustments() error {
 		}
 		if !clusterSettings.VitessSettings.IsEmpty() && len(clusterSettings.VitessSettings.Cells) < 1 {
 			clusterSettings.VitessSettings.Cells = settings.VitessCells
+		}
+		if clusterSettings.RecoveryDurationMillis < 0 {
+			return fmt.Errorf("Stores.MySQL.Clusters.%s.RecoveryDurationMillis must not be negative", clusterName)
+		}
+		if clusterSettings.RecoveryDurationMillis > 0 {
+			recoveryThreshold := clusterSettings.ThrottleThreshold
+			if clusterSettings.RecoveryThreshold != nil {
+				recoveryThreshold = *clusterSettings.RecoveryThreshold
+			}
+			if recoveryThreshold > clusterSettings.ThrottleThreshold {
+				return fmt.Errorf(
+					"Stores.MySQL.Clusters.%s.RecoveryThreshold must not exceed ThrottleThreshold",
+					clusterName,
+				)
+			}
+		}
+	}
+	return settings.validateRequiredClusters()
+}
+
+func (settings *MySQLConfigurationSettings) validateRequiredClusters() error {
+	const (
+		unvisited = iota
+		visiting
+		visited
+	)
+	states := make(map[string]int)
+
+	var visit func(string) error
+	visit = func(clusterName string) error {
+		switch states[clusterName] {
+		case visiting:
+			return fmt.Errorf("Stores.MySQL.Clusters contains a RequiredClusters cycle involving %q", clusterName)
+		case visited:
+			return nil
+		}
+
+		states[clusterName] = visiting
+		cluster := settings.Clusters[clusterName]
+		if cluster == nil {
+			return fmt.Errorf("Stores.MySQL.Clusters.%s must not be null", clusterName)
+		}
+		for _, name := range cluster.RequiredClusters {
+			if _, ok := settings.Clusters[name]; !ok {
+				return fmt.Errorf("Stores.MySQL.Clusters.%s.RequiredClusters references unknown cluster %q", clusterName, name)
+			}
+			if err := visit(name); err != nil {
+				return err
+			}
+		}
+		states[clusterName] = visited
+		return nil
+	}
+
+	clusterNames := make([]string, 0, len(settings.Clusters))
+	for clusterName := range settings.Clusters {
+		clusterNames = append(clusterNames, clusterName)
+	}
+	sort.Strings(clusterNames)
+	for _, clusterName := range clusterNames {
+		if states[clusterName] == unvisited {
+			if err := visit(clusterName); err != nil {
+				return err
+			}
 		}
 	}
 	return nil

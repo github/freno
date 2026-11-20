@@ -54,34 +54,26 @@ func (check *ThrottlerCheck) checkAppMetricResult(appName string, storeType stri
 		threshold = flags.OverrideThreshold
 	}
 	value, err := metricResult.Get()
+	if flags.ReadCheck && flags.OverrideThreshold > 0 && errors.Is(err, base.RecoveryNotCompleteError) && value <= threshold {
+		err = nil
+	}
 	if appName == "" {
 		return NewCheckResult(http.StatusExpectationFailed, value, threshold, fmt.Errorf("no app indicated"))
 	}
 
-	statusCode := http.StatusInternalServerError // 500
-
-	if err == base.AppDeniedError {
-		// app specifically not allowed to get metrics
-		statusCode = http.StatusExpectationFailed // 417
-	} else if err == base.NoSuchMetricError {
-		// not collected yet, or metric does not exist
-		statusCode = http.StatusNotFound // 404
-	} else if errors.Is(err, base.NoHostsError) {
-		// If no hosts we report 0 for the metric.
-		statusCode = http.StatusOK // 200
-	} else if err != nil {
-		// any error
-		statusCode = http.StatusInternalServerError // 500
-	} else if value > threshold {
-		// casual throttling
-		statusCode = http.StatusTooManyRequests // 429
-		err = base.ThresholdExceededError
-
+	failOnNoHosts := false
+	if storeType == "mysql" {
+		if clusterSettings, ok := config.Settings().Stores.MySQL.Clusters[storeName]; ok {
+			failOnNoHosts = clusterSettings.FailOnNoHosts
+		}
+	}
+	checkResult = newMetricCheckResult(value, threshold, err, failOnNoHosts)
+	if err == nil && value > threshold {
 		if !flags.LowPriority && !flags.ReadCheck && appName != frenoAppName {
 			// low priority requests will henceforth be denied
 			go check.throttler.nonLowPriorityAppRequestsThrottled.SetDefault(metricName, true)
 		}
-	} else if appName != frenoAppName && check.throttler.getShareDomainSecondsSinceHealth(metricName) >= 1 {
+	} else if err == nil && checkResult.StatusCode == http.StatusOK && appName != frenoAppName && check.throttler.getShareDomainSecondsSinceHealth(metricName) >= 1 {
 		// throttling based on shared domain metric.
 		// we exclude the "freno" app itself, or else this could turn into a snowball: this service ("a") seeing
 		// another service ("b") as unhealthy, itself becoming unhealthy, makind b's read into a's state as unheathly,
@@ -89,13 +81,51 @@ func (check *ThrottlerCheck) checkAppMetricResult(appName string, storeType stri
 		// The "freno" app is the one to generate those health metrics. It therefore must not participate the
 		// shared-domain dependency check.,
 
-		statusCode = http.StatusTooManyRequests // 429
-		err = base.ThresholdExceededError
-	} else {
-		// all good!
-		statusCode = http.StatusOK // 200
+		checkResult = NewCheckResult(http.StatusTooManyRequests, value, threshold, base.ThresholdExceededError)
 	}
-	return NewCheckResult(statusCode, value, threshold, err)
+	checkResult.MetricName = metricName
+	return checkResult
+}
+
+func (check *ThrottlerCheck) checkMySQLCluster(
+	appName string,
+	clusterName string,
+	flags *CheckFlags,
+	checkedClusters map[string]bool,
+) *CheckResult {
+	if checkedClusters[clusterName] {
+		return nil
+	}
+	checkedClusters[clusterName] = true
+
+	metricResultFunc := func() (metricResult base.MetricResult, threshold float64) {
+		return check.throttler.getMySQLClusterMetrics(clusterName)
+	}
+	rootResult := check.checkAppMetricResult(appName, "mysql", clusterName, metricResultFunc, flags)
+	if rootResult.StatusCode != http.StatusOK {
+		return rootResult
+	}
+
+	clusterSettings := config.Settings().Stores.MySQL.Clusters[clusterName]
+	for _, requiredCluster := range clusterSettings.RequiredClusters {
+		requiredFlags := *flags
+		requiredFlags.ReadCheck = false
+		requiredFlags.OverrideThreshold = 0
+		requiredResult := check.checkMySQLCluster(appName, requiredCluster, &requiredFlags, checkedClusters)
+		if requiredResult == nil || requiredResult.StatusCode == http.StatusOK {
+			continue
+		}
+		if requiredResult.StatusCode == http.StatusNotFound {
+			checkResult := NewErrorCheckResult(
+				http.StatusInternalServerError,
+				fmt.Errorf("required MySQL cluster metric %q is unavailable", requiredCluster),
+			)
+			checkResult.MetricName = fmt.Sprintf("mysql/%s", requiredCluster)
+			return checkResult
+		}
+		return requiredResult
+	}
+	return rootResult
 }
 
 // CheckAppStoreMetric
@@ -114,9 +144,7 @@ func (check *ThrottlerCheck) Check(appName string, storeType string, storeName s
 				}
 			}
 			if configured {
-				metricResultFunc = func() (metricResult base.MetricResult, threshold float64) {
-					return check.throttler.getMySQLClusterMetrics(storeName)
-				}
+				checkResult = check.checkMySQLCluster(appName, storeName, flags, make(map[string]bool))
 			} else {
 				metricResultFunc = func() (metricResult base.MetricResult, threshold float64) {
 					return base.NoSuchMetric, 0
@@ -125,10 +153,24 @@ func (check *ThrottlerCheck) Check(appName string, storeType string, storeName s
 		}
 	}
 	if metricResultFunc == nil {
-		return NoSuchMetricCheckResult
+		if checkResult == nil {
+			return NoSuchMetricCheckResult
+		}
+	} else {
+		checkResult = check.checkAppMetricResult(appName, storeType, storeName, metricResultFunc, flags)
 	}
 
-	checkResult = check.checkAppMetricResult(appName, storeType, storeName, metricResultFunc, flags)
+	if checkResult.StatusCode == http.StatusTooManyRequests && appName != frenoAppName && appName != frenoShareDmainAppName {
+		reason := "other"
+		switch {
+		case errors.Is(checkResult.Error, base.RecoveryNotCompleteError):
+			reason = "recovery"
+		case errors.Is(checkResult.Error, base.ThresholdExceededError) && checkResult.Value > checkResult.Threshold:
+			reason = "threshold"
+		}
+		metricName := strings.ReplaceAll(checkResult.MetricName, "/", ".")
+		metrics.GetOrRegisterCounter(fmt.Sprintf("check.rejected.%s.%s.total", metricName, reason), nil).Inc(1)
+	}
 
 	go func(statusCode int) {
 		metrics.GetOrRegisterCounter("check.any.total", nil).Inc(1)

@@ -18,6 +18,7 @@ type MetricResultFunc func() (metricResult MetricResult, threshold float64)
 
 var ThresholdExceededError = errors.New("Threshold exceeded")
 var NoHostsError = errors.New("No hosts found")
+var RecoveryNotCompleteError = errors.New("Recovery period not complete")
 var noResultYetError = errors.New("Metric not collected yet")
 var NoSuchMetricError = errors.New("No such metric")
 
@@ -62,4 +63,17 @@ func NewSimpleMetricResult(value float64) MetricResult {
 
 func (metricResult *simpleMetricResult) Get() (float64, error) {
 	return metricResult.Value, nil
+}
+
+type errorMetricResult struct {
+	Value float64
+	Err   error
+}
+
+func NewErrorMetricResult(value float64, err error) MetricResult {
+	return &errorMetricResult{Value: value, Err: err}
+}
+
+func (metricResult *errorMetricResult) Get() (float64, error) {
+	return metricResult.Value, metricResult.Err
 }

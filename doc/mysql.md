@@ -120,6 +120,7 @@ Noteworthy:
 
 - `prod4` chooses to (but doesn't have to) override the `ThrottleThreshold` to `0.8` seconds
 - `prod4` list of servers is dictated by `HAProxy`. `freno` will routinely and dynamically poll given HAProxy server for list of hosts. These will include any hosts not in `NOLB`.
+- `sharded` discovers `REPLICA` tablets for the existing replication-lag checks. Vitess primary protection is not included.
 - `local` cluster chooses to override `User`, `Password` and `IgnoreHostsCount`.
 - `local` cluster defines a static list of hosts.
 - `sharded` list of servers is read from Vitess vtctld's HTTP `API`. To read it with vtctld's gRPC `GetTablets` instead (Vitess v23 removes the HTTP API), set `"GRPCAddress": "vtctld.example.com:15999"` and `"GRPCInsecure": true`. Only plaintext gRPC is supported.
@@ -178,3 +179,178 @@ unsuccessful refresh can leave the previous inventory in place.
 `freno` explicitly recognizes `show global ...` statements and reads the result's numeric value.
 
 Otherwise you may provide any query that returns a single row, single numeric column.
+
+### Composing replica, primary, and ProxySQL protection
+
+#### Behavior changes
+
+**Read before enabling dependencies or recovery.** These settings are opt-in, but
+they can reject application work as soon as the new configuration takes effect:
+
+- **Startup and leadership recovery:** a cluster with `RecoveryDurationMillis > 0`
+  must establish a full continuously healthy window after every process start or
+  leadership acquisition, even without `RequiredClusters`. Ordinary write checks
+  return `429` while a successfully collected metric is recovering; collection
+  errors can return `500` instead. Empty-host behavior is controlled separately by
+  `FailOnNoHosts`.
+- **Configuration changes require a restart:** the running service does not
+  live-reload configuration. Applying changes, including rollback, requires
+  restarting the affected process. Metrics that retain a positive
+  `RecoveryDurationMillis` must establish a new healthy window.
+- **Required dependencies fail closed:** missing runtime metrics or collection
+  failures, such as incorrect discovery or missing query privileges, return `500`
+  for checks that reach that dependency. An empty host list also fails with `500`
+  when the dependency has `FailOnNoHosts: true`. Overload or incomplete recovery
+  returns `429`; neither response permits writes.
+- **Memcache decisions are affected:** when memcache publishing is configured,
+  aggregation deletes a cluster's published key while any required dependency is
+  missing, in error, recovering, or above its threshold. Previously cached client
+  reads are not synchronously invalidated.
+- **Enforcement is not a dry run:** adding a probe and referencing it from
+  `RequiredClusters` in the same configuration change can immediately block work
+  after restart. Collect and inspect a separately named probe before adding it
+  to `RequiredClusters`. An unreferenced probe does not gate the source cluster
+  or predict its combined admission decision.
+- **Coordinate client wait budgets:** a budget shorter than the remaining
+  recovery window can expire before recovery finishes. Agree on safe retry/defer
+  behavior; do not bypass checks to avoid a timeout.
+
+At service startup, each cluster with required dependencies, a positive
+recovery duration, or fail-on-no-hosts enabled produces one safety-configuration notice on
+standard error. It includes the dependency names, effective recovery and throttle
+thresholds, recovery duration, and no-host policy, without credentials or query
+text. These notices are visible without `--verbose`; `--quiet` suppresses them.
+
+#### Rejection counters
+
+Application checks returning `429` increment
+`check.rejected.mysql.<blocking-cluster>.<reason>.total`. The blocking cluster
+comes from the response's `MetricName`, not necessarily the cluster requested
+by the application. For example:
+
+```text
+check.rejected.mysql.prod4.threshold.total
+check.rejected.mysql.prod4-primary.threshold.total
+check.rejected.mysql.prod4-primary.recovery.total
+```
+
+With the configuration below, the first counter records replica-lag rejections,
+the second primary-pressure rejections, and the third primary recovery holds.
+`threshold` means the value exceeded the effective threshold; `recovery` means
+the healthy window is incomplete. Other `429` decisions, such as a shared-domain
+hold while the local value is healthy, use `other` rather than claiming local
+overload.
+
+Each check increments only the counter for its first blocking metric. Healthy
+checks, non-`429` failures, and the internal `freno` and `freno-share-domain`
+checks do not increment these counters. These are process-local cumulative
+request counters that reset on restart, not counts of overloaded probe readings
+or distinct overload episodes. They do not measure memcache client rejections.
+
+#### Configuration example
+
+A cluster can require additional cluster metrics to pass before `freno` permits
+work. The example below enforces separately sampled primary-load and
+ProxySQL-capacity checks. To collect without enforcing, leave these probes out
+of `RequiredClusters`:
+
+```json
+"Clusters": {
+  "prod4": {
+    "RequiredClusters": [
+      "prod4-primary",
+      "prod4-proxysql"
+    ],
+    "HAProxySettings": {
+      "Host": "my.haproxy.mydomain.com",
+      "Port": 1001,
+      "PoolName": "my_prod4_pool"
+    }
+  },
+  "prod4-primary": {
+    "MetricQuery": "show global status like 'Threads_running'",
+    "CacheMillis": 500,
+    "ThrottleThreshold": 50,
+    "RecoveryThreshold": 35,
+    "RecoveryDurationMillis": 5000,
+    "FailOnNoHosts": true,
+    "StaticHostsSettings": {
+      "Hosts": [
+        "my.prod4.primary.vip.example.com:3306"
+      ]
+    }
+  },
+  "prod4-proxysql": {
+    "User": "${proxysql_stats_user}",
+    "Password": "${proxysql_stats_password}",
+    "MetricQuery": "select connection_pressure_percent from operational_metrics.proxysql_capacity limit 1",
+    "CacheMillis": 500,
+    "ThrottleThreshold": 80,
+    "RecoveryThreshold": 60,
+    "RecoveryDurationMillis": 5000,
+    "FailOnNoHosts": true,
+    "StaticHostsSettings": {
+      "Hosts": [
+        "my.prod4.proxysql.example.com:6032"
+      ]
+    }
+  }
+}
+```
+
+The ProxySQL query above is illustrative: deployments must provide a scalar query or operational view whose value increases as usable connection capacity is consumed.
+
+- `RequiredClusters` lists additional configured metrics that must return `HTTP 200`. Missing required runtime metrics fail closed.
+- `FailOnNoHosts` changes the legacy no-host response from `HTTP 200` to `HTTP 500`. Enable it for primary and ProxySQL safety probes, where an empty roster cannot prove that work is safe.
+- `RecoveryThreshold` is the lower threshold that begins recovery after a cluster has throttled. It must not exceed `ThrottleThreshold`.
+- `RecoveryDurationMillis` is the continuous time the metric must remain at or below `RecoveryThreshold` before checks return `HTTP 200` again. A new error or threshold violation resets the recovery window.
+- A new process or leader starts configured recovery metrics in the recovering state. It must observe a complete healthy window before admitting work.
+- Metric sampling remains centralized in the `freno` leader and uses the existing metric cache. Application checks read the aggregated decision rather than querying the primary or ProxySQL for every batch.
+- Check responses include `MetricName`, identifying the replica, primary, or ProxySQL metric that blocked a composite decision. `recovery.mysql.<cluster>.active` reports whether the recovery latch is active.
+
+Configuration loading rejects missing `RequiredClusters` references and
+dependency cycles. Add a validated probe to `RequiredClusters` only in a
+separately reviewed activation change.
+
+### Rolling out primary safety checks
+
+Deploy a binary containing these settings before deploying configuration that
+uses them. Verify the capabilities of the deployed binary rather than assuming
+that a configuration change installs new server functionality.
+
+1. Deploy the binary with the existing configuration. Without required
+   dependencies, fail-on-no-hosts, or a recovery duration, legacy cluster
+   decisions retain their existing behavior.
+2. Add separately named primary metrics and reference them from the application's
+   normal cluster only after validation. Initially leave them out of
+   `RequiredClusters` and inspect their aggregates.
+   Validate discovery, privileges, probe load, errors, and recovery gauges.
+   Do not add new probes and enforce them in the same deployment.
+3. Review thresholds against recent traffic, known incidents, and per-host/shard
+   coverage. Averaged monitoring data is not equivalent to the instantaneous SQL
+   samples used by the safety check. Missing data must not be interpreted as zero
+   or healthy.
+4. In a separate reviewed configuration change, add a primary dependency to
+   `RequiredClusters` on one cluster whose probes have
+   been validated. Exercise overload, probe
+   failure, missing hosts, leadership changes, and the HTTP and memcache paths.
+   Required probes fail closed; verify callers defer work rather than bypassing
+   protection on an error.
+5. Expand only after reviewing rejection rates, recovery duration, job backlog,
+   application errors, and primary health against agreed success/rollback limits.
+
+Choose recovery durations and client wait budgets for the workload, and
+coordinate restarts and leadership transitions with application operators.
+Neither a longer timeout nor client-side consecutive checks guarantee recovery
+during overload.
+
+Rollback enforcement by removing the primary dependency from the normal cluster's
+`RequiredClusters`, keeping its existing replica-lag configuration.
+Apply the configuration and restart the affected process; this is not an
+instantaneous runtime toggle, and any remaining recovery-enabled metrics need
+a new healthy window. Remove probe configurations only after removing every
+reference to them.
+
+### Scope boundaries
+
+These settings provide reusable admission checks and recovery behavior. Deployments remain responsible for choosing appropriate metrics and thresholds, configuring their host-discovery sources, monitoring probe health and rejection rates, and controlling application concurrency or fallback behavior.

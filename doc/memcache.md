@@ -37,6 +37,10 @@ Optionally set `MemcachePath` (default is `"freno"`):
 - The value will be of the form `<epochmillis>:<aggregated-value>`.
   - As example, it might be `1497418678836:0.54` where `1497418678836` is the unix epoch in milliseconds, and `0.54` is the aggregated value.
   - Embedding the epoch within the value allows the app to double-check the validity of the value, or go into more granular validation.
+- For a MySQL cluster with `RequiredClusters`, Freno removes the source cluster's
+  memcache key when a required metric is unavailable, recovering, or above its
+  threshold. Clients must treat a missing key as unavailable and retry, defer, or
+  consult Freno, not as permission to proceed.
 
 ### Runtime access to memcache configuration
 
