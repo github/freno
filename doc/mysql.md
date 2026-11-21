@@ -247,6 +247,45 @@ checks do not increment these counters. These are process-local cumulative
 request counters that reset on restart, not counts of overloaded probe readings
 or distinct overload episodes. They do not measure memcache client rejections.
 
+#### Safety telemetry and logs
+
+The existing rejection counters above are unchanged. Additional counters record
+non-internal MySQL checks returning `429` or `500`, with the configured requested
+cluster, first blocking dependency, status, and reason:
+
+```text
+check.rejection.mysql.prod4.dependency.prod4-primary.status.429.threshold.total
+check.rejection.mysql.prod4.dependency.prod4-primary.status.500.no_hosts.total
+```
+
+Reasons are `threshold`, `recovery`, `shared_domain`, `no_hosts`,
+`missing_metric`, `metric_error`, or `other`. `metric_error` includes probe
+failures and measurements that have not been collected; it does not establish
+the underlying cause. Fallback requests use the configured fallback cluster,
+not arbitrary names supplied by callers. These counters do not include
+application identities or memcache rejections.
+
+Recovery-enabled clusters also emit
+`check.recovery.mysql.<cluster>.<event>.total`, where events are `initialized`,
+`blocked`, `started`, `reset`, and `completed`. Initialization means a new
+process or leader is requiring a healthy window, not that overload occurred.
+Repeated readings in the same state do not increment transition counters.
+The existing `recovery.mysql.<cluster>.active` gauge is unchanged.
+
+Both new counter families use `check.*` so the existing production Go Expvar
+configuration collects them as rates. Local counters are cumulative since
+startup; Datadog rates are events per second, not cumulative totals.
+
+At INFO level, recovery transitions emit `event=freno_recovery_<event>` with
+the cluster, reason, value, thresholds, and configured recovery duration.
+Rejections emit `event=freno_admission_rejected` with the requested cluster,
+blocking dependency, HTTP status, reason, value, and threshold. Rejection logs
+are limited to one per minute per cluster/dependency/status/reason combination;
+every eligible rejection still increments its counter. Logs omit raw error
+messages, credentials, and request contents. Standard error follows the existing
+log collection path; this change does not configure Splunk or repair Datadog
+delivery gaps.
+
 #### Configuration example
 
 A cluster can require additional cluster metrics to pass before `freno` permits

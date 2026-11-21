@@ -74,10 +74,11 @@ type Throttler struct {
 
 	proxysqlClient *proxysql.Client
 
-	throttledAppsMutex sync.Mutex
-	skippedHostsMutex  sync.Mutex
-	mysqlRecoveryMutex sync.Mutex
-	mysqlRecoveryState map[string]*mysqlClusterRecoveryState
+	throttledAppsMutex  sync.Mutex
+	skippedHostsMutex   sync.Mutex
+	mysqlRecoveryMutex  sync.Mutex
+	mysqlRecoveryState  map[string]*mysqlClusterRecoveryState
+	safetyRejectionLogs *cache.Cache
 
 	nonLowPriorityAppRequestsThrottled *cache.Cache
 	httpClient                         *http.Client
@@ -107,6 +108,7 @@ func NewThrottler() *Throttler {
 		metricsHealth:           cache.New(cache.NoExpiration, 0),
 		shareDomainMetricHealth: cache.New(5*sharedDomainCollectInterval, sharedDomainCollectInterval),
 		mysqlRecoveryState:      make(map[string]*mysqlClusterRecoveryState),
+		safetyRejectionLogs:     cache.New(time.Minute, time.Minute),
 
 		nonLowPriorityAppRequestsThrottled: cache.New(nonDeprioritizedAppMapExpiration, nonDeprioritizedAppMapInterval),
 
@@ -548,9 +550,19 @@ func (throttler *Throttler) stabilizeMySQLMetric(clusterName string, metricResul
 		// was healthy before this process began observing it.
 		state = &mysqlClusterRecoveryState{throttled: true}
 		throttler.mysqlRecoveryState[clusterName] = state
+		reportRecoveryTransition(clusterName, "initialized", "startup_or_leadership", value, clusterSettings)
 	}
 
 	if err != nil || value > clusterSettings.ThrottleThreshold {
+		reason := "threshold"
+		if err != nil {
+			reason = safetyMetricErrorReason(err)
+		}
+		if !state.throttled {
+			reportRecoveryTransition(clusterName, "blocked", reason, value, clusterSettings)
+		} else if !state.healthySince.IsZero() {
+			reportRecoveryTransition(clusterName, "reset", reason, value, clusterSettings)
+		}
 		state.throttled = true
 		state.healthySince = time.Time{}
 		metrics.GetOrRegisterGauge(fmt.Sprintf("recovery.mysql.%s.active", clusterName), nil).Update(1)
@@ -566,12 +578,16 @@ func (throttler *Throttler) stabilizeMySQLMetric(clusterName string, metricResul
 		recoveryThreshold = *clusterSettings.RecoveryThreshold
 	}
 	if value > recoveryThreshold {
+		if !state.healthySince.IsZero() {
+			reportRecoveryTransition(clusterName, "reset", "above_recovery_threshold", value, clusterSettings)
+		}
 		state.healthySince = time.Time{}
 		metrics.GetOrRegisterGauge(fmt.Sprintf("recovery.mysql.%s.active", clusterName), nil).Update(1)
 		return base.NewErrorMetricResult(value, base.RecoveryNotCompleteError)
 	}
 	if state.healthySince.IsZero() {
 		state.healthySince = now
+		reportRecoveryTransition(clusterName, "started", "below_recovery_threshold", value, clusterSettings)
 		metrics.GetOrRegisterGauge(fmt.Sprintf("recovery.mysql.%s.active", clusterName), nil).Update(1)
 		return base.NewErrorMetricResult(value, base.RecoveryNotCompleteError)
 	}
@@ -584,6 +600,7 @@ func (throttler *Throttler) stabilizeMySQLMetric(clusterName string, metricResul
 
 	state.throttled = false
 	state.healthySince = time.Time{}
+	reportRecoveryTransition(clusterName, "completed", "healthy_window_complete", value, clusterSettings)
 	metrics.GetOrRegisterGauge(fmt.Sprintf("recovery.mysql.%s.active", clusterName), nil).Update(0)
 	return metricResult
 }
