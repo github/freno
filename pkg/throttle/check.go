@@ -82,6 +82,7 @@ func (check *ThrottlerCheck) checkAppMetricResult(appName string, storeType stri
 		// shared-domain dependency check.,
 
 		checkResult = NewCheckResult(http.StatusTooManyRequests, value, threshold, base.ThresholdExceededError)
+		checkResult.rejectionReason = "shared_domain"
 	}
 	checkResult.MetricName = metricName
 	return checkResult
@@ -121,6 +122,7 @@ func (check *ThrottlerCheck) checkMySQLCluster(
 				fmt.Errorf("required MySQL cluster metric %q is unavailable", requiredCluster),
 			)
 			checkResult.MetricName = fmt.Sprintf("mysql/%s", requiredCluster)
+			checkResult.rejectionReason = "missing_metric"
 			return checkResult
 		}
 		return requiredResult
@@ -170,6 +172,9 @@ func (check *ThrottlerCheck) Check(appName string, storeType string, storeName s
 		}
 		metricName := strings.ReplaceAll(checkResult.MetricName, "/", ".")
 		metrics.GetOrRegisterCounter(fmt.Sprintf("check.rejected.%s.%s.total", metricName, reason), nil).Inc(1)
+	}
+	if storeType == "mysql" {
+		check.recordMySQLRejection(appName, storeName, checkResult)
 	}
 
 	go func(statusCode int) {

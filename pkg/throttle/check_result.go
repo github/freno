@@ -31,12 +31,13 @@ func newMetricCheckResult(value, threshold float64, err error, failOnNoHosts boo
 
 // CheckResult is the result for an app inquiring on a metric. It also exports as JSON via the API
 type CheckResult struct {
-	StatusCode int     `json:"StatusCode"`
-	Value      float64 `json:"Value"`
-	Threshold  float64 `json:"Threshold"`
-	MetricName string  `json:"MetricName,omitempty"`
-	Error      error   `json:"-"`
-	Message    string  `json:"Message"`
+	StatusCode      int     `json:"StatusCode"`
+	Value           float64 `json:"Value"`
+	Threshold       float64 `json:"Threshold"`
+	MetricName      string  `json:"MetricName,omitempty"`
+	Error           error   `json:"-"`
+	Message         string  `json:"Message"`
+	rejectionReason string
 }
 
 func NewCheckResult(statusCode int, value float64, threshold float64, err error) *CheckResult {
