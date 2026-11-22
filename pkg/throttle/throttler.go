@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"math/rand"
 	"net/http"
 	"strings"
@@ -24,6 +23,7 @@ import (
 
 	"github.com/bradfitz/gomemcache/memcache"
 	metrics "github.com/rcrowley/go-metrics"
+	"io"
 )
 
 const leaderCheckInterval = 1 * time.Second
@@ -803,7 +803,7 @@ func (throttler *Throttler) collectShareDomainMetricHealth() error {
 	aggregatedMetricHealth := make(base.MetricHealthMap)
 	for _, service := range services {
 		err := func() error {
-			uri := fmt.Sprintf("http://%s/metrics-health", service)
+			uri := fmt.Sprintf("https://%s/metrics-health", service)
 
 			resp, err := throttler.httpClient.Get(uri)
 			if err != nil {
@@ -811,7 +811,7 @@ func (throttler *Throttler) collectShareDomainMetricHealth() error {
 			}
 
 			defer resp.Body.Close()
-			b, err := ioutil.ReadAll(resp.Body)
+			b, err := io.ReadAll(resp.Body)
 			if err != nil {
 				return err
 			}

@@ -6,6 +6,7 @@
 CREATE TABLE service_election (
   domain varchar(32) NOT NULL,
   share_domain varchar(32) NOT NULL,
+  service_url varchar(64) NOT NULL DEFAULT '',
   service_id varchar(128) NOT NULL,
   last_seen_active timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (domain),
@@ -61,6 +62,7 @@ type MySQLBackend struct {
 	domain      string
 	shareDomain string
 	serviceId   string
+	serviceUrl  string
 	leaderState int64
 	healthState int64
 	throttler   *throttle.Throttler
@@ -94,12 +96,14 @@ func NewMySQLBackend(throttler *throttle.Throttler) (*MySQLBackend, error) {
 		domain = fmt.Sprintf("%s:%s", config.Settings().DataCenter, config.Settings().Environment)
 	}
 	shareDomain := config.Settings().ShareDomain
+	serviceUrl := config.Settings().ServiceURL
 	serviceId := fmt.Sprintf("%s:%d", hostname, config.Settings().ListenPort)
 	backend := &MySQLBackend{
 		db:          db,
 		domain:      domain,
 		shareDomain: shareDomain,
 		serviceId:   serviceId,
+		serviceUrl:  serviceUrl,
 		throttler:   throttler,
 	}
 	go backend.continuousOperations()
@@ -261,15 +265,16 @@ func (backend *MySQLBackend) GetHealthyDomainServices() (services []string, err 
 func (backend *MySQLBackend) AttemptLeadership() error {
 	query := `
     insert ignore into service_election (
-        domain, share_domain, service_id, last_seen_active
+        domain, share_domain, service_id, service_url, last_seen_active
       ) values (
-        ?, ?, ?, now()
+        ?, ?, ?, ?, now()
       ) on duplicate key update
 			service_id       = if(last_seen_active < now() - interval ? second, values(service_id), service_id),
+      service_url      = if(service_id = values(service_id), values(service_url), service_url),
       share_domain     = if(service_id = values(service_id), values(share_domain), share_domain),
       last_seen_active = if(service_id = values(service_id), values(last_seen_active), last_seen_active)
   `
-	args := sqlutils.Args(backend.domain, backend.shareDomain, backend.serviceId, electionExpireSeconds)
+	args := sqlutils.Args(backend.domain, backend.shareDomain, backend.serviceId, backend.serviceUrl, electionExpireSeconds)
 	_, err := sqlutils.ExecNoPrepare(backend.db, query, args...)
 	return err
 }
@@ -277,12 +282,12 @@ func (backend *MySQLBackend) AttemptLeadership() error {
 func (backend *MySQLBackend) ForceLeadership() error {
 	query := `
     replace into service_election (
-        domain, service_id, last_seen_active
+        domain, service_id, service_url, last_seen_active
       ) values (
-        ?, ?, now()
+        ?, ?, ?, now()
       )
   `
-	args := sqlutils.Args(backend.domain, backend.serviceId)
+	args := sqlutils.Args(backend.domain, backend.serviceId, backend.serviceUrl)
 	_, err := sqlutils.ExecNoPrepare(backend.db, query, args...)
 	return err
 }
@@ -325,7 +330,8 @@ func (backend *MySQLBackend) GetSharedDomainServices() (services map[string]stri
 	query := `
 		select
 			domain,
-			service_id
+			service_id,
+			service_url
 		from
 			service_election
 		where
@@ -335,7 +341,14 @@ func (backend *MySQLBackend) GetSharedDomainServices() (services map[string]stri
 	`
 	args := sqlutils.Args(backend.shareDomain, electionExpireSeconds, backend.serviceId)
 	err = sqlutils.QueryRowsMap(backend.db, query, func(m sqlutils.RowMap) error {
-		services[m.GetString("domain")] = m.GetString("service_id")
+		serviceUrl := m.GetString("service_url")
+		domain := m.GetString("domain")
+		if serviceUrl != "" {
+			services[domain] = serviceUrl
+		} else {
+			// fall back to using service_id
+			services[domain] = m.GetString("service_id")
+		}
 		return nil
 	}, args...)
 
