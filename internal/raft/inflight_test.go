@@ -17,12 +17,12 @@ func TestInflight_StartCommit(t *testing.T) {
 	// Commit 3 times
 	in.Commit(1)
 	if in.Committed().Len() != 0 {
-		t.Fatalf("should not be commited")
+		t.Fatalf("should not be committed")
 	}
 
 	in.Commit(1)
 	if in.Committed().Len() != 1 {
-		t.Fatalf("should be commited")
+		t.Fatalf("should be committed")
 	}
 
 	// Already committed but should work anyways

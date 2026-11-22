@@ -51,7 +51,7 @@ var (
 	ErrUnknownPeer = errors.New("peer is unknown")
 
 	// ErrNothingNewToSnapshot is returned when trying to create a snapshot
-	// but there's nothing new commited to the FSM since we started.
+	// but there's nothing new committed to the FSM since we started.
 	ErrNothingNewToSnapshot = errors.New("Nothing new to snapshot")
 )
 
