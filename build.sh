@@ -27,6 +27,7 @@ set -e
 mydir=$(dirname $0)
 GIT_COMMIT=$(git rev-parse HEAD)
 RELEASE_VERSION=
+extra_opt=
 TOPDIR=/tmp/freno-release
 export RELEASE_VERSION TOPDIR
 
@@ -72,9 +73,15 @@ function precheck() {
     ok=1
   fi
 
-  if ! go version | egrep -q 'go(1\.1[6789])' ; then
+  GO_VERSION=$(go version | grep -Po "go1\\.\K[0-9]+")
+  if [[ -z "$GO_VERSION" || "$GO_VERSION" -lt "16" ]]; then
     echo "go version must be 1.16 or above"
     ok=1
+  fi
+
+  if [[ "$GO_VERSION" -eq "16" ]]; then
+    # This option is needed only for go 1.16
+    extra_opt="-i"
   fi
 
   return $ok
@@ -143,7 +150,7 @@ function build() {
   prefix="$4"
   ldflags="-X main.AppVersion=${RELEASE_VERSION} -X main.GitCommit=${GIT_COMMIT}"
   echo "Building via $(go version)"
-  gobuild="go build -i ${opt_race} -ldflags \"$ldflags\" -o $builddir/freno${prefix}/freno cmd/freno/main.go"
+  gobuild="go build ${extra_opt} ${opt_race} -ldflags \"$ldflags\" -o $builddir/freno${prefix}/freno cmd/freno/main.go"
 
   case $os in
     'linux')
