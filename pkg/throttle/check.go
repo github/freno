@@ -25,7 +25,7 @@ type CheckFlags struct {
 
 var StandardCheckFlags = &CheckFlags{}
 
-// ThrottlerCheck provides methdos for an app checking on metrics
+// ThrottlerCheck provides methods for an app checking on metrics
 type ThrottlerCheck struct {
 	throttler *Throttler
 }
@@ -76,10 +76,10 @@ func (check *ThrottlerCheck) checkAppMetricResult(appName string, storeType stri
 	} else if err == nil && checkResult.StatusCode == http.StatusOK && appName != frenoAppName && check.throttler.getShareDomainSecondsSinceHealth(metricName) >= 1 {
 		// throttling based on shared domain metric.
 		// we exclude the "freno" app itself, or else this could turn into a snowball: this service ("a") seeing
-		// another service ("b") as unhealthy, itself becoming unhealthy, makind b's read into a's state as unheathly,
+		// another service ("b") as unhealthy, itself becoming unhealthy, making b's read into a's state as unhealthy,
 		// b reporting unhealthy, ad infinitum.
-		// The "freno" app is the one to generate those health metrics. It therefore must not participate the
-		// shared-domain dependency check.,
+		// The "freno" app is the one to generate those health metrics. It therefore must not participate in the
+		// shared-domain dependency check.
 
 		checkResult = NewCheckResult(http.StatusTooManyRequests, value, threshold, base.ThresholdExceededError)
 	}
@@ -241,12 +241,12 @@ func (check *ThrottlerCheck) reportAggregated(metricName string, metricResult ba
 	}
 }
 
-// AggregatedMetrics is a convenience acces method into throttler's `aggregatedMetricsSnapshot`
+// AggregatedMetrics is a convenience access method into throttler's `aggregatedMetricsSnapshot`
 func (check *ThrottlerCheck) AggregatedMetrics() map[string]base.MetricResult {
 	return check.throttler.aggregatedMetricsSnapshot()
 }
 
-// MetricsHealth is a convenience acces method into throttler's `metricsHealthSnapshot`
+// MetricsHealth is a convenience access method into throttler's `metricsHealthSnapshot`
 func (check *ThrottlerCheck) MetricsHealth() map[string](*base.MetricHealth) {
 	return check.throttler.metricsHealthSnapshot()
 }

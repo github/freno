@@ -134,7 +134,7 @@ func (store *Store) genericCommand(c *command) error {
 	return f.Error()
 }
 
-// ThrottleApp, as implied by consensusService, is a raft oepration request which
+// ThrottleApp, as implied by consensusService, is a raft operation request which
 // will ask for consensus.
 func (store *Store) ThrottleApp(appName string, ttlMinutes int64, expireAt time.Time, ratio float64) error {
 	c := &command{
@@ -146,7 +146,7 @@ func (store *Store) ThrottleApp(appName string, ttlMinutes int64, expireAt time.
 	return store.genericCommand(c)
 }
 
-// UnthrottleApp, as implied by consensusService, is a raft oepration request which
+// UnthrottleApp, as implied by consensusService, is a raft operation request which
 // will ask for consensus.
 func (store *Store) UnthrottleApp(appName string) error {
 	c := &command{
