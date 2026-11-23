@@ -32,50 +32,51 @@ func newMetricCheckResult(value, threshold float64, err error, failOnNoHosts boo
 
 // CheckResult is the result for an app inquiring on a metric. It also exports as JSON via the API
 type CheckResult struct {
-	StatusCode       int            `json:"StatusCode"`
-	Value            float64        `json:"Value"`
-	Threshold        float64        `json:"Threshold"`
-	MetricName       string         `json:"MetricName,omitempty"`
-	Error            error          `json:"-"`
-	Message          string         `json:"Message"`
-	Dependencies     []*CheckResult `json:"Dependencies,omitempty"`
-	rejectionReason  string
-	blockingResult   *CheckResult
-	measurementError string
+	StatusCode      int            `json:"StatusCode"`
+	Value           float64        `json:"Value"`
+	Threshold       float64        `json:"Threshold"`
+	MetricName      string         `json:"MetricName,omitempty"`
+	Error           error          `json:"-"`
+	Message         string         `json:"Message"`
+	Dependencies    []*CheckResult `json:"Dependencies,omitempty"`
+	rejectionReason string
+	blockingResult  *CheckResult
+}
+
+type checkResultResponse struct {
+	StatusCode   int                    `json:"StatusCode"`
+	Value        float64                `json:"Value"`
+	Threshold    float64                `json:"Threshold"`
+	MetricName   string                 `json:"MetricName,omitempty"`
+	Message      string                 `json:"Message"`
+	Dependencies []*checkResultResponse `json:"Dependencies,omitempty"`
+}
+
+func (result *CheckResult) response() *checkResultResponse {
+	if result == nil {
+		return nil
+	}
+	response := &checkResultResponse{
+		StatusCode: result.StatusCode,
+		Value:      result.Value,
+		Threshold:  result.Threshold,
+		MetricName: result.MetricName,
+		Message:    result.Message,
+	}
+	for _, dependency := range result.Dependencies {
+		response.Dependencies = append(response.Dependencies, dependency.response())
+	}
+	return response
 }
 
 func (result *CheckResult) MarshalJSON() ([]byte, error) {
-	type response CheckResult
 	return json.Marshal(struct {
-		*response
-		MeasurementError   string `json:"MeasurementError,omitempty"`
+		*checkResultResponse
 		BlockingMetricName string `json:"BlockingMetricName,omitempty"`
-		RejectionReason    string `json:"RejectionReason,omitempty"`
 	}{
-		response:           (*response)(result),
-		MeasurementError:   result.measurementError,
-		BlockingMetricName: result.blockingMetricName(),
-		RejectionReason:    result.rejectionResult().reason(),
+		checkResultResponse: result.response(),
+		BlockingMetricName:  result.blockingMetricName(),
 	})
-}
-
-func (result *CheckResult) reason() string {
-	if result.StatusCode == http.StatusOK {
-		return ""
-	}
-	if result.rejectionReason != "" {
-		return result.rejectionReason
-	}
-	switch {
-	case errors.Is(result.Error, base.RecoveryNotCompleteError):
-		return "recovery"
-	case errors.Is(result.Error, base.ThresholdExceededError) && result.Value > result.Threshold:
-		return "threshold"
-	case result.StatusCode == http.StatusInternalServerError:
-		return safetyMetricErrorReason(result.Error)
-	default:
-		return ""
-	}
 }
 
 func (result *CheckResult) rejectionResult() *CheckResult {
@@ -101,9 +102,6 @@ func NewCheckResult(statusCode int, value float64, threshold float64, err error)
 	}
 	if err != nil {
 		result.Message = err.Error()
-		if !errors.Is(err, base.RecoveryNotCompleteError) && !errors.Is(err, base.ThresholdExceededError) {
-			result.measurementError = err.Error()
-		}
 	}
 	return result
 }

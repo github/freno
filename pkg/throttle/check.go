@@ -130,7 +130,6 @@ func (check *ThrottlerCheck) checkMySQLCluster(
 			requiredResult.StatusCode = http.StatusInternalServerError
 			requiredResult.Error = err
 			requiredResult.Message = err.Error()
-			requiredResult.measurementError = err.Error()
 			requiredResult.rejectionReason = "missing_metric"
 		}
 		if blocker == nil {

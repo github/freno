@@ -161,38 +161,36 @@ HTTP 429 and a body containing:
   "Threshold": 1,
   "Message": "Threshold exceeded",
   "BlockingMetricName": "mysql/repositories-primary",
-  "RejectionReason": "threshold",
   "Dependencies": [
     {
       "StatusCode": 429,
       "MetricName": "mysql/repositories-primary",
       "Value": 80,
       "Threshold": 75,
-      "Message": "Threshold exceeded",
-      "BlockingMetricName": "mysql/repositories-primary",
-      "RejectionReason": "threshold"
+      "Message": "Threshold exceeded"
     }
   ]
 }
 ```
 
 Admission still follows the first failing check: the requested metric first,
-then required dependencies in configured order. `BlockingMetricName` and
-`RejectionReason` describe that decision. Rejection counters and logs retain
+then required dependencies in configured order. The top-level
+`BlockingMetricName` identifies the first blocker; the existing `Message`
+explains the rejection. Dependency entries contain the existing result fields
+without repeating the blocking metric. Rejection counters and logs retain
 the blocking metric's identity and value, rather than the top-level lag.
 Recovery and shared-domain health can still cause HTTP 429 when the current
 pressure is below the throttle threshold.
 
-When a measurement is unavailable, its result includes `MeasurementError`.
-For compatibility with existing clients, `Value` remains numeric and retains
-the legacy error-path
-value; it must not be interpreted as a valid reading when `MeasurementError`
-is present. The original missing-host fail-open/fail-closed setting remains in
-effect. `MeasurementError` describes a problem with the local numeric reading,
-not the health of its dependencies.
+A probe failure is reported through the failing metric's `StatusCode` and
+`Message`. For compatibility with existing clients, `Value` remains numeric
+and retains the legacy error-path value; that value is not a valid measurement.
+The overall status can also describe a dependency failure while the requested
+lag is valid; `BlockingMetricName` identifies which metric blocked admission.
+The original missing-host fail-open/fail-closed setting remains in effect.
 
 An unchanged Ruby `replication_delay` client reads only `Value`; it does not
-honor admission status or the new measurement-error field. This change preserves
+honor admission status or error messages. This change preserves
 its numeric contract and removes pressure/lag unit confusion, but does not make
 that client handle unavailable lag differently. Write admission must still use
 the status-based check.

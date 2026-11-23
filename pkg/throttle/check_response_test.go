@@ -29,23 +29,23 @@ func TestCheckKeepsRequestedMeasurementAndReportsDependencies(t *testing.T) {
 		shared      bool
 		wantStatus  int
 		wantBlocker string
-		wantReason  string
+		wantMessage string
 		wantLag     interface{}
 		wantPrimary interface{}
 	}{
 		{"healthy", base.NewSimpleMetricResult(0.05), base.NewSimpleMetricResult(23), false, 200, "", "", 0.05, float64(23)},
-		{"primary overload", base.NewSimpleMetricResult(0.05), base.NewSimpleMetricResult(80), false, 429, "mysql/primary", "threshold", 0.05, float64(80)},
-		{"primary recovery", base.NewSimpleMetricResult(0.05), base.NewErrorMetricResult(35, base.RecoveryNotCompleteError), false, 429, "mysql/primary", "recovery", 0.05, float64(35)},
-		{"primary shared health", base.NewSimpleMetricResult(0.05), base.NewSimpleMetricResult(23), true, 429, "mysql/primary", "shared_domain", 0.05, float64(23)},
-		{"primary probe error", base.NewSimpleMetricResult(0.05), base.NewErrorMetricResult(999, errors.New("probe failed")), false, 500, "mysql/primary", "metric_error", 0.05, float64(999)},
-		{"primary no hosts", base.NewSimpleMetricResult(0.05), base.NoHostsMetricResult, false, 500, "mysql/primary", "no_hosts", 0.05, float64(0)},
-		{"primary missing", base.NewSimpleMetricResult(0.05), base.NoSuchMetric, false, 500, "mysql/primary", "missing_metric", 0.05, float64(0)},
-		{"lag overload includes pressure", base.NewSimpleMetricResult(6), base.NewSimpleMetricResult(23), false, 429, "mysql/replicas", "threshold", float64(6), float64(23)},
-		{"lag recovery includes pressure", base.NewErrorMetricResult(2, base.RecoveryNotCompleteError), base.NewSimpleMetricResult(23), false, 429, "mysql/replicas", "recovery", float64(2), float64(23)},
-		{"both overloaded keeps first blocker", base.NewSimpleMetricResult(6), base.NewSimpleMetricResult(80), false, 429, "mysql/replicas", "threshold", float64(6), float64(80)},
-		{"lag error includes pressure", base.NewErrorMetricResult(999, errors.New("lag failed")), base.NewSimpleMetricResult(23), false, 500, "mysql/replicas", "metric_error", float64(999), float64(23)},
-		{"both unavailable", base.NoMetricResultYet, base.NoMetricResultYet, false, 500, "mysql/replicas", "metric_error", float64(0), float64(0)},
-		{"legacy lag no-hosts fail-open is unchanged", base.NoHostsMetricResult, base.NewSimpleMetricResult(23), false, 200, "", "", float64(0), float64(23)},
+		{"primary overload", base.NewSimpleMetricResult(0.05), base.NewSimpleMetricResult(80), false, 429, "mysql/primary", "Threshold exceeded", 0.05, float64(80)},
+		{"primary recovery", base.NewSimpleMetricResult(0.05), base.NewErrorMetricResult(35, base.RecoveryNotCompleteError), false, 429, "mysql/primary", "Recovery period not complete", 0.05, float64(35)},
+		{"primary shared health", base.NewSimpleMetricResult(0.05), base.NewSimpleMetricResult(23), true, 429, "mysql/primary", "Threshold exceeded", 0.05, float64(23)},
+		{"primary probe error", base.NewSimpleMetricResult(0.05), base.NewErrorMetricResult(999, errors.New("probe failed")), false, 500, "mysql/primary", "probe failed", 0.05, float64(999)},
+		{"primary no hosts", base.NewSimpleMetricResult(0.05), base.NoHostsMetricResult, false, 500, "mysql/primary", "No hosts found", 0.05, float64(0)},
+		{"primary missing", base.NewSimpleMetricResult(0.05), base.NoSuchMetric, false, 500, "mysql/primary", `required MySQL cluster metric "primary" is unavailable`, 0.05, float64(0)},
+		{"lag overload includes pressure", base.NewSimpleMetricResult(6), base.NewSimpleMetricResult(23), false, 429, "mysql/replicas", "Threshold exceeded", float64(6), float64(23)},
+		{"lag recovery includes pressure", base.NewErrorMetricResult(2, base.RecoveryNotCompleteError), base.NewSimpleMetricResult(23), false, 429, "mysql/replicas", "Recovery period not complete", float64(2), float64(23)},
+		{"both overloaded keeps first blocker", base.NewSimpleMetricResult(6), base.NewSimpleMetricResult(80), false, 429, "mysql/replicas", "Threshold exceeded", float64(6), float64(80)},
+		{"lag error includes pressure", base.NewErrorMetricResult(999, errors.New("lag failed")), base.NewSimpleMetricResult(23), false, 500, "mysql/replicas", "lag failed", float64(999), float64(23)},
+		{"both unavailable", base.NoMetricResultYet, base.NoMetricResultYet, false, 500, "mysql/replicas", "Metric not collected yet", float64(0), float64(0)},
+		{"legacy lag no-hosts fail-open is unchanged", base.NoHostsMetricResult, base.NewSimpleMetricResult(23), false, 200, "", "No hosts found", float64(0), float64(23)},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			throttler := NewThrottler()
@@ -71,19 +71,14 @@ func TestCheckKeepsRequestedMeasurementAndReportsDependencies(t *testing.T) {
 			}
 			assert.Equal(t, test.wantLag, body["Value"])
 			assert.Equal(t, float64(5), body["Threshold"])
-			_, lagErr := test.replica.Get()
-			lagAvailable := lagErr == nil || errors.Is(lagErr, base.RecoveryNotCompleteError)
+			assert.Equal(t, test.wantMessage, body["Message"])
 			assert.NotContains(t, body, "MeasurementAvailable")
-			if !lagAvailable {
-				assert.Equal(t, lagErr.Error(), body["MeasurementError"])
-			} else {
-				assert.NotContains(t, body, "MeasurementError")
-			}
+			assert.NotContains(t, body, "MeasurementError")
+			assert.NotContains(t, body, "RejectionReason")
 			if test.wantBlocker == "" {
 				assert.NotContains(t, body, "BlockingMetricName")
 			} else {
 				assert.Equal(t, test.wantBlocker, body["BlockingMetricName"])
-				assert.Equal(t, test.wantReason, body["RejectionReason"])
 			}
 			if !assert.Len(t, result.Dependencies, 2) {
 				return
@@ -94,14 +89,11 @@ func TestCheckKeepsRequestedMeasurementAndReportsDependencies(t *testing.T) {
 			dependencies := body["Dependencies"].([]interface{})
 			primary := dependencies[0].(map[string]interface{})
 			assert.Equal(t, test.wantPrimary, primary["Value"])
-			_, primaryErr := test.primary.Get()
-			available := primaryErr == nil || errors.Is(primaryErr, base.RecoveryNotCompleteError)
 			assert.NotContains(t, primary, "MeasurementAvailable")
-			if !available {
-				assert.NotEmpty(t, primary["MeasurementError"])
-			} else {
-				assert.NotContains(t, primary, "MeasurementError")
-			}
+			assert.NotContains(t, primary, "MeasurementError")
+			assert.NotContains(t, primary, "RejectionReason")
+			assert.NotContains(t, primary, "BlockingMetricName")
+			assert.Equal(t, result.Dependencies[0].Message, primary["Message"])
 		})
 	}
 }
@@ -174,6 +166,22 @@ func TestNestedDependenciesKeepLagAndBlockerIdentity(t *testing.T) {
 	assert.Equal(t, 0.1, result.Dependencies[0].Value)
 	assert.Equal(t, "mysql/primary", result.rejectionResult().MetricName)
 	assert.Equal(t, 80.0, result.rejectionResult().Value)
+	data, err := json.Marshal(result)
+	if !assert.NoError(t, err) {
+		return
+	}
+	var body map[string]interface{}
+	if !assert.NoError(t, json.Unmarshal(data, &body)) {
+		return
+	}
+	assert.Equal(t, "mysql/primary", body["BlockingMetricName"])
+	intermediate := body["Dependencies"].([]interface{})[0].(map[string]interface{})
+	primary := intermediate["Dependencies"].([]interface{})[0].(map[string]interface{})
+	for _, dependency := range []map[string]interface{}{intermediate, primary} {
+		assert.NotContains(t, dependency, "BlockingMetricName")
+		assert.NotContains(t, dependency, "RejectionReason")
+		assert.NotContains(t, dependency, "MeasurementError")
+	}
 
 	throttler.aggregatedMetrics.Delete("mysql/intermediate")
 	result = NewThrottlerCheck(throttler).Check("test-app", "mysql", "replicas", "", StandardCheckFlags)
