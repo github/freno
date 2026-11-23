@@ -43,7 +43,7 @@ func TestHTTPMySQLPrimaryDependencies(t *testing.T) {
 		wantValue       float64
 		wantThreshold   float64
 	}{
-		{"required primary blocks", "RequiredClusters", http.StatusTooManyRequests, "mysql/primary", 60, 50},
+		{"required primary blocks", "RequiredClusters", http.StatusTooManyRequests, "mysql/replicas", 1, 5},
 		{"removed shadow field is ignored", "ShadowRequiredClusters", http.StatusOK, "mysql/replicas", 1, 5},
 	} {
 		t.Run(test.name, func(t *testing.T) {
@@ -127,12 +127,16 @@ func TestHTTPMySQLPrimaryRecoveryAfterProbeError(t *testing.T) {
 			if status != step.wantStatus || result.Message != step.wantMessage {
 				t.Fatalf("at %s: unexpected HTTP check: %+v", step.elapsed, result)
 			}
-			wantMetric := "mysql/primary"
-			if status == http.StatusOK {
-				wantMetric = "mysql/replicas"
-			}
+			wantMetric := "mysql/replicas"
 			if result.MetricName != wantMetric {
 				t.Fatalf("metric = %q, want %q", result.MetricName, wantMetric)
+			}
+			if result.Value != 1 || result.Threshold != 5 || len(result.Dependencies) != 1 {
+				t.Fatalf("lag fields or primary measurement lost: %+v", result)
+			}
+			value, _ := step.metric.Get()
+			if result.Dependencies[0].Value != value {
+				t.Fatalf("primary value = %g, want %g", result.Dependencies[0].Value, value)
 			}
 			t.Logf("at %s: HTTP %d, metric=%s, message=%q", step.elapsed, status, result.MetricName, result.Message)
 		})

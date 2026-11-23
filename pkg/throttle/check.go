@@ -106,26 +106,35 @@ func (check *ThrottlerCheck) checkMySQLCluster(
 	if rootResult.StatusCode != http.StatusOK {
 		return rootResult
 	}
-
 	clusterSettings := config.Settings().Stores.MySQL.Clusters[clusterName]
+	if clusterSettings == nil {
+		return rootResult
+	}
+
 	for _, requiredCluster := range clusterSettings.RequiredClusters {
 		requiredFlags := *flags
 		requiredFlags.ReadCheck = false
 		requiredFlags.OverrideThreshold = 0
 		requiredResult := check.checkMySQLCluster(appName, requiredCluster, &requiredFlags, checkedClusters)
-		if requiredResult == nil || requiredResult.StatusCode == http.StatusOK {
+		if requiredResult == nil {
 			continue
 		}
 		if requiredResult.StatusCode == http.StatusNotFound {
-			checkResult := NewErrorCheckResult(
-				http.StatusInternalServerError,
-				fmt.Errorf("required MySQL cluster metric %q is unavailable", requiredCluster),
-			)
-			checkResult.MetricName = fmt.Sprintf("mysql/%s", requiredCluster)
-			checkResult.rejectionReason = "missing_metric"
-			return checkResult
+			err := fmt.Errorf("required MySQL cluster metric %q is unavailable", requiredCluster)
+			requiredResult.StatusCode = http.StatusInternalServerError
+			requiredResult.Error = err
+			requiredResult.Message = err.Error()
+			requiredResult.measurementError = err.Error()
+			requiredResult.rejectionReason = "missing_metric"
 		}
-		return requiredResult
+		rootResult.Dependencies = append(rootResult.Dependencies, requiredResult)
+		if requiredResult.StatusCode != http.StatusOK {
+			rootResult.StatusCode = requiredResult.StatusCode
+			rootResult.Error = requiredResult.Error
+			rootResult.Message = requiredResult.Message
+			rootResult.blockingResult = requiredResult.rejectionResult()
+			return rootResult
+		}
 	}
 	return rootResult
 }
@@ -163,18 +172,19 @@ func (check *ThrottlerCheck) Check(appName string, storeType string, storeName s
 	}
 
 	if checkResult.StatusCode == http.StatusTooManyRequests && appName != frenoAppName && appName != frenoShareDmainAppName {
+		rejection := checkResult.rejectionResult()
 		reason := "other"
 		switch {
-		case errors.Is(checkResult.Error, base.RecoveryNotCompleteError):
+		case errors.Is(rejection.Error, base.RecoveryNotCompleteError):
 			reason = "recovery"
-		case errors.Is(checkResult.Error, base.ThresholdExceededError) && checkResult.Value > checkResult.Threshold:
+		case errors.Is(rejection.Error, base.ThresholdExceededError) && rejection.Value > rejection.Threshold:
 			reason = "threshold"
 		}
-		metricName := strings.ReplaceAll(checkResult.MetricName, "/", ".")
+		metricName := strings.ReplaceAll(rejection.MetricName, "/", ".")
 		metrics.GetOrRegisterCounter(fmt.Sprintf("check.rejected.%s.%s.total", metricName, reason), nil).Inc(1)
 	}
 	if storeType == "mysql" {
-		check.recordMySQLRejection(appName, storeName, checkResult)
+		check.recordMySQLRejection(appName, storeName, checkResult.rejectionResult())
 	}
 
 	go func(statusCode int) {

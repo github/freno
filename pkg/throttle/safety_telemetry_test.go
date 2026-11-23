@@ -135,6 +135,9 @@ func TestSafetyRejectionTelemetry(t *testing.T) {
 			assert.Equal(t, 1, strings.Count(logs(), "event=freno_admission_rejected"))
 			assert.Contains(t, logs(), fmt.Sprintf("reason=%q", test.wantReason))
 			assert.Contains(t, logs(), fmt.Sprintf("dependency=%q", dependency))
+			if test.name == "primary threshold" {
+				assert.Contains(t, logs(), "value=60 threshold=50")
+			}
 			assert.NotContains(t, logs(), "private connection details")
 			assert.NotContains(t, logs(), "unbounded-caller-input")
 			// The next interval logs again without suppressing any request counters.
