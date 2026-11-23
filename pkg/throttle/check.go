@@ -21,6 +21,7 @@ type CheckFlags struct {
 	OverrideThreshold float64
 	LowPriority       bool
 	OKIfNotExists     bool
+	observationOnly   bool
 }
 
 var StandardCheckFlags = &CheckFlags{}
@@ -69,7 +70,7 @@ func (check *ThrottlerCheck) checkAppMetricResult(appName string, storeType stri
 	}
 	checkResult = newMetricCheckResult(value, threshold, err, failOnNoHosts)
 	if err == nil && value > threshold {
-		if !flags.LowPriority && !flags.ReadCheck && appName != frenoAppName {
+		if !flags.LowPriority && !flags.ReadCheck && !flags.observationOnly && appName != frenoAppName {
 			// low priority requests will henceforth be denied
 			go check.throttler.nonLowPriorityAppRequestsThrottled.SetDefault(metricName, true)
 		}
@@ -103,20 +104,25 @@ func (check *ThrottlerCheck) checkMySQLCluster(
 		return check.throttler.getMySQLClusterMetrics(clusterName)
 	}
 	rootResult := check.checkAppMetricResult(appName, "mysql", clusterName, metricResultFunc, flags)
-	if rootResult.StatusCode != http.StatusOK {
-		return rootResult
-	}
 	clusterSettings := config.Settings().Stores.MySQL.Clusters[clusterName]
 	if clusterSettings == nil {
 		return rootResult
 	}
 
+	var blocker *CheckResult
+	if rootResult.StatusCode != http.StatusOK {
+		blocker = rootResult
+	}
 	for _, requiredCluster := range clusterSettings.RequiredClusters {
 		requiredFlags := *flags
 		requiredFlags.ReadCheck = false
 		requiredFlags.OverrideThreshold = 0
+		requiredFlags.observationOnly = flags.observationOnly || blocker != nil
 		requiredResult := check.checkMySQLCluster(appName, requiredCluster, &requiredFlags, checkedClusters)
-		if requiredResult == nil {
+		if requiredResult != nil {
+			rootResult.Dependencies = append(rootResult.Dependencies, requiredResult)
+		}
+		if requiredResult == nil || requiredResult.StatusCode == http.StatusOK {
 			continue
 		}
 		if requiredResult.StatusCode == http.StatusNotFound {
@@ -127,14 +133,15 @@ func (check *ThrottlerCheck) checkMySQLCluster(
 			requiredResult.measurementError = err.Error()
 			requiredResult.rejectionReason = "missing_metric"
 		}
-		rootResult.Dependencies = append(rootResult.Dependencies, requiredResult)
-		if requiredResult.StatusCode != http.StatusOK {
-			rootResult.StatusCode = requiredResult.StatusCode
-			rootResult.Error = requiredResult.Error
-			rootResult.Message = requiredResult.Message
-			rootResult.blockingResult = requiredResult.rejectionResult()
-			return rootResult
+		if blocker == nil {
+			blocker = requiredResult
 		}
+	}
+	if blocker != nil && blocker != rootResult {
+		rootResult.StatusCode = blocker.StatusCode
+		rootResult.Error = blocker.Error
+		rootResult.Message = blocker.Message
+		rootResult.blockingResult = blocker.rejectionResult()
 	}
 	return rootResult
 }

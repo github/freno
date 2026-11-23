@@ -140,11 +140,12 @@ dependency blocks admission. Existing replication-delay clients can continue to
 read lag seconds from `Value`; a primary's running-thread count never replaces
 the requested store's lag.
 
-If the requested metric fails, Freno returns its value, status, and reason
-without evaluating dependencies. Otherwise, `Dependencies` contains the required
-metrics evaluated in configured order, stopping at the first failure. Each
-includes its own name, value, threshold, status, and any evaluated nested
-dependencies. These checks use collected measurements already held by Freno,
+`Dependencies` contains the required metrics on both accepted and rejected
+checks, including when the requested metric fails. Each includes its own name,
+value, threshold, status, and any evaluated nested dependencies. Freno retains
+the first failure as the admission decision; later checks only complete the
+diagnostic response and do not set additional low-priority throttling state.
+These checks use collected measurements already held by Freno,
 not additional database queries per request. A directly requested primary store
 still returns primary pressure in its own `Value`; it is not a replication-lag
 endpoint.

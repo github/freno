@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 	"testing"
+	"time"
 
 	"github.com/github/freno/pkg/base"
 	"github.com/github/freno/pkg/config"
@@ -39,10 +40,10 @@ func TestCheckKeepsRequestedMeasurementAndReportsDependencies(t *testing.T) {
 		{"primary probe error", base.NewSimpleMetricResult(0.05), base.NewErrorMetricResult(999, errors.New("probe failed")), false, 500, "mysql/primary", "metric_error", 0.05, float64(999)},
 		{"primary no hosts", base.NewSimpleMetricResult(0.05), base.NoHostsMetricResult, false, 500, "mysql/primary", "no_hosts", 0.05, float64(0)},
 		{"primary missing", base.NewSimpleMetricResult(0.05), base.NoSuchMetric, false, 500, "mysql/primary", "missing_metric", 0.05, float64(0)},
-		{"lag overload skips pressure", base.NewSimpleMetricResult(6), base.NewSimpleMetricResult(23), false, 429, "mysql/replicas", "threshold", float64(6), float64(23)},
-		{"lag recovery skips pressure", base.NewErrorMetricResult(2, base.RecoveryNotCompleteError), base.NewSimpleMetricResult(23), false, 429, "mysql/replicas", "recovery", float64(2), float64(23)},
+		{"lag overload includes pressure", base.NewSimpleMetricResult(6), base.NewSimpleMetricResult(23), false, 429, "mysql/replicas", "threshold", float64(6), float64(23)},
+		{"lag recovery includes pressure", base.NewErrorMetricResult(2, base.RecoveryNotCompleteError), base.NewSimpleMetricResult(23), false, 429, "mysql/replicas", "recovery", float64(2), float64(23)},
 		{"both overloaded keeps first blocker", base.NewSimpleMetricResult(6), base.NewSimpleMetricResult(80), false, 429, "mysql/replicas", "threshold", float64(6), float64(80)},
-		{"lag error skips pressure", base.NewErrorMetricResult(999, errors.New("lag failed")), base.NewSimpleMetricResult(23), false, 500, "mysql/replicas", "metric_error", float64(999), float64(23)},
+		{"lag error includes pressure", base.NewErrorMetricResult(999, errors.New("lag failed")), base.NewSimpleMetricResult(23), false, 500, "mysql/replicas", "metric_error", float64(999), float64(23)},
 		{"both unavailable", base.NoMetricResultYet, base.NoMetricResultYet, false, 500, "mysql/replicas", "metric_error", float64(0), float64(0)},
 		{"legacy lag no-hosts fail-open is unchanged", base.NoHostsMetricResult, base.NewSimpleMetricResult(23), false, 200, "", "", float64(0), float64(23)},
 	} {
@@ -84,24 +85,12 @@ func TestCheckKeepsRequestedMeasurementAndReportsDependencies(t *testing.T) {
 				assert.Equal(t, test.wantBlocker, body["BlockingMetricName"])
 				assert.Equal(t, test.wantReason, body["RejectionReason"])
 			}
-			if test.wantBlocker == "mysql/replicas" {
-				assert.Empty(t, result.Dependencies)
-				assert.NotContains(t, body, "Dependencies")
-				assert.Equal(t, map[string]bool{"replicas": true}, checked)
+			if !assert.Len(t, result.Dependencies, 2) {
 				return
 			}
-			wantDependencies := 1
-			if test.wantStatus == http.StatusOK {
-				wantDependencies = 2
-			}
-			if !assert.Len(t, result.Dependencies, wantDependencies) {
-				return
-			}
-			assert.Len(t, checked, wantDependencies+1)
+			assert.Equal(t, map[string]bool{"replicas": true, "primary": true, "other": true}, checked)
 			assert.Equal(t, "mysql/primary", result.Dependencies[0].MetricName)
-			if wantDependencies == 2 {
-				assert.Equal(t, 10.0, result.Dependencies[1].Value)
-			}
+			assert.Equal(t, 10.0, result.Dependencies[1].Value)
 			dependencies := body["Dependencies"].([]interface{})
 			primary := dependencies[0].(map[string]interface{})
 			assert.Equal(t, test.wantPrimary, primary["Value"])
@@ -111,6 +100,50 @@ func TestCheckKeepsRequestedMeasurementAndReportsDependencies(t *testing.T) {
 			if !available {
 				assert.NotEmpty(t, primary["MeasurementError"])
 			}
+		})
+	}
+}
+
+func TestDiagnosticDependenciesDoNotSetLowPriorityThrottlingState(t *testing.T) {
+	original := config.Settings().Stores.MySQL
+	t.Cleanup(func() { config.Settings().Stores.MySQL = original })
+	config.Settings().Stores.MySQL = config.MySQLConfigurationSettings{
+		Clusters: map[string]*config.MySQLClusterConfigurationSettings{
+			"replicas": {RequiredClusters: []string{"primary", "other"}},
+			"primary":  {},
+			"other":    {},
+		},
+	}
+	for _, test := range []struct {
+		name        string
+		lag         float64
+		blocker     string
+		diagnostics []string
+	}{
+		{"lag blocks first", 6, "mysql/replicas", []string{"mysql/primary", "mysql/other"}},
+		{"primary blocks first", 0.05, "mysql/primary", []string{"mysql/other"}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			throttler := NewThrottler()
+			setTestMySQLClusterMetric(throttler, "replicas", test.lag, 5)
+			setTestMySQLClusterMetric(throttler, "primary", 80, 50)
+			setTestMySQLClusterMetric(throttler, "other", 30, 20)
+			result := NewThrottlerCheck(throttler).Check("test-app", "mysql", "replicas", "", StandardCheckFlags)
+			assert.Equal(t, http.StatusTooManyRequests, result.StatusCode)
+			assert.Equal(t, test.blocker, result.rejectionResult().MetricName)
+			assert.Len(t, result.Dependencies, 2)
+			assert.Eventually(t, func() bool {
+				_, exists := throttler.nonLowPriorityAppRequestsThrottled.Get(test.blocker)
+				return exists
+			}, time.Second, time.Millisecond)
+			assert.Never(t, func() bool {
+				for _, metric := range test.diagnostics {
+					if _, exists := throttler.nonLowPriorityAppRequestsThrottled.Get(metric); exists {
+						return true
+					}
+				}
+				return false
+			}, 50*time.Millisecond, time.Millisecond)
 		})
 	}
 }
@@ -145,8 +178,8 @@ func TestNestedDependenciesKeepLagAndBlockerIdentity(t *testing.T) {
 	assert.Equal(t, http.StatusInternalServerError, result.StatusCode)
 	assert.Equal(t, 0.05, result.Value)
 	assert.Equal(t, "mysql/intermediate", result.rejectionResult().MetricName)
-	if !assert.Len(t, result.Dependencies, 1) {
+	if !assert.Len(t, result.Dependencies, 1) || !assert.Len(t, result.Dependencies[0].Dependencies, 1) {
 		return
 	}
-	assert.Empty(t, result.Dependencies[0].Dependencies)
+	assert.Equal(t, 80.0, result.Dependencies[0].Dependencies[0].Value)
 }
