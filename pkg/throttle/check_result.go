@@ -41,7 +41,6 @@ type CheckResult struct {
 	Dependencies     []*CheckResult `json:"Dependencies,omitempty"`
 	rejectionReason  string
 	blockingResult   *CheckResult
-	valueUnavailable bool
 	measurementError string
 }
 
@@ -49,16 +48,14 @@ func (result *CheckResult) MarshalJSON() ([]byte, error) {
 	type response CheckResult
 	return json.Marshal(struct {
 		*response
-		MeasurementAvailable bool   `json:"MeasurementAvailable"`
-		MeasurementError     string `json:"MeasurementError,omitempty"`
-		BlockingMetricName   string `json:"BlockingMetricName,omitempty"`
-		RejectionReason      string `json:"RejectionReason,omitempty"`
+		MeasurementError   string `json:"MeasurementError,omitempty"`
+		BlockingMetricName string `json:"BlockingMetricName,omitempty"`
+		RejectionReason    string `json:"RejectionReason,omitempty"`
 	}{
-		response:             (*response)(result),
-		MeasurementAvailable: !result.valueUnavailable,
-		MeasurementError:     result.measurementError,
-		BlockingMetricName:   result.blockingMetricName(),
-		RejectionReason:      result.rejectionResult().reason(),
+		response:           (*response)(result),
+		MeasurementError:   result.measurementError,
+		BlockingMetricName: result.blockingMetricName(),
+		RejectionReason:    result.rejectionResult().reason(),
 	})
 }
 
@@ -101,12 +98,10 @@ func NewCheckResult(statusCode int, value float64, threshold float64, err error)
 		Value:      value,
 		Threshold:  threshold,
 		Error:      err,
-		valueUnavailable: err != nil && !errors.Is(err, base.RecoveryNotCompleteError) &&
-			!errors.Is(err, base.ThresholdExceededError),
 	}
 	if err != nil {
 		result.Message = err.Error()
-		if result.valueUnavailable {
+		if !errors.Is(err, base.RecoveryNotCompleteError) && !errors.Is(err, base.ThresholdExceededError) {
 			result.measurementError = err.Error()
 		}
 	}

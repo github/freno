@@ -73,7 +73,7 @@ func TestCheckKeepsRequestedMeasurementAndReportsDependencies(t *testing.T) {
 			assert.Equal(t, float64(5), body["Threshold"])
 			_, lagErr := test.replica.Get()
 			lagAvailable := lagErr == nil || errors.Is(lagErr, base.RecoveryNotCompleteError)
-			assert.Equal(t, lagAvailable, body["MeasurementAvailable"])
+			assert.NotContains(t, body, "MeasurementAvailable")
 			if !lagAvailable {
 				assert.Equal(t, lagErr.Error(), body["MeasurementError"])
 			} else {
@@ -96,9 +96,11 @@ func TestCheckKeepsRequestedMeasurementAndReportsDependencies(t *testing.T) {
 			assert.Equal(t, test.wantPrimary, primary["Value"])
 			_, primaryErr := test.primary.Get()
 			available := primaryErr == nil || errors.Is(primaryErr, base.RecoveryNotCompleteError)
-			assert.Equal(t, available, primary["MeasurementAvailable"])
+			assert.NotContains(t, primary, "MeasurementAvailable")
 			if !available {
 				assert.NotEmpty(t, primary["MeasurementError"])
+			} else {
+				assert.NotContains(t, primary, "MeasurementError")
 			}
 		})
 	}

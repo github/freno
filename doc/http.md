@@ -160,7 +160,6 @@ HTTP 429 and a body containing:
   "Value": 0.05,
   "Threshold": 1,
   "Message": "Threshold exceeded",
-  "MeasurementAvailable": true,
   "BlockingMetricName": "mysql/repositories-primary",
   "RejectionReason": "threshold",
   "Dependencies": [
@@ -170,7 +169,6 @@ HTTP 429 and a body containing:
       "Value": 80,
       "Threshold": 75,
       "Message": "Threshold exceeded",
-      "MeasurementAvailable": true,
       "BlockingMetricName": "mysql/repositories-primary",
       "RejectionReason": "threshold"
     }
@@ -185,16 +183,16 @@ the blocking metric's identity and value, rather than the top-level lag.
 Recovery and shared-domain health can still cause HTTP 429 when the current
 pressure is below the throttle threshold.
 
-When a measurement is unavailable, its result includes
-`MeasurementAvailable: false` and `MeasurementError`. For compatibility with
-existing clients, `Value` remains numeric and retains the legacy error-path
-value; it must not be interpreted as a valid reading when availability is
-false. The original missing-host fail-open/fail-closed setting remains in
-effect. Measurement availability describes the local numeric reading, not
-permission to write or the health of its dependencies.
+When a measurement is unavailable, its result includes `MeasurementError`.
+For compatibility with existing clients, `Value` remains numeric and retains
+the legacy error-path
+value; it must not be interpreted as a valid reading when `MeasurementError`
+is present. The original missing-host fail-open/fail-closed setting remains in
+effect. `MeasurementError` describes a problem with the local numeric reading,
+not the health of its dependencies.
 
 An unchanged Ruby `replication_delay` client reads only `Value`; it does not
-honor admission status or the new availability metadata. This change preserves
+honor admission status or the new measurement-error field. This change preserves
 its numeric contract and removes pressure/lag unit confusion, but does not make
 that client handle unavailable lag differently. Write admission must still use
 the status-based check.
