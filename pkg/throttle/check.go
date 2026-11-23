@@ -21,6 +21,7 @@ type CheckFlags struct {
 	OverrideThreshold float64
 	LowPriority       bool
 	OKIfNotExists     bool
+	observationOnly   bool
 }
 
 var StandardCheckFlags = &CheckFlags{}
@@ -69,7 +70,7 @@ func (check *ThrottlerCheck) checkAppMetricResult(appName string, storeType stri
 	}
 	checkResult = newMetricCheckResult(value, threshold, err, failOnNoHosts)
 	if err == nil && value > threshold {
-		if !flags.LowPriority && !flags.ReadCheck && appName != frenoAppName {
+		if !flags.LowPriority && !flags.ReadCheck && !flags.observationOnly && appName != frenoAppName {
 			// low priority requests will henceforth be denied
 			go check.throttler.nonLowPriorityAppRequestsThrottled.SetDefault(metricName, true)
 		}
@@ -103,29 +104,43 @@ func (check *ThrottlerCheck) checkMySQLCluster(
 		return check.throttler.getMySQLClusterMetrics(clusterName)
 	}
 	rootResult := check.checkAppMetricResult(appName, "mysql", clusterName, metricResultFunc, flags)
-	if rootResult.StatusCode != http.StatusOK {
+	clusterSettings := config.Settings().Stores.MySQL.Clusters[clusterName]
+	if clusterSettings == nil {
 		return rootResult
 	}
 
-	clusterSettings := config.Settings().Stores.MySQL.Clusters[clusterName]
+	var blocker *CheckResult
+	if rootResult.StatusCode != http.StatusOK {
+		blocker = rootResult
+	}
 	for _, requiredCluster := range clusterSettings.RequiredClusters {
 		requiredFlags := *flags
 		requiredFlags.ReadCheck = false
 		requiredFlags.OverrideThreshold = 0
+		requiredFlags.observationOnly = flags.observationOnly || blocker != nil
 		requiredResult := check.checkMySQLCluster(appName, requiredCluster, &requiredFlags, checkedClusters)
+		if requiredResult != nil {
+			rootResult.Dependencies = append(rootResult.Dependencies, requiredResult)
+		}
 		if requiredResult == nil || requiredResult.StatusCode == http.StatusOK {
 			continue
 		}
 		if requiredResult.StatusCode == http.StatusNotFound {
-			checkResult := NewErrorCheckResult(
-				http.StatusInternalServerError,
-				fmt.Errorf("required MySQL cluster metric %q is unavailable", requiredCluster),
-			)
-			checkResult.MetricName = fmt.Sprintf("mysql/%s", requiredCluster)
-			checkResult.rejectionReason = "missing_metric"
-			return checkResult
+			err := fmt.Errorf("required MySQL cluster metric %q is unavailable", requiredCluster)
+			requiredResult.StatusCode = http.StatusInternalServerError
+			requiredResult.Error = err
+			requiredResult.Message = err.Error()
+			requiredResult.rejectionReason = "missing_metric"
 		}
-		return requiredResult
+		if blocker == nil {
+			blocker = requiredResult
+		}
+	}
+	if blocker != nil && blocker != rootResult {
+		rootResult.StatusCode = blocker.StatusCode
+		rootResult.Error = blocker.Error
+		rootResult.Message = blocker.Message
+		rootResult.blockingResult = blocker.rejectionResult()
 	}
 	return rootResult
 }
@@ -163,18 +178,19 @@ func (check *ThrottlerCheck) Check(appName string, storeType string, storeName s
 	}
 
 	if checkResult.StatusCode == http.StatusTooManyRequests && appName != frenoAppName && appName != frenoShareDmainAppName {
+		rejection := checkResult.rejectionResult()
 		reason := "other"
 		switch {
-		case errors.Is(checkResult.Error, base.RecoveryNotCompleteError):
+		case errors.Is(rejection.Error, base.RecoveryNotCompleteError):
 			reason = "recovery"
-		case errors.Is(checkResult.Error, base.ThresholdExceededError) && checkResult.Value > checkResult.Threshold:
+		case errors.Is(rejection.Error, base.ThresholdExceededError) && rejection.Value > rejection.Threshold:
 			reason = "threshold"
 		}
-		metricName := strings.ReplaceAll(checkResult.MetricName, "/", ".")
+		metricName := strings.ReplaceAll(rejection.MetricName, "/", ".")
 		metrics.GetOrRegisterCounter(fmt.Sprintf("check.rejected.%s.%s.total", metricName, reason), nil).Inc(1)
 	}
 	if storeType == "mysql" {
-		check.recordMySQLRejection(appName, storeName, checkResult)
+		check.recordMySQLRejection(appName, storeName, checkResult.rejectionResult())
 	}
 
 	go func(statusCode int) {

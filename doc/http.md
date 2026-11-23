@@ -131,3 +131,74 @@ A `GET` request for `http://my.freno.service:9777/check/archive/mysql/main1` may
 ```
 
 Extra info such as the threshold or actual replication lag value is irrelevant for automated requests, which should just know whether they're allowed to proceed or not. For humans this is beneficial input.
+
+## Requested measurements and required dependencies
+
+For a configured MySQL store, `MetricName`, `Value`, and `Threshold` always
+describe the requested store (or its configured fallback), even when a required
+dependency blocks admission. Existing replication-delay clients can continue to
+read lag seconds from `Value`; a primary's running-thread count never replaces
+the requested store's lag.
+
+`Dependencies` contains the required metrics on both accepted and rejected
+checks, including when the requested metric fails. Each includes its own name,
+value, threshold, status, and any evaluated nested dependencies. Freno retains
+the first failure as the admission decision; later checks only complete the
+diagnostic response and do not set additional low-priority throttling state.
+These checks use collected measurements already held by Freno,
+not additional database queries per request. A directly requested primary store
+still returns primary pressure in its own `Value`; it is not a replication-lag
+endpoint.
+
+For example, healthy replica lag with an overloaded required primary returns
+HTTP 429 and a body containing:
+
+```json
+{
+  "StatusCode": 429,
+  "MetricName": "mysql/repositories",
+  "Value": 0.05,
+  "Threshold": 1,
+  "Message": "Threshold exceeded",
+  "BlockingMetricName": "mysql/repositories-primary",
+  "Dependencies": [
+    {
+      "StatusCode": 429,
+      "MetricName": "mysql/repositories-primary",
+      "Value": 80,
+      "Threshold": 75,
+      "Message": "Threshold exceeded"
+    }
+  ]
+}
+```
+
+Admission still follows the first failing check: the requested metric first,
+then required dependencies in configured order. The top-level
+`BlockingMetricName` identifies the first blocker; the existing `Message`
+explains the rejection. Dependency entries contain the existing result fields
+without repeating the blocking metric. Rejection counters and logs retain
+the blocking metric's identity and value, rather than the top-level lag.
+Recovery and shared-domain health can still cause HTTP 429 when the current
+pressure is below the throttle threshold.
+
+A probe failure is reported through the failing metric's `StatusCode` and
+`Message`. For compatibility with existing clients, `Value` remains numeric
+and retains the legacy error-path value; that value is not a valid measurement.
+The overall status can also describe a dependency failure while the requested
+lag is valid; `BlockingMetricName` identifies which metric blocked admission.
+The original missing-host fail-open/fail-closed setting remains in effect.
+
+An unchanged Ruby `replication_delay` client reads only `Value`; it does not
+honor admission status or error messages. This change preserves
+its numeric contract and removes pressure/lag unit confusion, but does not make
+that client handle unavailable lag differently. Write admission must still use
+the status-based check.
+
+The opt-in Go test `TestRubyClientLagPressureCompatibility` runs the actual Ruby
+client against an in-process Freno HTTP server. Set `FRENO_RUBY_CLIENT_PATH` to an
+unchanged client checkout, provide Ruby with Faraday, and run:
+
+```sh
+go test ./pkg/throttle -run '^TestRubyClientLagPressureCompatibility$' -v
+```

@@ -181,6 +181,10 @@ func StabilizeTestMySQLClusterMetric(throttler *Throttler, clusterName string, m
 	throttler.aggregatedMetrics.SetDefault("mysql/"+clusterName, throttler.stabilizeMySQLMetric(clusterName, metric, now))
 }
 
+func SetTestMySQLSharedHealth(throttler *Throttler, clusterName string, seconds int64) {
+	throttler.shareDomainMetricHealth.SetDefault("mysql/"+clusterName, &base.MetricHealth{SecondsSinceLastHealthy: seconds})
+}
+
 func newTestMySQLFallbackCheck(fallbackCluster string) (*ThrottlerCheck, *Throttler) {
 	config.Settings().Stores.MySQL = config.MySQLConfigurationSettings{
 		FallbackCluster: fallbackCluster,
@@ -345,9 +349,11 @@ func TestCheckMySQLRequiredClusters(t *testing.T) {
 		setTestMySQLClusterMetric(throttler, "primary", 60.0, 50.0)
 		result := check.Check("transitions", "mysql", "replicas", "", &CheckFlags{})
 		assert.Equal(t, http.StatusTooManyRequests, result.StatusCode)
-		assert.Equal(t, 60.0, result.Value)
-		assert.Equal(t, 50.0, result.Threshold)
-		assert.Equal(t, "mysql/primary", result.MetricName)
+		assert.Equal(t, 1.0, result.Value)
+		assert.Equal(t, 5.0, result.Threshold)
+		assert.Equal(t, "mysql/replicas", result.MetricName)
+		assert.Equal(t, "mysql/primary", result.rejectionResult().MetricName)
+		assert.Equal(t, 60.0, result.Dependencies[0].Value)
 	})
 
 	t.Run("ProxySQL cluster blocks admission", func(t *testing.T) {
@@ -355,8 +361,10 @@ func TestCheckMySQLRequiredClusters(t *testing.T) {
 		setTestMySQLClusterMetric(throttler, "proxysql", 90.0, 80.0)
 		result := check.Check("transitions", "mysql", "replicas", "", &CheckFlags{})
 		assert.Equal(t, http.StatusTooManyRequests, result.StatusCode)
-		assert.Equal(t, 90.0, result.Value)
-		assert.Equal(t, 80.0, result.Threshold)
+		assert.Equal(t, 1.0, result.Value)
+		assert.Equal(t, 5.0, result.Threshold)
+		assert.Equal(t, "mysql/proxysql", result.rejectionResult().MetricName)
+		assert.Equal(t, 90.0, result.Dependencies[1].Value)
 	})
 
 	t.Run("read threshold override only applies to requested cluster", func(t *testing.T) {
@@ -367,7 +375,8 @@ func TestCheckMySQLRequiredClusters(t *testing.T) {
 			OverrideThreshold: 100.0,
 		})
 		assert.Equal(t, http.StatusTooManyRequests, result.StatusCode)
-		assert.Equal(t, 50.0, result.Threshold)
+		assert.Equal(t, 100.0, result.Threshold)
+		assert.Equal(t, 50.0, result.Dependencies[0].Threshold)
 	})
 
 	t.Run("read threshold override bypasses only the requested cluster recovery latch", func(t *testing.T) {
@@ -393,7 +402,8 @@ func TestCheckMySQLRequiredClusters(t *testing.T) {
 			OverrideThreshold: 100.0,
 		})
 		assert.Equal(t, http.StatusTooManyRequests, result.StatusCode)
-		assert.Equal(t, "mysql/primary", result.MetricName)
+		assert.Equal(t, "mysql/replicas", result.MetricName)
+		assert.Equal(t, "mysql/primary", result.rejectionResult().MetricName)
 	})
 
 	t.Run("missing required metric fails closed", func(t *testing.T) {
@@ -402,7 +412,8 @@ func TestCheckMySQLRequiredClusters(t *testing.T) {
 		result := check.Check("transitions", "mysql", "replicas", "", &CheckFlags{OKIfNotExists: true})
 		assert.Equal(t, http.StatusInternalServerError, result.StatusCode)
 		assert.EqualError(t, result.Error, `required MySQL cluster metric "primary" is unavailable`)
-		assert.Equal(t, "mysql/primary", result.MetricName)
+		assert.Equal(t, "mysql/replicas", result.MetricName)
+		assert.Equal(t, "mysql/primary", result.rejectionResult().MetricName)
 	})
 }
 

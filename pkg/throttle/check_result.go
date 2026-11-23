@@ -1,6 +1,7 @@
 package throttle
 
 import (
+	"encoding/json"
 	"errors"
 	"net/http"
 
@@ -31,13 +32,65 @@ func newMetricCheckResult(value, threshold float64, err error, failOnNoHosts boo
 
 // CheckResult is the result for an app inquiring on a metric. It also exports as JSON via the API
 type CheckResult struct {
-	StatusCode      int     `json:"StatusCode"`
-	Value           float64 `json:"Value"`
-	Threshold       float64 `json:"Threshold"`
-	MetricName      string  `json:"MetricName,omitempty"`
-	Error           error   `json:"-"`
-	Message         string  `json:"Message"`
+	StatusCode      int            `json:"StatusCode"`
+	Value           float64        `json:"Value"`
+	Threshold       float64        `json:"Threshold"`
+	MetricName      string         `json:"MetricName,omitempty"`
+	Error           error          `json:"-"`
+	Message         string         `json:"Message"`
+	Dependencies    []*CheckResult `json:"Dependencies,omitempty"`
 	rejectionReason string
+	blockingResult  *CheckResult
+}
+
+type checkResultResponse struct {
+	StatusCode   int                    `json:"StatusCode"`
+	Value        float64                `json:"Value"`
+	Threshold    float64                `json:"Threshold"`
+	MetricName   string                 `json:"MetricName,omitempty"`
+	Message      string                 `json:"Message"`
+	Dependencies []*checkResultResponse `json:"Dependencies,omitempty"`
+}
+
+func (result *CheckResult) response() *checkResultResponse {
+	if result == nil {
+		return nil
+	}
+	response := &checkResultResponse{
+		StatusCode: result.StatusCode,
+		Value:      result.Value,
+		Threshold:  result.Threshold,
+		MetricName: result.MetricName,
+		Message:    result.Message,
+	}
+	for _, dependency := range result.Dependencies {
+		response.Dependencies = append(response.Dependencies, dependency.response())
+	}
+	return response
+}
+
+func (result *CheckResult) MarshalJSON() ([]byte, error) {
+	return json.Marshal(struct {
+		*checkResultResponse
+		BlockingMetricName string `json:"BlockingMetricName,omitempty"`
+	}{
+		checkResultResponse: result.response(),
+		BlockingMetricName:  result.blockingMetricName(),
+	})
+}
+
+func (result *CheckResult) rejectionResult() *CheckResult {
+	if result.blockingResult != nil {
+		return result.blockingResult
+	}
+	return result
+}
+
+func (result *CheckResult) blockingMetricName() string {
+	if result.StatusCode == http.StatusOK {
+		return ""
+	}
+	return result.rejectionResult().MetricName
 }
 
 func NewCheckResult(statusCode int, value float64, threshold float64, err error) *CheckResult {
