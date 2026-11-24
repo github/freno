@@ -21,7 +21,8 @@ func aggregateMySQLProbes(
 	// so it's safe to iterate it
 	probeValues := []float64{}
 	for _, probe := range *probes {
-		if clusterInstanceHttpChecksMap[mysql.MySQLHttpCheckHashKey(clusterName, &probe.Key)] == http.StatusNotFound {
+		httpStatus := clusterInstanceHttpChecksMap[mysql.MySQLHttpCheckHashKey(clusterName, &probe.Key)]
+		if httpStatus == http.StatusNotFound || httpStatus == 0 {
 			continue
 		}
 		instanceMetricResult, ok := instanceResultsMap[mysql.GetClusterInstanceKey(clusterName, &probe.Key)]
